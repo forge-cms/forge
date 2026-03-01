@@ -16,7 +16,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 3 | mcp.go | ✅ Done | 2026-03-01 |
 | 4 | node.go | ✅ Done | 2026-03-01 |
 | 5 | context.go | ✅ Done | 2026-03-01 |
-| 6 | signals.go | 🔲 Not started | — |
+| 6 | signals.go | ✅ Done | 2026-03-01 |
 | 7 | storage.go | 🔲 Not started | — |
 | 8 | auth.go | 🔲 Not started | — |
 | 9 | middleware.go | 🔲 Not started | — |
@@ -439,21 +439,74 @@ When a step is done: change `🔲` to `✅` and record the date.
 ### Step 6 — signals.go
 
 **Depends on:** context, errors
-**Decisions:** Amendment P1 (debounce)
+**Decisions:** Amendment P1 (debounce), Amendment S2 (generic On[T])
+**Files:** `signals.go`, `signals_test.go`
+**Status:** ✅ Done
 
-- [ ] `forge.Signal` type (string constant)
-- [ ] Exported signal constants:
-  - `BeforeCreate`, `AfterCreate`
-  - `BeforeUpdate`, `AfterUpdate`
-  - `BeforeDelete`, `AfterDelete`
-  - `AfterPublish`, `AfterUnpublish`, `AfterArchive`
-  - `SitemapRegenerate`
-- [ ] `forge.SignalHandler` type: `func(ctx forge.Context, payload any) error`
-- [ ] `forge.On(signal Signal, handler SignalHandler) Option` — module option
-- [ ] Internal `dispatchBefore(ctx, signal, payload)` — synchronous; error → aborts operation; panic → recovered, logged, returns 500 error
-- [ ] Internal `dispatchAfter(ctx, signal, payload)` — spawns goroutine; errors logged; panics recovered and logged
-- [ ] `SitemapRegenerate` debounce: 2-second timer; reset on each new AfterPublish/AfterUnpublish/AfterArchive; fires only once after a burst
-- [ ] Tests: BeforeX can abort operation; AfterX is non-blocking; debounce coalesces 10 signals into 1 rebuild
+#### 6.1 — `forge.Signal` type and constants
+
+- [x] `forge.Signal` named `string` type — consistent with `Role` and `Status`
+- [x] Ten exported constants: `BeforeCreate`, `AfterCreate`, `BeforeUpdate`,
+      `AfterUpdate`, `BeforeDelete`, `AfterDelete`, `AfterPublish`,
+      `AfterUnpublish`, `AfterArchive`, `SitemapRegenerate`
+- [x] godoc on type and every constant
+
+#### 6.2 — `forge.On[T any]` option
+
+- [x] Unexported `signalHandler` type: `func(Context, any) error` — internal dispatch only
+- [x] Unexported `signalOption` struct: `{ signal Signal; handler signalHandler }`;
+      implements `Option` via `isOption()` (reuse marker from roles.go — do NOT redeclare)
+- [x] `func On[T any](signal Signal, h func(Context, T) error) Option` — wraps
+      typed handler in closure: `func(ctx Context, payload any) error { return h(ctx, payload.(T)) }`
+- [x] godoc: "On registers a typed signal handler as a module Option. The handler
+      receives the content value as its concrete type T — no type assertion required."
+
+#### 6.3 — `dispatchBefore` and `dispatchAfter`
+
+- [x] `dispatchBefore(ctx Context, handlers []signalHandler, payload any) error`
+  - Iterates handlers in registration order
+  - First non-nil error aborts iteration and is returned to caller
+  - Panic: recovered via `recover()`; logged via `log/slog`; returns
+    `forge.Error` with HTTP 500 and code `"signal_panic"`
+- [x] `dispatchAfter(ctx Context, handlers []signalHandler, payload any)`
+  - Launches a single goroutine
+  - Iterates all handlers; non-nil errors logged via `log/slog`
+  - Panic: recovered and logged; never propagated to caller
+
+#### 6.4 — `debouncer`
+
+- [x] Unexported `debouncer` struct: `{ mu sync.Mutex; timer *time.Timer;
+      delay time.Duration; fn func() }`
+- [x] `newDebouncer(delay time.Duration, fn func()) *debouncer`
+- [x] `(d *debouncer) Trigger()` — stops existing timer and resets to `delay`;
+      `fn` fires only after `delay` elapses with no further calls
+- [x] Used by `module.go` (Step 10) to coalesce AfterPublish/AfterUnpublish/
+      AfterArchive into a single SitemapRegenerate dispatch
+
+#### 6.5 — Tests (`signals_test.go`)
+
+- [x] `TestDispatchBeforeAbortsOnError` — first handler errors; second handler
+      never called; error propagated
+- [x] `TestDispatchBeforeRunsAllOnSuccess` — all handlers called when none error
+- [x] `TestDispatchBeforePanicReturnsError` — panicking handler returns
+      forge.Error (HTTP 500), does not crash process
+- [x] `TestDispatchAfterIsNonBlocking` — returns before handler finishes
+      (handler sleeps; use WaitGroup to verify completion)
+- [x] `TestDispatchAfterPanicDoesNotPropagate` — panicking async handler does
+      not crash or return error
+- [x] `TestDebouncerCoalesces` — 10 rapid Trigger() calls produce exactly 1
+      fn invocation after delay elapses
+- [x] `TestOnReturnsOption` — On(BeforeCreate, handler) return value satisfies
+      Option interface
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestDispatch|TestDebouncer|TestOn" ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment S2 agreed;
+      AfterUnpublish gap in ARCHITECTURE.md fixed in same step
 
 ---
 

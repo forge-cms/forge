@@ -257,13 +257,13 @@ BeforeCreate / BeforeUpdate / BeforeDelete
     → return error → operation aborted, error returned to client
     → panic → recovered, logged, 500 returned
 
-AfterCreate / AfterUpdate / AfterDelete / AfterPublish / AfterArchive
+AfterCreate / AfterUpdate / AfterDelete / AfterPublish / AfterUnpublish / AfterArchive
     → run in new goroutine (go dispatch(...))
     → errors logged, never returned to client
     → panic recovered and logged
 
 SitemapRegenerate
-    → fired by AfterPublish, AfterArchive, AfterDelete
+    → fired by AfterPublish, AfterUnpublish, AfterArchive, AfterDelete
     → debounced 2 seconds — coalesces bursts of changes
     → runs sitemap + feed regeneration
 ```

@@ -1,0 +1,161 @@
+package forge
+
+import (
+	"log/slog"
+	"sync"
+	"time"
+)
+
+// Signal identifies a lifecycle event fired by a content module.
+// Handlers are registered with [On] and receive the content value as their
+// concrete type T — no type assertion required.
+type Signal string
+
+// Lifecycle signals fired by content modules.
+const (
+	// BeforeCreate fires before a new content item is persisted.
+	// Return an error to abort the operation.
+	BeforeCreate Signal = "before_create"
+
+	// AfterCreate fires after a new content item has been persisted.
+	// Runs asynchronously — errors and panics are logged, never returned.
+	AfterCreate Signal = "after_create"
+
+	// BeforeUpdate fires before an existing content item is updated.
+	// Return an error to abort the operation.
+	BeforeUpdate Signal = "before_update"
+
+	// AfterUpdate fires after a content item has been updated.
+	// Runs asynchronously — errors and panics are logged, never returned.
+	AfterUpdate Signal = "after_update"
+
+	// BeforeDelete fires before a content item is deleted.
+	// Return an error to abort the operation.
+	BeforeDelete Signal = "before_delete"
+
+	// AfterDelete fires after a content item has been deleted.
+	// Runs asynchronously — errors and panics are logged, never returned.
+	AfterDelete Signal = "after_delete"
+
+	// AfterPublish fires after a content item transitions to Published.
+	// Runs asynchronously — triggers sitemap and feed regeneration.
+	AfterPublish Signal = "after_publish"
+
+	// AfterUnpublish fires after a content item is moved out of Published status.
+	// Runs asynchronously — triggers sitemap and feed regeneration.
+	AfterUnpublish Signal = "after_unpublish"
+
+	// AfterArchive fires after a content item transitions to Archived.
+	// Runs asynchronously — triggers sitemap and feed regeneration.
+	AfterArchive Signal = "after_archive"
+
+	// SitemapRegenerate is fired internally after AfterPublish, AfterUnpublish,
+	// AfterArchive, and AfterDelete. It is debounced to coalesce burst changes
+	// into a single sitemap and feed rebuild.
+	SitemapRegenerate Signal = "sitemap_regenerate"
+)
+
+// signalHandler is the internal, type-erased handler signature used by
+// dispatchBefore and dispatchAfter. It is never exposed to callers —
+// use [On] to register typed handlers.
+type signalHandler func(Context, any) error
+
+// signalOption is the [Option] value returned by [On]. It carries a single
+// signal name and one type-erased handler. Module wiring (module.go)
+// accumulates these options into per-signal handler slices.
+type signalOption struct {
+	signal  Signal
+	handler signalHandler
+}
+
+// isOption marks signalOption as a valid [Option] value.
+func (signalOption) isOption() {}
+
+// On registers a typed signal handler as a module [Option]. The handler
+// receives the content value as its concrete type T — no type assertion
+// required at the call site.
+//
+// Example:
+//
+//	forge.On(forge.BeforeCreate, func(ctx forge.Context, p *Post) error {
+//	    p.Author = ctx.User().Name
+//	    return nil
+//	})
+func On[T any](signal Signal, h func(Context, T) error) Option {
+	return signalOption{
+		signal: signal,
+		handler: func(ctx Context, payload any) error {
+			return h(ctx, payload.(T))
+		},
+	}
+}
+
+// errSignalPanic is returned by dispatchBefore when a signal handler panics.
+var errSignalPanic = newSentinel(500, "signal_panic", "Internal server error")
+
+// dispatchBefore runs handlers synchronously in registration order.
+// The first non-nil error aborts iteration and is returned to the caller.
+// A panicking handler is recovered, logged, and causes a 500-class
+// [forge.Error] to be returned — it does not crash the process.
+func dispatchBefore(ctx Context, handlers []signalHandler, payload any) error {
+	for _, h := range handlers {
+		if err := safeCall(ctx, h, payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dispatchAfter runs all handlers in a single goroutine, asynchronously.
+// Errors are logged. Panics are recovered and logged. Nothing is returned
+// to the caller — the request has already completed.
+func dispatchAfter(ctx Context, handlers []signalHandler, payload any) {
+	go func() {
+		for _, h := range handlers {
+			if err := safeCall(ctx, h, payload); err != nil {
+				slog.ErrorContext(ctx, "signal handler error",
+					"error", err,
+				)
+			}
+		}
+	}()
+}
+
+// safeCall invokes a single signalHandler, recovering from any panic.
+// On panic it logs the recovered value and returns errSignalPanic.
+func safeCall(ctx Context, h signalHandler, payload any) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "signal handler panic", "panic", r)
+			err = errSignalPanic
+		}
+	}()
+	return h(ctx, payload)
+}
+
+// debouncer delays invocation of fn until no further [debouncer.Trigger]
+// calls have arrived within the configured delay. Rapid bursts of calls
+// collapse into a single fn invocation.
+type debouncer struct {
+	mu    sync.Mutex
+	timer *time.Timer
+	delay time.Duration
+	fn    func()
+}
+
+// newDebouncer returns a debouncer that calls fn after delay elapses
+// without any further Trigger calls.
+func newDebouncer(delay time.Duration, fn func()) *debouncer {
+	return &debouncer{delay: delay, fn: fn}
+}
+
+// Trigger resets the debounce timer. fn fires only after delay elapses
+// with no subsequent Trigger calls.
+func (d *debouncer) Trigger() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.timer != nil {
+		d.timer.Stop()
+	}
+	d.timer = time.AfterFunc(d.delay, d.fn)
+}

@@ -820,6 +820,43 @@ The option to restrict it exists for operators with specific security requiremen
 
 ---
 
+### Amendment S2 — Generic `On[T]` replaces exported `SignalHandler` (amends Decision 8)
+
+**Decision:** `forge.On` is a generic function `On[T any](signal Signal, h func(Context, T) error) Option`.
+The exported `SignalHandler` named type is removed. Internal dispatch uses an unexported
+`signalHandler` type `func(Context, any) error`.
+
+**Call-site syntax:**
+```go
+forge.On(forge.BeforeCreate, func(ctx forge.Context, p *BlogPost) error {
+    p.Author = ctx.User().Name
+    return nil
+})
+```
+
+**Mechanism:** `On[T]` captures the typed handler in a closure at registration time:
+```go
+func On[T any](signal Signal, h func(Context, T) error) Option {
+    return signalOption{signal: signal, handler: func(ctx Context, payload any) error {
+        return h(ctx, payload.(T))
+    }}
+}
+```
+The type assertion `payload.(T)` appears exactly once, written by the framework, never by developers.
+
+**Consequences for developer/AI experience:**
+1. **Call-site syntax** — fully typed; no visible `any`, no assertion, matches README verbatim
+2. **README** — no changes required; README already assumed this form
+3. **AI generation accuracy** — AI assistants write `func(ctx forge.Context, p *BlogPost) error`
+   directly; correct without consulting docs
+4. **Consistency** — `On[T]` follows the same generic helper pattern as `Query[T]`/`QueryOne[T]`
+   (Step 7); one pattern, applied everywhere
+
+**Trade-off:** Internal dispatch stores `[]signalHandler` (erased type); this is invisible to
+developers and confined entirely to signals.go.
+
+---
+
 ### Amendment P1 — Asynchronous sitemap regeneration (amends Decision 9)
 
 **Decision:** Sitemap regeneration runs asynchronously in a dedicated goroutine.
