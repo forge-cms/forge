@@ -8,42 +8,61 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 
 ---
 
-## Package structure
+## Changelog
 
-```
-github.com/forge-cms/forge/
-│
-├── forge.go          App, Config, New(), MustConfig()
-├── node.go           Node, Status, lifecycle constants
-├── module.go         Module[T], Option type, routing, lifecycle enforcement
-├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext()
-├── auth.go           AuthFunc (interface), BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
-├── roles.go          Role type, hierarchy, HasRole(), Is(), built-in constants
-├── head.go           Head struct, Image, Excerpt(), URL(), Crumbs(), Crumb()
-├── errors.go         Error interface, sentinel errors, WriteError(), ValidationError
-├── storage.go        Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
-├── signals.go        Signal type, On() option, signal dispatch
-├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, RateLimit...
-├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor, manifest
-├── redirects.go      RedirectEntry, redirect table, chain collapse
-├── sitemap.go        SitemapConfig, generation, debounce goroutine
-├── rss.go            FeedConfig, Atom/RSS generation
-├── ai.go             AIDoc, LLMsTxt, Markdownable interface, content negotiation
-├── social.go         OpenGraph, TwitterCard, LinkedIn meta tag rendering
-├── templates.go      TemplateData[T], template helpers, forge:head partial
-├── scheduler.go      Adaptive ticker, scheduled publishing loop
-└── mcp.go            MCP() no-op option (v1), MCPRead/MCPWrite constants
-```
+| Date | Change |
+|------|--------|
+| 2026-03-01 | Initial architecture document drafted (Milestone 1 planning) |
+| 2026-03-01 | Updated to reflect Milestone 1 completion: corrected request lifecycle order, added `CacheStore`, `CSRF`, `TrustedProxy`, updated `SignToken` signature, added `ListOptions.Status`, fixed `Markdownable` location to `module.go`, marked future-milestone files as planned |
+
+---
+
+## Package structure
 
 All files are in a single package: `forge`. There are no sub-packages.
 This is intentional — it eliminates circular import issues and keeps
 the API surface in one place. The file names are the organisation.
 
+### Implemented (Milestone 1)
+
+```
+github.com/forge-cms/forge/
+│
+├── errors.go         Error interface, sentinel errors, WriteError(), ValidationError
+├── roles.go          Role type, hierarchy, HasRole(), IsRole(), built-in constants, Option interface
+├── mcp.go            MCP() no-op option (v1), MCPRead/MCPWrite constants
+├── node.go           Node, Status, lifecycle constants, NewID(), GenerateSlug(), UniqueSlug(), ValidateStruct()
+├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser
+├── signals.go        Signal type, On[T]() option, dispatchBefore(), dispatchAfter(), debouncer
+├── storage.go        DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
+├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
+├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
+│                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
+└── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
+                      Middleware, Repo, On options
+```
+
+### Planned (future milestones)
+
+```
+├── forge.go          App, Config, New()                                    (Milestone 2)
+├── head.go           Head struct, SEO/social metadata                      (Milestone 2)
+├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 3)
+├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 4)
+├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 4)
+├── sitemap.go        SitemapConfig, generation, debounce goroutine         (Milestone 4)
+├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 4)
+├── ai.go             AIDoc, LLMsTxt, content negotiation helpers           (Milestone 5)
+├── social.go         OpenGraph, TwitterCard, LinkedIn meta rendering       (Milestone 5)
+└── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 5)
+```
+
 ---
 
 ## Request lifecycle
 
-A request arriving at a Forge app passes through these layers in order:
+A request arriving at a Forge app passes through these layers in order.
+**Read (GET) and write (POST/PUT/DELETE) paths diverge after context creation.**
 
 ```
 HTTP Request
@@ -51,76 +70,76 @@ HTTP Request
     ▼
 ┌─────────────────────────────────┐
 │  Global middleware chain        │  RequestLogger, Recoverer, SecurityHeaders,
-│  (app.Use order)                │  CORS, MaxBodySize, RateLimit
+│  (app.Use order, planned)       │  CORS, MaxBodySize, RateLimit, CSRF
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  net/http ServeMux router       │  Pattern matching, path parameters
+│  net/http ServeMux router       │  Go 1.22 pattern matching, path parameters
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  forge.Context creation         │  RequestID (UUID v7), User (from auth), Locale
+│  forge.Context creation         │  ContextFrom(w, r)
+│                                 │  Sets X-Request-ID (UUID v7 if absent)
+│                                 │  Extracts User resolved by auth middleware
+└────────────────┬────────────────┘
+                 │
+    ▼ GET / read only
+┌─────────────────────────────────┐
+│  Cache check                    │  forge.Cache(ttl) per-module LRU
+│                                 │  HIT → write X-Cache: HIT, return immediately
+│                                 │  MISS → continue (X-Cache: MISS set on response)
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Auth resolution                │  BearerHMAC → CookieSession → Guest
-│                                 │  First match wins
+│  Role check                     │  ctx.User().HasRole(required)
+│                                 │  Insufficient role → 403
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Redirect table lookup          │  Only on potential 404 — not on every request
-│                                 │  Match → 301 or 410 immediately
+│  Storage fetch                  │  repo.FindBySlug / repo.FindAll
+│                                 │  Not found → 404
+└────────────────┬────────────────┘
+                 │
+    ▼ GET / read only
+┌─────────────────────────────────┐
+│  Lifecycle enforcement          │  non-Published + Guest → 404
+│                                 │  (404 intentional — do not leak draft existence)
+└────────────────┬────────────────┘
+                 │
+    ▼ POST / PUT / DELETE only
+┌─────────────────────────────────┐
+│  Input decode + validation      │  json.Decode → auto-ID/Slug → RunValidation
+│                                 │  Validation failure → 422
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Module handler dispatch        │
-│  (list / show / create /        │
-│   update / delete)              │
+│  BeforeX signals                │  Synchronous. Can abort with error → 500.
+│                                 │  BeforeCreate / BeforeUpdate / BeforeDelete
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Lifecycle enforcement          │  Draft/Scheduled/Archived + Guest → 404
-│                                 │  Draft + Author (own content) → allowed
-└────────────────┬────────────────┘
-                 │
-    ▼
-┌─────────────────────────────────┐
-│  Role check                     │  Insufficient role → 403
-└────────────────┬────────────────┘
-                 │
-    ▼
-┌─────────────────────────────────┐
-│  Cache check (read operations)  │  LRU hit → return cached response
-└────────────────┬────────────────┘
-                 │
-    ▼
-┌─────────────────────────────────┐
-│  BeforeX signals                │  Synchronous. Can abort with error.
-└────────────────┬────────────────┘
-                 │
-    ▼
-┌─────────────────────────────────┐
-│  Storage operation              │  Caller's Repository[T] implementation
+│  Storage operation              │  repo.Save / repo.Delete
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
 │  AfterX signals                 │  Asynchronous (goroutine). Cannot abort.
-│                                 │  Sitemap/feed regeneration fires here.
+│                                 │  AfterCreate/Update/Delete/Publish/Unpublish/Archive
 └────────────────┬────────────────┘
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Content negotiation            │  Accept: application/json → JSON
-│                                 │  Accept: text/html → template
-│                                 │  Accept: text/markdown → Markdown()
-│                                 │  Accept: text/plain → stripped text
+│  Content negotiation            │  application/json → JSON (default)
+│                                 │  text/html       → 406 until Milestone 3
+│                                 │  text/markdown   → Markdown() or 406
+│                                 │  text/plain      → stripped text
+│                                 │  Vary: Accept always set
 └────────────────┬────────────────┘
                  │
     ▼
@@ -134,13 +153,11 @@ HTTP Response  (X-Request-ID always set)
 These interfaces are the extension points for users of Forge.
 They must not change in v1.x without a deprecation cycle.
 
-```go
-// Headable — implement to control SEO, social, and AI metadata
-type Headable interface {
-    Head() Head
-}
+### Implemented (Milestone 1)
 
-// Markdownable — implement to enable text/markdown content negotiation
+```go
+// Markdownable — implement to enable text/markdown content negotiation.
+// Declared in module.go.
 type Markdownable interface {
     Markdown() string
 }
@@ -150,8 +167,8 @@ type Validatable interface {
     Validate() error
 }
 
-// AuthFunc — implement to provide a custom authentication scheme
-// Forge provides BearerHMAC, CookieSession, BasicAuth, and AnyAuth
+// AuthFunc — implement to provide a custom authentication scheme.
+// Forge provides BearerHMAC, CookieSession, BasicAuth, and AnyAuth.
 type AuthFunc interface {
     authenticate(*http.Request) (User, bool)
 }
@@ -165,8 +182,8 @@ type Repository[T any] interface {
     Delete(ctx context.Context, id string) error
 }
 
-// Context — the request context passed to all hooks and handlers
-// Implemented as an interface (not a struct) to enable testing without HTTP
+// Context — the request context passed to all hooks and handlers.
+// Implemented as an interface (not a struct) to enable testing without HTTP.
 type Context interface {
     context.Context
     User() User
@@ -185,12 +202,57 @@ type Error interface {
     Public() string
 }
 
-// AIDocSummary — optional; implement for a custom AIDoc summary field
+// DB — satisfied by *sql.DB, *sql.Tx, and pgx adapters
+type DB interface {
+    QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+    ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+    QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+```
+
+### Key exported functions and types (Milestone 1)
+
+```go
+// SignToken — ttl=0 means no expiry; ttl>0 embeds exp claim, rejected after expiry
+func SignToken(user User, secret string, ttl time.Duration) (string, error)
+
+// CSRF — double-submit cookie protection; wrap CookieSession-authenticated routes only
+func CSRF(auth AuthFunc) func(http.Handler) http.Handler
+
+// RateLimit — pass TrustedProxy() when running behind nginx/Caddy/CloudFlare
+func RateLimit(n int, d time.Duration, opts ...Option) func(http.Handler) http.Handler
+func TrustedProxy() Option
+
+// CacheStore — exported LRU cache backing forge.Cache() and forge.InMemoryCache()
+type CacheStore struct{ /* unexported */ }
+func NewCacheStore(ttl time.Duration, max int) *CacheStore
+func (c *CacheStore) Flush()  // invalidate all entries (called on write operations)
+func (c *CacheStore) Sweep()  // remove expired entries (called by background ticker)
+
+// ListOptions — Status filter is applied inside the repository layer
+type ListOptions struct {
+    Page    int
+    PerPage int
+    OrderBy string
+    Desc    bool
+    Status  []Status // nil/empty = all statuses; non-empty = exact match filter
+}
+```
+
+### Planned (future milestones)
+
+```go
+// Headable — implement to control SEO, social, and AI metadata  (head.go, Milestone 2)
+type Headable interface {
+    Head() Head
+}
+
+// AIDocSummary — optional; custom AIDoc summary field           (ai.go, Milestone 5)
 type AIDocSummary interface {
     AIDocSummary() string
 }
 
-// SitemapPriority — optional; implement to control per-item sitemap priority
+// SitemapPriority — optional; per-item sitemap priority         (sitemap.go, Milestone 4)
 type SitemapPriority interface {
     SitemapPriority() float64
 }
@@ -200,29 +262,32 @@ type SitemapPriority interface {
 
 ## Internal dependency rules
 
-To prevent circular imports and keep the package coherent, these rules apply:
+To prevent circular imports and keep the package coherent, these rules apply.
+Files marked *planned* do not exist yet.
 
 ```
 errors.go       — no internal dependencies (foundation layer)
+roles.go        — no internal dependencies (foundation layer)
+mcp.go          — no internal dependencies
 node.go         — depends on: errors
-roles.go        — no internal dependencies
-context.go      — depends on: roles
-auth.go         — depends on: errors, roles, context
+context.go      — depends on: roles, node
+auth.go         — depends on: errors, roles, context, node
 signals.go      — depends on: context, errors
 storage.go      — depends on: node, errors
-module.go       — depends on: node, context, auth, signals, storage, errors
-head.go         — no internal dependencies
-cookies.go      — depends on: errors
-redirects.go    — depends on: node, errors
-sitemap.go      — depends on: node, signals
-rss.go          — depends on: node, signals, head
-ai.go           — depends on: node, head
-social.go       — depends on: head
-templates.go    — depends on: head, context, node
-middleware.go   — depends on: errors, context
-scheduler.go    — depends on: node, signals, storage
-mcp.go          — depends on: (nothing — no-op in v1)
-forge.go        — depends on: all of the above
+middleware.go   — depends on: errors, context, auth, node
+module.go       — depends on: node, context, signals, storage, errors, middleware
+
+── planned ──────────────────────────────────────────────────────────────────
+head.go         — no internal dependencies                              (Milestone 2)
+forge.go        — depends on: all of the above                          (Milestone 2)
+templates.go    — depends on: head, context, node                       (Milestone 3)
+cookies.go      — depends on: errors                                    (Milestone 4)
+redirects.go    — depends on: node, errors                              (Milestone 4)
+sitemap.go      — depends on: node, signals                             (Milestone 4)
+rss.go          — depends on: node, signals, head                       (Milestone 4)
+ai.go           — depends on: node, head                                (Milestone 5)
+social.go       — depends on: head                                      (Milestone 5)
+scheduler.go    — depends on: node, signals, storage                    (Milestone 5)
 ```
 
 The dependency graph has no cycles. `errors.go` and `roles.go` are the only
@@ -276,7 +341,7 @@ SitemapRegenerate
 
 ---
 
-## Scheduler
+## Scheduler *(planned — Milestone 5)*
 
 The scheduled publishing loop runs as a goroutine started by `app.Run()`.
 
@@ -315,7 +380,7 @@ not string comparison on every request.
 
 ---
 
-## Redirect table
+## Redirect table *(planned — Milestone 4)*
 
 The redirect table is a flat key-value store keyed by `FromPath`.
 It lives alongside the content — in the same database, same transaction.
@@ -378,7 +443,7 @@ module. It imports both `forge` and `pgx/v5`. Forge core never imports pgx.
 
 ---
 
-## Template data shape
+## Template data shape *(planned — Milestone 3)*
 
 ```go
 // show handler
@@ -414,14 +479,19 @@ ctx := forge.NewTestContext(forge.User{
     Roles: []forge.Role{forge.Editor},
 })
 
-// Test app — full app without listening on a port
-app := forge.New(forge.Config{
-    BaseURL: "http://localhost",
-    Secret:  []byte("test-secret-32-bytes-minimum-xx"),
-    Env:     forge.Test,
-})
-handler := app.Handler() // returns http.Handler, does not call app.Run()
+// Token for test requests — ttl=0 means no expiry
+tok, _ := forge.SignToken(user, "test-secret", 0)
+
+// Module integration test via httptest — no app.Run() required
+repo := forge.NewMemoryRepo[*Post]()
+m := forge.NewModule((*Post)(nil), forge.Repo(repo))
+mux := http.NewServeMux()
+m.Register(mux)
+w := httptest.NewRecorder()
+r := httptest.NewRequest(http.MethodGet, "/posts", nil)
+mux.ServeHTTP(w, r)
 ```
 
-Use `net/http/httptest` with `app.Handler()` for integration tests.
-Use `forge.NewTestContext()` with direct hook calls for unit tests.
+Use `net/http/httptest` with `m.Register(mux)` for module integration tests.
+Use `forge.NewTestContext()` with direct signal handler calls for unit tests.
+`forge.App` / `app.Handler()` will be available from Milestone 2.

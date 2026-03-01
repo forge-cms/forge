@@ -101,6 +101,10 @@ Every step — without exception — follows this exact sequence:
 - After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
 - Ask: does this implementation reveal a gap, ambiguity, or conflict?
 - If yes: draft a new Decision or Amendment and present it to the user before proceeding.
+- After each step, consider whether `ARCHITECTURE.md` needs updating: new exported
+  symbols, corrected interface locations, changed behaviour, new middleware, or
+  planned files that are now implemented. If yes, update `ARCHITECTURE.md` before
+  proposing the commit.
 - The step is not complete until the review checkbox is ticked.
 
 ### 5. Update the backlog
