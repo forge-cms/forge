@@ -13,7 +13,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 |------|------|--------|-----------|
 | 1 | errors.go | ✅ Done | 2026-03-01 |
 | 2 | roles.go | ✅ Done | 2026-03-01 |
-| 3 | mcp.go | 🔲 Not started | — |
+| 3 | mcp.go | ✅ Done | 2026-03-01 |
 | 4 | node.go | 🔲 Not started | — |
 | 5 | context.go | 🔲 Not started | — |
 | 6 | signals.go | 🔲 Not started | — |
@@ -190,12 +190,46 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 ### Step 3 — mcp.go
 
-**Depends on:** nothing
+**Depends on:** roles (for `forge.Option`)
 **Decisions:** Decision 19
+**Files:** `mcp.go`, `mcp_test.go`
 
-- [ ] `forge.MCPRead` and `forge.MCPWrite` exported constants
-- [ ] `forge.MCP(options ...any) Option` — returns no-op `Option`; godoc comment states reserved for v2
-- [ ] Test: `forge.MCP(forge.MCPRead)` compiles and returns a valid (no-op) Option
+#### 3.1 — `MCPOperation` type and constants
+
+- [x] Declare unexported `MCPOperation` type as `string` — keeps constants typesafe
+- [x] `MCPRead  MCPOperation = "read"` — signals read-only MCP resource exposure
+- [x] `MCPWrite MCPOperation = "write"` — signals read+write MCP resource exposure
+- [x] godoc on both: "reserved for v2 MCP support; no-op in v1"
+
+#### 3.2 — `mcpOption` concrete type
+
+- [x] Declare unexported `mcpOption` struct (empty in v1 — no data needed)
+- [x] Implement `forge.Option` via `isOption()` marker method
+- [x] Do NOT re-declare `forge.Option` — use the canonical definition from `roles.go`
+
+#### 3.3 — `forge.MCP` function
+
+- [x] `func MCP(ops ...MCPOperation) Option` — accepts typed `MCPOperation` varargs
+- [x] Returns `mcpOption{}` — no-op in v1
+- [x] godoc: "MCP is reserved for v2 Model Context Protocol support. In v1, this
+      option compiles but has no effect at runtime. See Decision 19."
+
+#### 3.4 — Tests (`mcp_test.go`)
+
+- [x] `TestMCP` — table-driven:
+  - `MCP(MCPRead)` returns non-nil `Option`; type-asserts to `mcpOption`
+  - `MCP(MCPWrite)` returns non-nil `Option`; type-asserts to `mcpOption`
+  - `MCP(MCPRead, MCPWrite)` returns non-nil `Option`
+  - `MCP()` (zero args) returns valid no-op `Option`
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestMCP ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required;
+      MCPOperation exported correctly, Option used from roles.go as intended.
 
 ---
 
