@@ -1,311 +1,159 @@
 # Forge — Backlog
 
-This document is the living roadmap for Forge.
-All decisions affecting architecture are locked in DECISIONS.md.
-This document is about *what to build* and in what order.
+High-level roadmap for all milestones. This file tracks progress at the milestone
+and step level. For sub-task detail, verification blocks, and implementation notes
+see the corresponding `Milestone{N}_BACKLOG.md` file.
+
+All architectural decisions are locked in `DECISIONS.md`.
 
 ---
 
-## Status
+## Progress
 
-| Phase | Contents | Status |
-|-------|----------|--------|
-| Architecture | All 22 decisions | ✅ Locked |
-| Documentation | README, DECISIONS, BACKLOG, CHECKLIST | ✅ Done |
-| Core implementation | forge.Node, Module, Context, Auth... | 🔲 Not started |
-| Example app | example/blog | 🔲 Not started |
-| Tests | Full test suite | 🔲 Not started |
-| Launch | Domain, Sponsors | 🔲 Not started |
+| Milestone | Description | Status |
+|-----------|-------------|--------|
+| M1 | Core (v0.1.0) | 🔲 In progress |
+| M2 | SEO & Head (v0.2.0) | 🔲 Not started |
+| M3 | Templates & Rendering (v0.3.0) | 🔲 Not started |
+| M4 | Social & AI (v0.4.0) | 🔲 Not started |
+| M5 | Cookies & Compliance (v0.5.0) | 🔲 Not started |
+| M6 | Redirects (v0.6.0) | 🔲 Not started |
+| M7 | Scheduled publishing (v0.7.0) | 🔲 Not started |
+| M8 | v1.0.0 stabilisation | 🔲 Not started |
+| M9 | MCP support (v2) | 🔲 Not started |
 
 ---
 
 ## Milestone 1 — Core (v0.1.0)
 
 The minimum needed for a developer to build something real.
+**Detail:** [Milestone1_BACKLOG.md](Milestone1_BACKLOG.md)
 
-### forge.Node
-- [ ] `ID` — UUID v7 generation via `crypto/rand`
-- [ ] `Slug` — auto-generation from first `forge:"required"` string field
-- [ ] Slug sanitisation — whitelist `[a-z0-9-]`, max 200 chars, collision suffix
-- [ ] `Status` — Draft / Published / Scheduled / Archived
-- [ ] `PublishedAt`, `ScheduledAt`, `CreatedAt`, `UpdatedAt`
-- [ ] Struct tag validation — `required`, `min`, `max`, `email`, `url`, `slug`, `oneof`
-- [ ] `Validate() error` interface — runs after tag validation
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | errors.go | ✅ Done | 2026-03-01 |
+| 2 | roles.go | ✅ Done | 2026-03-01 |
+| 3 | mcp.go | ✅ Done | 2026-03-01 |
+| 4 | node.go | ✅ Done | 2026-03-01 |
+| 5 | context.go | ✅ Done | 2026-03-01 |
+| 6 | signals.go | ✅ Done | 2026-03-01 |
+| 7 | storage.go | 🔲 Not started | — |
+| 8 | auth.go | 🔲 Not started | — |
+| 9 | middleware.go | 🔲 Not started | — |
+| 10 | module.go | 🔲 Not started | — |
+| 11 | forge.go | 🔲 Not started | — |
+| P1 | forge-pgx | 🔲 Not started | — |
 
-### forge.Signals (early — everything depends on this)
-- [ ] `forge.Signal` type
-- [ ] Built-in signals: `BeforeCreate`, `AfterCreate`, `BeforeUpdate`, `AfterUpdate`, `BeforeDelete`, `AfterDelete`, `AfterPublish`, `AfterUnpublish`, `AfterArchive`, `SitemapRegenerate`
-- [ ] `forge.On(signal, handler)` — module option
-- [ ] `BeforeX` signals can abort the operation by returning an error
-- [ ] `AfterX` signals run asynchronously
-
-### forge.Context
-- [ ] Embeds `context.Context`
-- [ ] Implemented as an interface (Decision 21) — enables testing without HTTP
-- [ ] `User() forge.User`
-- [ ] `Locale() string` — returns `"en"` in v1
-- [ ] `SiteName() string`
-- [ ] `RequestID() string`
-- [ ] `Request() *http.Request`
-- [ ] `Response() http.ResponseWriter`
-- [ ] `forge.ContextFrom(r *http.Request) forge.Context`
-- [ ] `forge.NewTestContext(user forge.User) forge.Context` — for unit tests
-
-### forge.Error hierarchy
-- [ ] `forge.Error` interface — `Code()`, `HTTPStatus()`, `Public()`
-- [ ] Sentinel errors — `ErrNotFound`, `ErrGone`, `ErrForbidden`, `ErrUnauth`, `ErrConflict`
-- [ ] `forge.Err(field, message)` — ValidationError with field details
-- [ ] `forge.Require(errs...)` — collect multiple ValidationErrors
-- [ ] `forge.WriteError(w, r, err)` — single call, correct HTTP response
-- [ ] Error response format — JSON with `code`, `message`, `request_id`, `fields`
-- [ ] HTML error pages — `templates/errors/{status}.html`
-
-### Auth
-- [ ] `forge.BearerHMAC(secret)` — HMAC-SHA256 token validation
-- [ ] `forge.CookieSession(name, secret)` — cookie-based auth + auto CSRF
-- [ ] `forge.BasicAuth(user, pass)` — dev only + production startup warning
-- [ ] `forge.AnyAuth(fns...)` — accept bearer or cookie, first match wins
-- [ ] `forge.SignToken(user, secret)` — generate signed token
-- [ ] `forge.User` — `ID`, `Name`, `Roles`
-- [ ] `user.HasRole(role)` — hierarchical check (Admin includes Editor includes Author)
-- [ ] `user.Is(role)` — exact match only
-- [ ] CSRF token generation and validation in `CookieSession`
-
-### Roles
-- [ ] `forge.Admin`, `forge.Editor`, `forge.Author`, `forge.Guest` — built-in constants
-- [ ] Hierarchical inheritance — `HasRole(Editor)` returns true for Admin
-- [ ] `forge.Role("custom").Below(Editor).Above(Author)` — custom roles
-- [ ] `app.Roles(...)` — register custom roles
-- [ ] `forge.Read(role)`, `forge.Write(role)`, `forge.Delete(role)` — per-module auth
-
-### Storage (Decision 22)
-- [ ] `forge.DB` interface — `QueryContext`, `ExecContext`, `QueryRowContext`
-- [ ] `forge.Query[T](db forge.DB, sql, args...)` — list query with struct scanning
-- [ ] `forge.QueryOne[T](db forge.DB, sql, args...)` — single item query
-- [ ] Satisfied by `*sql.DB`, `*sql.Tx`, and `forgepgx.Wrap(pool)` out of the box
-- [ ] Struct field mapping — `db` tag, then field name lowercased
-- [ ] Reflection cache — `sync.Map`, scan struct fields once per type
-- [ ] `forge.Repository[T]` interface — for MemoryRepo and test doubles
-- [ ] `forge.NewMemoryRepo[T]()` — in-memory implementation for tests
-- [ ] `forge.ListOptions` — `Page`, `PerPage`, `OrderBy`, `Desc`, `Offset()`
-
-### forge-pgx (parallel to Milestone 1 — separate module)
-- [ ] `github.com/forge-cms/forge-pgx` — new repository under forge-cms org
-- [ ] `forgepgx.Wrap(pool *pgxpool.Pool) forge.DB` — native pool adapter
-- [ ] ~25 lines — thin translation layer, no business logic
-- [ ] Tests against a real PostgreSQL instance
-- [ ] README with performance comparison vs stdlib
-
-### forge.Module[T]
-- [ ] `app.Content(&T{}, opts...)` registration
-- [ ] Auto-routing: GET list, GET show, POST create, PUT update, DELETE delete
-- [ ] Lifecycle enforcement — Draft/Scheduled/Archived → 404 for Guest
-- [ ] Content negotiation — JSON / HTML / markdown / plain text
-- [ ] `forge.At(prefix)` option
-- [ ] `forge.Cache(ttl)` option — LRU, max 1000 entries
-- [ ] `forge.Middleware(...)` option
-- [ ] `forge.MCP(...)` option — no-op in v1, reserved for v2 (Decision 19)
-
-### App
-- [ ] `forge.New(config)` — top-level builder, calls MustConfig internally
-- [ ] `app.Use(middleware)` — global middleware
-- [ ] `app.Content(...)` — register content module
-- [ ] `app.Handle(pattern, handler)` — custom route
-- [ ] `app.HandleFunc(pattern, fn)` — custom route function
-- [ ] `app.Run(addr)` — start with graceful shutdown (SIGINT/SIGTERM, 30s timeout)
-- [ ] `app.Handler()` — return http.Handler without starting server
-
-### Configuration (Decision 20)
-- [ ] `forge.Config` struct — `BaseURL`, `Secret`, `Env`, `Logger`, `LogLevel`
-- [ ] `forge.Development`, `forge.Production`, `forge.Test` — env constants
-- [ ] Auto-read `FORGE_ENV` → `Config.Env`
-- [ ] Auto-read `FORGE_BASE_URL` → `Config.BaseURL` (fallback)
-- [ ] Auto-read `FORGE_SECRET` → `Config.Secret` (fallback)
-- [ ] Auto-read `FORGE_LOG_LEVEL` → `Config.LogLevel` (fallback)
-- [ ] Auto-read `PORT` → used by `app.Run("")`
-- [ ] `forge.MustConfig(cfg)` — startup validation with precise error messages
-- [ ] FORGE_SECRET warning if not set in production
-- [ ] FORGE_SECRET warning if under 32 bytes
-- [ ] `app.Run("")` → uses `PORT` → falls back to `:8080`
-
-### Middleware
-- [ ] `forge.RequestLogger()` — structured slog output + request_id
-- [ ] `forge.Recoverer()` — panic → 500, never crash
-- [ ] `forge.CORS(origin)` — CORS headers
-- [ ] `forge.MaxBodySize(n)` — request body limit
-- [ ] `forge.RateLimit(n, duration)` — per-IP rate limiting
-- [ ] `forge.SecurityHeaders()` — HSTS, CSP, X-Frame-Options, Referrer-Policy
-- [ ] `forge.InMemoryCache(ttl, opts...)` — LRU cache, max entries, X-Cache header
-- [ ] `forge.Chain(h, middlewares...)` — composition helper
+- [x] Step 1 — `errors.go`: forge.Error interface, sentinel errors, ValidationError, Require, WriteError
+- [x] Step 2 — `roles.go`: Role type, built-in roles, level hierarchy, HasRole, IsRole, NewRole builder, Read/Write/Delete options
+- [x] Step 3 — `mcp.go`: MCPOperation type, MCPRead/MCPWrite constants, MCP() no-op Option (reserved for v2)
+- [x] Step 4 — `node.go`: Node struct, Status type, NewID (UUID v7), GenerateSlug, UniqueSlug, struct tag validation engine, RunValidation
+- [x] Step 5 — `context.go`: User struct, GuestUser, Context interface, contextImpl, ContextFrom, NewTestContext
+- [x] Step 6 — `signals.go`: Signal type and constants, On[T] generic option, dispatchBefore, dispatchAfter, debouncer
+- [ ] Step 7 — `storage.go`: DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
+- [ ] Step 8 — `auth.go`: BearerHMAC, CookieSession (+ CSRF), BasicAuth, AnyAuth, SignToken
+- [ ] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
+- [ ] Step 10 — `module.go`: Module[T], auto-routing, lifecycle enforcement, content negotiation, cache, signal dispatch, At/Cache/Middleware/On options
+- [ ] Step 11 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown
+- [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool
 
 ---
 
 ## Milestone 2 — SEO & Head (v0.2.0)
 
-### forge.Head
-- [ ] `forge.Head` struct — all fields from README
-- [ ] `forge.Image` struct — URL, Alt, Width, Height
-- [ ] `forge.Excerpt(text, maxLen)` — smart truncation at word boundary
-- [ ] `forge.URL(parts...)` — URL builder
-- [ ] `forge.Crumbs(...)` / `forge.Crumb(label, url)` — breadcrumb builder
-- [ ] `forge.Headable` interface — `Head() forge.Head`
-- [ ] `forge.HeadFunc(fn)` — module-level Head override
+Metadata, structured data, sitemaps, and robots.txt.
+**Detail:** Milestone2_BACKLOG.md *(not yet created)*
 
-### Structured data (JSON-LD)
-- [ ] `forge.Article` — BlogPosting schema
-- [ ] `forge.Product` — Product schema
-- [ ] `forge.FAQPage` — FAQPage schema
-- [ ] `forge.HowTo` — HowToStep schema
-- [ ] `forge.Event` — Event schema
-- [ ] `forge.Recipe` — Recipe schema
-- [ ] `forge.Review` — Review schema
-- [ ] `forge.Organization` — Organization schema
-- [ ] BreadcrumbList — auto-generated from `Head.Breadcrumbs`
-
-### Sitemap
-- [ ] Per-module sitemap fragment (`/posts/sitemap.xml`)
-- [ ] Sitemap index merger (`/sitemap.xml`)
-- [ ] Event-driven regeneration via Signal
-- [ ] Debounce — 2 seconds, async goroutine
-- [ ] `forge.SitemapConfig` — BaseURL, ChangeFreq, Priority
-- [ ] `forge.SitemapPriority()` — optional interface per content type
-
-### Robots.txt
-- [ ] `app.SEO(forge.RobotsConfig{...})` — auto-generated robots.txt
-- [ ] `forge.AskFirst` AI scraper policy
-- [ ] Auto-append sitemap URL
+- [ ] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
+- [ ] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
+- [ ] Step 3 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
+- [ ] Step 4 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
 
 ---
 
 ## Milestone 3 — Templates & Rendering (v0.3.0)
 
-Moved before Social/AI — needed to build example apps and validate the API.
+HTML rendering, template helpers, content negotiation.
+**Detail:** Milestone3_BACKLOG.md *(not yet created)*
 
-### Template system
-- [ ] `forge.Templates(dir)` — parse at startup, fail fast
-- [ ] `forge.TemplatesWatch(dir)` — hot-reload in development
-- [ ] `forge.TemplatesOptional(dir)` — no startup error if dir missing
-- [ ] `templates/{type}/list.html` and `show.html` convention
-- [ ] `templates/errors/{status}.html` — custom error pages
-- [ ] `{{template "forge:head" .Head}}` — built-in head partial
-- [ ] `forge_meta`, `forge_date`, `forge_markdown`, `forge_excerpt` template helpers
-- [ ] `forge_csrf_token` — CSRF token helper for forms
-- [ ] `forge_llms_entries` — llms.txt template helper
-- [ ] `forge.TemplateData[T]` — `Content`, `Head`, `User`, `Request`
+- [ ] Step 1 — `templates.go`: Templates/TemplatesWatch/TemplatesOptional, list+show convention, startup parse, error pages
+- [ ] Step 2 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries
+- [ ] Step 3 — `templatedata.go`: TemplateData[T] struct wiring Content, Head, User, Request
 
 ---
 
 ## Milestone 4 — Social & AI (v0.4.0)
 
-### Social sharing
-- [ ] `forge.Social(platforms...)` — module option
-- [ ] `forge.OpenGraph` — all `og:` meta tags including article tags
-- [ ] `forge.TwitterCard` — all `twitter:` meta tags
-- [ ] `forge.SummaryLargeImage`, `forge.Summary` — Twitter card types
-- [ ] `forge.SocialOverrides` — per-platform overrides
-- [ ] `forge.LinkedIn` — LinkedIn-specific tags
+Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
+**Detail:** Milestone4_BACKLOG.md *(not yet created)*
 
-### AI indexing
-- [ ] `forge.AIIndex(options...)` — module option
-- [ ] `forge.LLMsTxt` — auto-generated `/llms.txt`
-- [ ] `/llms-full.txt` — with content summaries
-- [ ] Template override — `templates/llms.txt`
-- [ ] `forge.AIDoc` — `.aidoc` endpoint per content item
-- [ ] `forge.WithoutID` — suppress UUID in AIDoc
-- [ ] AIDoc format — `+++aidoc+v1+++` delimiter, all fields
-- [ ] `forge.AIDocSummary()` — optional interface for custom summary
-- [ ] Content negotiation — `Accept: text/markdown`, `Accept: text/plain`
-- [ ] `forge.Markdownable` interface — `Markdown() string`
-
-### RSS feeds
-- [ ] Auto-generated `/feed.xml` per module
-- [ ] Published content only
-- [ ] `forge.FeedConfig` — title, description, author
-- [ ] `forge.Feed(forge.Disabled)` — opt-out
-- [ ] Regeneration via same Signal as sitemap
+- [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides
+- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option
+- [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, Feed(Disabled) opt-out, signal-driven regeneration
 
 ---
 
 ## Milestone 5 — Cookies & Compliance (v0.5.0)
 
-- [ ] `forge.Cookie` struct — all fields from README
-- [ ] `forge.Necessary`, `forge.Preferences`, `forge.Analytics`, `forge.Marketing`
-- [ ] `forge.SetCookie(w, r, cookie, value)` — Necessary only
-- [ ] `forge.SetCookieIfConsented(w, r, cookie, value) bool`
-- [ ] `forge.ReadCookie(r, cookie) (string, bool)`
-- [ ] `forge.ClearCookie(w, cookie)`
-- [ ] `forge.ConsentFor(r, category) bool`
-- [ ] `app.Cookies(cookies...)` — registration
-- [ ] `/.well-known/cookies.json` — compliance manifest endpoint
-- [ ] `forge.ManifestAuth(role)` — access control on manifest
-- [ ] Consent state stored in Necessary cookie
+Typed cookie declarations, category-enforced consent, compliance manifest.
+**Detail:** Milestone5_BACKLOG.md *(not yet created)*
+
+- [ ] Step 1 — `cookies.go`: Cookie struct, Necessary/Preferences/Analytics/Marketing categories, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, ConsentFor, app.Cookies
+- [ ] Step 2 — `cookiemanifest.go`: /.well-known/cookies.json endpoint, ManifestAuth option, consent state storage
 
 ---
 
 ## Milestone 6 — Redirects (v0.6.0)
 
-- [ ] `forge.RedirectEntry` struct
-- [ ] Auto-create on slug rename
-- [ ] Auto-create on prefix change
-- [ ] `410 Gone` on archive and delete
-- [ ] `404` on Draft and Scheduled (does not leak existence)
-- [ ] Redirect chain collapse — A→B→C becomes A→C
-- [ ] `forge.Redirects(forge.From(prefix))` — bulk redirect
-- [ ] `app.Redirect(from, to, type)` — manual redirect
-- [ ] `/.well-known/redirects.json` — inspect endpoint (Editor+)
+Automatic redirect tracking, 410 Gone, chain collapse, inspect endpoint.
+**Detail:** Milestone6_BACKLOG.md *(not yet created)*
+
+- [ ] Step 1 — `redirects.go`: RedirectEntry, auto-create on slug/prefix rename, 410 on archive/delete, chain collapse, Redirects(From) bulk option, app.Redirect manual route
+- [ ] Step 2 — `redirectmanifest.go`: /.well-known/redirects.json inspect endpoint (Editor+)
 
 ---
 
 ## Milestone 7 — Scheduled publishing (v0.7.0)
 
-- [ ] Adaptive ticker — `time.Until(nextScheduledAt)`
-- [ ] Fallback polling — 60 seconds if nothing scheduled
-- [ ] Transition Scheduled → Published
-- [ ] Set `PublishedAt` automatically
-- [ ] Fire `AfterPublish` Signal
-- [ ] Trigger sitemap + feed regeneration
-- [ ] Graceful shutdown — wait for in-progress publish cycle
+Adaptive ticker, Scheduled→Published transition, AfterPublish signal.
+**Detail:** Milestone7_BACKLOG.md *(not yet created)*
+
+- [ ] Step 1 — `scheduler.go`: adaptive ticker, fallback polling (60s), Scheduled→Published transition, PublishedAt assignment, AfterPublish signal, sitemap+feed trigger, graceful shutdown coordination
 
 ---
 
 ## Milestone 8 — v1.0.0 stabilisation
 
-- [ ] Full test suite — all packages, minimum 80% coverage
-- [ ] Benchmark suite — request throughput, cache hit rate, template render time
-- [ ] godoc documentation on all exported symbols
-- [ ] Example apps:
-      `example/blog` — blog with posts and tags
-      `example/docs` — documentation site
-      `example/api` — pure API without templates
-- [ ] CHANGELOG.md created
-- [ ] Semantic versioning policy documented
-- [ ] API stability promise — no breaking changes in v1.x
+Test coverage, benchmarks, godoc audit, example apps.
+**Detail:** Milestone8_BACKLOG.md *(not yet created)*
+
+- [ ] Step 1 — Full test suite: all packages, minimum 80% coverage
+- [ ] Step 2 — Benchmark suite: request throughput, cache hit rate, template render time
+- [ ] Step 3 — godoc audit: all exported symbols documented
+- [ ] Step 4 — Example apps: example/blog, example/docs, example/api
+- [ ] Step 5 — CHANGELOG.md, semantic versioning policy, API stability promise
 
 ---
 
 ## Milestone 9 — MCP support (v2)
 
-Implementation of Decision 19. Syntax already reserved in v1.
+Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
+**Detail:** Milestone9_BACKLOG.md *(not yet created)*
 
-- [ ] `forge.MCPServer` — MCP server started with `app.Run()`
-- [ ] Auto-generated resource schema from `forge.Node` + struct tags
-- [ ] `forge.MCPRead` — expose content as readable MCP resources
-- [ ] `forge.MCPWrite` — expose Create/Update/Delete/Publish as MCP tools
-- [ ] Lifecycle enforcement in MCP — Draft not visible to Guest via MCP
-- [ ] Auth in MCP — same role system as HTTP endpoints
-- [ ] Rate limiting on MCP endpoints
-- [ ] Transport: stdio (local AI tools) + SSE (remote, authenticated)
-- [ ] `forge-mcp` as separate package (preserves zero-deps in core)
-- [ ] Documentation: "Connecting Claude/Cursor/Copilot to your Forge app"
+- [ ] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
+- [ ] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
+- [ ] Step 3 — MCPWrite: expose Create/Update/Delete/Publish as MCP tools with role checks
+- [ ] Step 4 — Transport: stdio (local AI tools) + SSE (remote, authenticated)
+- [ ] Step 5 — Documentation: connecting Claude/Cursor/Copilot to a Forge app
 
 ---
 
 ## v2+ Roadmap (not yet planned)
 
-These topics may not be implemented without a new Tier 1 decision round.
+These topics require a new Tier 1 decision round before planning begins.
 
 - **i18n** — locale-aware URLs, hreflang tags, per-locale content
-- **Forge AI** — content assistant built on MCP + AIDoc + llms.txt. Paid product via Forge Cloud. Architecturally impossible without Forge's content semantics.
+- **Forge AI** — content assistant built on MCP + AIDoc + llms.txt
 - **Admin UI** — `forge-studio` as a separate package
 - **Search** — SQLite FTS5 integration, `forge.Searchable` interface
 - **Webhooks** — outbound HTTP on content events
@@ -315,3 +163,5 @@ These topics may not be implemented without a new Tier 1 decision round.
 - **Image resizing** — `forge-images` as a separate package
 - **Forge Cloud** — managed hosting, dual-license introduction
 - **Database migrations** — `forge migrate` CLI or migration interface
+
+

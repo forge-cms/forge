@@ -104,7 +104,8 @@ Every step — without exception — follows this exact sequence:
 - The step is not complete until the review checkbox is ticked.
 
 ### 5. Update the backlog
-- Mark the step `✅ Done` in the Progress table with the completion date.
+- Mark the step `✅ Done` in the `Milestone{N}_BACKLOG.md` Progress table with the completion date.
+- Tick the step's summary checkbox in `BACKLOG.md` and update its row in the step table.
 - Never batch updates — update immediately after the step is verified.
 
 ### 6. Propose a commit message
@@ -130,12 +131,46 @@ Scope: the file name without extension (e.g. `errors`, `roles`, `node`)
 ## Milestone planning process
 
 Before implementing any milestone, a dedicated backlog file must be created and
-agreed upon. This file is the single source of truth for that milestone.
+agreed upon. This file is the single source of truth for that milestone's detail.
+
+### Two-tier backlog structure
+
+Forge uses two tiers of backlog documentation:
+
+**Tier 1 — `BACKLOG.md` (repo root)**
+- High-level roadmap for all milestones
+- Progress table at the top tracks milestone-level status
+- Each milestone section has a per-step progress table and one-line step
+  summary checkboxes — no sub-tasks, no implementation detail
+- One-line step format: `- [ ] Step {N} — \`{filename}\`: {one sentence summary}`
+- Updated when: a step is completed (tick the step checkbox + update step table)
+  or a milestone status changes (update the top Progress table)
+
+**Tier 2 — `Milestone{N}_BACKLOG.md` (repo root)**
+- Full implementation plan for one milestone only
+- Contains numbered sub-sections (N.M), atomic checkboxes, verification blocks,
+  and the architecture review checkbox
+- The authoritative task list — implementation follows this file exactly
+- Updated after every step: tick all checkboxes, mark step ✅ in Progress table
+
+### Keeping the two tiers in sync
+
+After completing a step:
+1. Tick all sub-task checkboxes in `Milestone{N}_BACKLOG.md`
+2. Mark step ✅ Done in the `Milestone{N}_BACKLOG.md` Progress table
+3. Tick the step checkbox in `BACKLOG.md` under the relevant milestone section
+4. Update the step row status in `BACKLOG.md` step table
+5. If all steps in a milestone are done, mark the milestone ✅ in the top
+   `BACKLOG.md` Progress table
+
+Never update only one file — always keep both in sync.
 
 ### When to create a milestone backlog
 
-Create `Milestone{N}_BACKLOG.md` in the repo root before writing any code for
-that milestone. The file must be reviewed and confirmed before implementation starts.
+Before writing any code for a milestone:
+1. Create `Milestone{N}_BACKLOG.md` with full step detail
+2. Add the step summaries to `BACKLOG.md` under the relevant milestone section
+3. Both files must be reviewed and confirmed before implementation starts
 
 ### Structure of a milestone backlog file
 
@@ -216,12 +251,16 @@ One-line description of the milestone goal.
 
 ### Progress tracking
 
-- Mark a step `🔲 In progress` in the Progress table when work begins.
-- Mark a step `✅ Done` and record the date when all its checkboxes are ticked
-  and its verification block passes.
+- Mark a step `🔲 In progress` in the Progress table of `Milestone{N}_BACKLOG.md` when work begins.
+- After a step passes verification:
+  1. Tick all its checkboxes in `Milestone{N}_BACKLOG.md`
+  2. Mark it `✅ Done` with date in the `Milestone{N}_BACKLOG.md` Progress table
+  3. Tick its summary checkbox in `BACKLOG.md`
+  4. Update its row in the `BACKLOG.md` step table
 - Never mark a step done if `go test ./...` is red.
-- Update `Milestone1_BACKLOG.md` (or the relevant file) after every step — do not
-  batch updates.
+- If all steps in a milestone are complete, update the milestone row in the
+  `BACKLOG.md` top Progress table to ✅.
+- Never batch updates — update immediately after each step is verified.
 
 ### Naming convention
 
