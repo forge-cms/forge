@@ -98,6 +98,8 @@ When a step is done: change `🔲` to `✅` and record the date.
 - [x] `go vet ./...` — clean
 - [x] `gofmt -l .` — returns nothing
 - [x] `go test -v -run TestError ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required,
+      or new Decision/Amendment drafted and agreed upon
 
 ---
 

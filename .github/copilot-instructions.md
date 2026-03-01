@@ -118,6 +118,18 @@ One-line description of the milestone goal.
   or the step ends with a shared verification block if substeps are tightly coupled.
 - **Checkboxes are atomic** — each `- [ ]` item must be a single, unambiguous task.
   Never write "implement X" without specifying what X requires.
+- **Every step ends with an architecture and decision review.** After the verification
+  block passes, review `ARCHITECTURE.md` and `DECISIONS.md` and ask:
+  - Does the implementation reveal a gap, ambiguity, or conflict in an existing decision?
+  - Did any implementation choice introduce a pattern or constraint not yet captured?
+  - Does the file's dependency graph still match the rules in `ARCHITECTURE.md`?
+  If yes to any of the above, a new Decision or Amendment must be proposed and agreed
+  upon before the next step begins. The step is not complete until this review is done.
+  Add the following checkbox at the end of every step's verification block:
+  ```
+  - [ ] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required,
+        or new Decision/Amendment drafted and agreed upon
+  ```
 
 ### Progress tracking
 
