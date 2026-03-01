@@ -1,0 +1,9 @@
+*.exe
+*.test
+*.out
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+LAUNCH_CHECKLIST.md
