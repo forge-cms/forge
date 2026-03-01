@@ -15,7 +15,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 2 | roles.go | ✅ Done | 2026-03-01 |
 | 3 | mcp.go | ✅ Done | 2026-03-01 |
 | 4 | node.go | ✅ Done | 2026-03-01 |
-| 5 | context.go | 🔲 Not started | — |
+| 5 | context.go | ✅ Done | 2026-03-01 |
 | 6 | signals.go | 🔲 Not started | — |
 | 7 | storage.go | 🔲 Not started | — |
 | 8 | auth.go | 🔲 Not started | — |
@@ -362,23 +362,75 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 **Depends on:** roles
 **Decisions:** Decision 6, 21; Amendment S1 (RequestID)
+**Files:** `context.go`, `context_test.go`
 
-- [ ] `forge.Context` interface:
-  ```go
-  context.Context
-  User() forge.User
-  Locale() string
-  SiteName() string
-  RequestID() string
-  Request() *http.Request
-  Response() http.ResponseWriter
-  ```
-- [ ] Unexported `contextImpl` struct implementing `forge.Context`
-- [ ] `forge.ContextFrom(r *http.Request) forge.Context` — builds context from request; generates UUID v7 RequestID; sets `X-Request-ID` response header
-- [ ] `forge.NewTestContext(user forge.User) forge.Context` — for unit tests; `Request()` returns a synthetic `*http.Request`; `Response()` returns an `httptest.ResponseRecorder`-compatible writer
-- [ ] `Locale()` always returns `"en"` in v1
-- [ ] `forge.Context` is always non-nil — Forge guarantees this before user code is called
-- [ ] Tests: `NewTestContext` with and without user; `ContextFrom` sets RequestID; Locale returns "en"
+#### 5.1 — `forge.User` struct
+
+- [x] `forge.User` value struct: `ID string`, `Name string`, `Roles []Role`
+- [x] `GuestUser` package-level var — zero-value User with no roles; represents an
+      unauthenticated request
+- [x] godoc: "User represents an authenticated identity. The zero value is equivalent
+      to GuestUser (unauthenticated)."
+- [x] Defined in context.go because it only depends on Role (Layer 0); auth.go (Step 8)
+      adds authentication machinery on top
+
+#### 5.2 — `forge.Context` interface
+
+- [x] `forge.Context` interface embedding `context.Context` with methods:
+  - `User() User`
+  - `Locale() string`
+  - `SiteName() string`
+  - `RequestID() string`
+  - `Request() *http.Request`
+  - `Response() http.ResponseWriter`
+- [x] godoc on interface and every method
+
+#### 5.3 — `contextImpl` unexported struct
+
+- [x] Unexported `contextImpl` implementing all `forge.Context` methods
+- [x] Embeds `context.Context` (stores the request's context for deadline/cancel propagation)
+- [x] Fields: `user User`, `locale string`, `siteName string`, `requestID string`,
+      `req *http.Request`, `w http.ResponseWriter`
+- [x] All methods are simple field accessors — no allocation on the hot path
+
+#### 5.4 — `forge.ContextFrom`
+
+- [x] `func ContextFrom(w http.ResponseWriter, r *http.Request) Context`
+- [x] RequestID: read from `w.Header().Get("X-Request-ID")` first; then
+      `r.Header.Get("X-Request-ID")`; generate new `NewID()` if both empty
+- [x] Write RequestID to `w.Header().Set("X-Request-ID", ...)` unconditionally
+- [x] User: read from request context via unexported `contextKey` type; zero value
+      (GuestUser) if not present
+- [x] `Locale()` returns `"en"` (i18n deferred to v2 per Decision 11)
+- [x] `SiteName()` returns `""` in v1 (wired in forge.go, Step 11)
+
+#### 5.5 — `forge.NewTestContext`
+
+- [x] `func NewTestContext(user User) Context` — no HTTP overhead
+- [x] `Request()` returns `httptest.NewRequest("GET", "/", nil)`
+- [x] `Response()` returns `*httptest.ResponseRecorder`
+- [x] Locale `"en"`, SiteName `""`, RequestID generated via `NewID()`
+
+#### 5.6 — Tests (`context_test.go`)
+
+- [x] `TestContextFrom` — Locale returns `"en"`; Response is non-nil; Request is non-nil
+- [x] `TestContextFromGeneratesRequestID` — no incoming ID → RequestID non-empty;
+      response header `X-Request-ID` set
+- [x] `TestContextFromPreservesRequestID` — incoming `X-Request-ID` on request →
+      same ID echoed on response header and returned by `RequestID()`
+- [x] `TestNewTestContext` — returns non-nil; correct User; Locale `"en"`;
+      Request non-nil; Response non-nil
+- [x] `TestNewTestContextGuest` — `NewTestContext(User{})` → User equals GuestUser;
+      no roles
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestContext" ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment R3 drafted: forge.User
+      defined in context.go (not auth.go) to resolve layer dependency ordering.
 
 ---
 

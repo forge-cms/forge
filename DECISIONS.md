@@ -923,6 +923,33 @@ built-in roles, making the intent of the builder API correct and testable.
 
 ---
 
+### Amendment R3 — `forge.User` is defined in `context.go` (amends Decision 21)
+
+**Decision:** The `forge.User` struct is defined in `context.go` (Layer 1), not in
+`auth.go` (Layer 3).
+
+**Rationale:**
+`forge.Context.User()` returns `forge.User`. `context.go` is in Layer 1 (depends on
+roles only). `auth.go` is in Layer 3 (depends on context, node, signals, storage).
+
+Defining `forge.User` in `auth.go` would create a forward reference: context.go (Layer 1)
+would need to reference a type from auth.go (Layer 3), violating the dependency layer rules
+in ARCHITECTURE.md.
+
+Moving the declaration to `context.go` resolves this cleanly:
+- `forge.User` only depends on `forge.Role` (Layer 0) — it fits in Layer 1
+- `auth.go` builds on top of the User type without moving it
+- The User struct is a pure data type with no behaviour; behaviour (token signing,
+  password hashing, session management) belongs in auth.go
+
+**Consequences:**
+- `forge.User struct { ID, Name string; Roles []Role }` declared in `context.go`
+- `forge.GuestUser` zero-value var also in `context.go`
+- `auth.go` uses `forge.User` as its primary identity type without re-declaring it
+- Tests that construct users import nothing beyond the `forge` package (no auth dependency)
+
+---
+
 ### Amendment R2 — `oneof` tag uses `|` as value separator (amends Decision 10)
 
 **Decision:** The `oneof=` tag constraint uses `|` (pipe) as the separator between
