@@ -37,6 +37,35 @@ reflection usage (use the sync.Map cache pattern), goroutine overhead,
 and SQL query efficiency. Propose the performant solution by default —
 not the convenient one.
 
+**Optimise for readability and developer/AI experience:**
+Every exported symbol is part of the public API that developers write
+by hand and AI assistants read and generate. Before finalising any
+signature, option name, or syntax pattern, ask:
+- Is this the most readable form at the call site?
+- Can an AI assistant infer intent from the symbol name alone, without
+  reading docs?
+- Is the pattern consistent with every other symbol in the package?
+- Would a developer scanning unfamiliar code understand it in under
+  three seconds?
+
+Prefer `forge.Verb(Noun)` or `forge.Noun` — no abbreviations, no
+clever names. A longer but unambiguous name is always better than a
+short opaque one.
+
+**Analyse consequences for developer and AI experience before any amendment:**
+Before proposing a Decision, Amendment, or architectural change, explicitly
+evaluate its impact on:
+1. **Call-site syntax** — how does it look when a developer writes it?
+2. **README and documentation** — does any documented example break or
+   become misleading?
+3. **AI generation accuracy** — will AI assistants be able to produce
+   correct Forge code without consulting docs?
+4. **Consistency** — does this pattern align with all existing exported
+   symbols, or does it introduce a special case?
+
+Document this analysis in the Amendment before it is agreed upon.
+If an amendment breaks a README example, fix the README in the same step.
+
 ## Code style
 
 - Single package: `forge` — no sub-packages

@@ -793,7 +793,7 @@ Standard `http.Handler` wrapping — no Forge-specific types required:
 ```go
 func myCustomMiddleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        ctx := forge.ContextFrom(r)  // access forge.Context if needed
+        ctx := forge.ContextFrom(w, r)  // access forge.Context if needed
         _ = ctx.User()
         next.ServeHTTP(w, r)
     })
