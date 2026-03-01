@@ -39,7 +39,7 @@ The minimum needed for a developer to build something real.
 | 6 | signals.go | ✅ Done | 2026-03-01 |
 | 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | ✅ Done | 2026-03-01 |
-| 9 | middleware.go | 🔲 Not started | — |
+| 9 | middleware.go | ✅ Done | 2026-03-01 |
 | 10 | module.go | 🔲 Not started | — |
 | 11 | forge.go | 🔲 Not started | — |
 | P1 | forge-pgx | 🔲 Not started | — |
@@ -52,7 +52,7 @@ The minimum needed for a developer to build something real.
 - [x] Step 6 — `signals.go`: Signal type and constants, On[T] generic option, dispatchBefore, dispatchAfter, debouncer
 - [x] Step 7 — `storage.go`: DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
 - [x] Step 8 — `auth.go`: BearerHMAC, CookieSession (+ CSRF), BasicAuth, AnyAuth, SignToken
-- [ ] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
+- [x] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
 - [ ] Step 10 — `module.go`: Module[T], auto-routing, lifecycle enforcement, content negotiation, cache, signal dispatch, At/Cache/Middleware/On options
 - [ ] Step 11 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown
 - [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool

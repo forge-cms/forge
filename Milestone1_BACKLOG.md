@@ -19,7 +19,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 6 | signals.go | ✅ Done | 2026-03-01 |
 | 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | ✅ Done | 2026-03-01 |
-| 9 | middleware.go | 🔲 Not started | — |
+| 9 | middleware.go | ✅ Done | 2026-03-01 |
 | 10 | module.go | 🔲 Not started | — |
 | 11 | forge.go | 🔲 Not started | — |
 | P1 | forge-pgx (separate module) | 🔲 Not started | — |
@@ -767,22 +767,122 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 **Depends on:** errors, context
 **Decisions:** Amendment P2 (LRU cache)
+**Files:** `middleware.go`, `middleware_test.go`
+**Status:** ✅ Done
 
-- [ ] `forge.RequestLogger() func(http.Handler) http.Handler` — structured slog; fields: `method`, `path`, `status`, `duration`, `request_id`
-- [ ] `forge.Recoverer() func(http.Handler) http.Handler` — panic → 500 via `forge.WriteError`; logs stack trace
-- [ ] `forge.CORS(origin string) func(http.Handler) http.Handler` — sets `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`
-- [ ] `forge.MaxBodySize(n int64) func(http.Handler) http.Handler` — wraps `http.MaxBytesReader`
-- [ ] `forge.RateLimit(n int, d time.Duration) func(http.Handler) http.Handler` — per-IP token bucket; returns 429 on exceeded
-- [ ] `forge.SecurityHeaders() func(http.Handler) http.Handler` — HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, strict CSP default
-- [ ] `forge.InMemoryCache(ttl time.Duration, opts ...Option) func(http.Handler) http.Handler`
-  - LRU: doubly-linked list + map (~40 lines, stdlib only)
-  - Default max 1000 entries; `forge.CacheMaxEntries(n int)` option
-  - Cache key: method + full URL including query params + Accept header
-  - `X-Cache: HIT` / `X-Cache: MISS` always set
-  - Background sweep every 60s; lazy expiry on read
-- [ ] `forge.Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler` — composition helper
-- [ ] Tests: Recoverer catches panic, RateLimit returns 429, LRU MISS→HIT→eviction, SecurityHeaders present
-- [ ] Benchmark: LRU cache HIT throughput
+#### 9.1 — `statusRecorder` (unexported helper)
+
+- [x] Unexported struct `statusRecorder{ http.ResponseWriter; status int }` that
+      captures the HTTP status code written by handlers
+- [x] Implement `WriteHeader(code int)` — stores code, delegates to embedded writer
+- [x] Default status 200 if `WriteHeader` is never called (set on first `Write`)
+
+#### 9.2 — `RequestLogger`
+
+- [x] `func RequestLogger() func(http.Handler) http.Handler`
+- [x] Before `next.ServeHTTP`: record `start := time.Now()`, call
+      `ctx := ContextFrom(w, r)` (sets `X-Request-ID` on response), wrap `w`
+      with `statusRecorder`
+- [x] After `next.ServeHTTP`: log via `slog.InfoContext` with fields:
+      `method`, `path`, `status`, `duration_ms` (float64 milliseconds),
+      `request_id` from `ctx.RequestID()`
+
+#### 9.3 — `Recoverer`
+
+- [x] `func Recoverer() func(http.Handler) http.Handler`
+- [x] Defers a recovery closure around `next.ServeHTTP`
+- [x] On panic: call `WriteError(w, r, err)` with a 500-class `forge.Error`;
+      log stack trace via `slog.ErrorContext` using `runtime.Stack`
+
+#### 9.4 — `CORS`
+
+- [x] `func CORS(origin string) func(http.Handler) http.Handler`
+- [x] Sets on every request:
+  - `Access-Control-Allow-Origin: <origin>`
+  - `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`
+  - `Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token`
+- [x] On `OPTIONS` preflight: respond `204 No Content`, do not call `next`
+
+#### 9.5 — `MaxBodySize`
+
+- [x] `func MaxBodySize(n int64) func(http.Handler) http.Handler`
+- [x] Wraps `r.Body` with `http.MaxBytesReader(w, r.Body, n)` before calling `next`
+
+#### 9.6 — `SecurityHeaders`
+
+- [x] `func SecurityHeaders() func(http.Handler) http.Handler`
+- [x] Sets on every response (before calling `next`):
+  - `Strict-Transport-Security: max-age=63072000; includeSubDomains`
+  - `X-Frame-Options: DENY`
+  - `X-Content-Type-Options: nosniff`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Content-Security-Policy: default-src 'self'`
+
+#### 9.7 — `RateLimit` (token bucket per IP)
+
+- [x] Unexported `ipBucket{ tokens float64; lastSeen time.Time; mu sync.Mutex }`
+- [x] Unexported `rateLimiter{ buckets map[string]*ipBucket; mu sync.RWMutex;
+      rate float64; max float64 }`
+- [x] `func RateLimit(n int, d time.Duration) func(http.Handler) http.Handler`
+- [x] Per-request: extract IP via `net.SplitHostPort`; replenish tokens since
+      `lastSeen`; cap at `n`; if tokens ≥ 1 decrement and proceed; else 429 with
+      `Retry-After` header (seconds until 1 token available)
+- [x] Background goroutine (spawned once at middleware creation): `time.NewTicker(d)`
+      sweeps map, deletes buckets with `lastSeen > 2×d` ago
+
+#### 9.8 — `InMemoryCache` + `CacheMaxEntries` option
+
+- [x] Unexported `cacheMaxEntriesOption{ n int }` implementing `forge.Option`
+      (`isOption()` marker from `roles.go`)
+- [x] `func CacheMaxEntries(n int) Option` — returns `cacheMaxEntriesOption{n}`
+- [x] Unexported LRU types (~40 lines):
+  - `lruEntry{ key string; body []byte; header http.Header; status int;
+    expires time.Time; prev, next *lruEntry }`
+  - `lruCache{ mu sync.Mutex; entries map[string]*lruEntry; head, tail *lruEntry;
+    max, count int; ttl time.Duration }`
+  - `get(key) (*lruEntry, bool)` — lazy TTL check; move-to-front
+  - `set(key string, e *lruEntry)` — add to front; evict LRU tail if `count > max`
+  - `sweep()` — remove all expired entries; called by background goroutine
+- [x] `func InMemoryCache(ttl time.Duration, opts ...Option) func(http.Handler) http.Handler`
+- [x] Cache key: `r.Method + " " + r.URL.RequestURI() + " " + r.Header.Get("Accept")`
+- [x] Cache only `GET` requests; always set `X-Cache: HIT` or `X-Cache: MISS`
+- [x] On HIT: write cached headers + status + body; skip `next`
+- [x] On MISS: wrap `w` with `cacheRecorder`; after `next`, store if status 200
+- [x] Background goroutine: `time.NewTicker(60 * time.Second)` → `cache.sweep()`
+
+#### 9.9 — `Chain`
+
+- [x] `func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler`
+- [x] Apply middlewares in reverse order so slice index 0 is the outermost wrapper
+- [x] ~5 lines
+
+#### 9.10 — Tests (`middleware_test.go`)
+
+- [x] `TestRecovererCatchesPanic` — panicking handler → 500 response, no crash
+- [x] `TestRecovererPassesThrough` — non-panicking handler → 200, unaffected
+- [x] `TestRequestLoggerSetsRequestID` — `X-Request-ID` present on response
+- [x] `TestCORSHeaders` — CORS headers present
+- [x] `TestCORSPreflight` — OPTIONS → 204, `next` not called
+- [x] `TestMaxBodySizeRejects` — oversized body → 413
+- [x] `TestSecurityHeadersPresent` — all five security headers set
+- [x] `TestRateLimitAllows` — under limit → 200
+- [x] `TestRateLimitRejects` — over limit → 429 with `Retry-After`
+- [x] `TestInMemoryCacheMISS` — first request → `X-Cache: MISS`
+- [x] `TestInMemoryCacheHIT` — second identical request → `X-Cache: HIT`, body matches
+- [x] `TestInMemoryCacheEviction` — `CacheMaxEntries(1)` + two keys → LRU entry evicted
+- [x] `TestInMemoryCacheTTLExpiry` — entry past TTL → MISS on next request
+- [x] `TestChain` — middlewares applied in correct order
+- [x] `BenchmarkInMemoryCacheHIT` — hot-path benchmark for cached GET response
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestRecoverer|TestRequest|TestCORS|TestMax|TestSecurity|TestRate|TestInMemory|TestChain" ./...` — all green
+- [x] `go test -bench BenchmarkInMemoryCache ./...` — runs without error
+- [x] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required
+      (Amendment P2 covers LRU; no auth middleware in this step)
 
 ---
 
