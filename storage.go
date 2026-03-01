@@ -58,6 +58,7 @@ func dbFields(t reflect.Type) []dbField {
 var goFieldCache sync.Map
 
 // goFields returns a cached Go-name → field-index map for struct type t.
+// Only maps direct (non-embedded) exported fields.
 func goFields(t reflect.Type) map[string]int {
 	if v, ok := goFieldCache.Load(t); ok {
 		return v.(map[string]int)
@@ -70,6 +71,35 @@ func goFields(t reflect.Type) map[string]int {
 	}
 	goFieldCache.Store(t, m)
 	return m
+}
+
+// goFieldPathKey is the cache key for [goFieldPath].
+type goFieldPathKey struct {
+	t    reflect.Type
+	name string
+}
+
+// goFieldPathCache stores field index paths ([]int) keyed by goFieldPathKey.
+// A []int path is used to access promoted fields in embedded structs via
+// reflect.Value.FieldByIndex.
+var goFieldPathCache sync.Map
+
+// goFieldPath returns the reflect index path (suitable for FieldByIndex) for
+// the named field in struct type t, traversing embedded structs. Returns nil
+// if the field is not found.
+func goFieldPath(t reflect.Type, name string) []int {
+	key := goFieldPathKey{t: t, name: name}
+	if v, ok := goFieldPathCache.Load(key); ok {
+		return v.([]int)
+	}
+	sf, ok := t.FieldByName(name)
+	if !ok {
+		goFieldPathCache.Store(key, ([]int)(nil))
+		return nil
+	}
+	path := sf.Index
+	goFieldPathCache.Store(key, path)
+	return path
 }
 
 // structTypeOf returns the underlying struct reflect.Type for T and whether T
@@ -297,8 +327,9 @@ func (r *MemoryRepo[T]) Delete(_ context.Context, id string) error {
 }
 
 // stringField returns the string value of the named exported field in v.
-// Traverses one pointer indirection. Returns "" if the field does not
-// exist, is not a string, or v is nil. Uses goFieldCache.
+// Traverses one pointer indirection and handles embedded struct fields.
+// Returns "" if the field does not exist, is not a string, or v is nil.
+// Uses goFieldPathCache to avoid repeated reflection.
 func stringField[T any](v T, name string) string {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
@@ -310,12 +341,11 @@ func stringField[T any](v T, name string) string {
 	if rv.Kind() != reflect.Struct {
 		return ""
 	}
-	m := goFields(rv.Type())
-	idx, ok := m[name]
-	if !ok {
+	path := goFieldPath(rv.Type(), name)
+	if path == nil {
 		return ""
 	}
-	f := rv.Field(idx)
+	f := rv.FieldByIndex(path)
 	if f.Kind() != reflect.String {
 		return ""
 	}

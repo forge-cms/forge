@@ -40,7 +40,7 @@ The minimum needed for a developer to build something real.
 | 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | ✅ Done | 2026-03-01 |
 | 9 | middleware.go | ✅ Done | 2026-03-01 |
-| 10 | module.go | 🔲 Not started | — |
+| 10 | module.go | ✅ Done | 2026-03-01 |
 | 11 | forge.go | 🔲 Not started | — |
 | P1 | forge-pgx | 🔲 Not started | — |
 
@@ -53,7 +53,7 @@ The minimum needed for a developer to build something real.
 - [x] Step 7 — `storage.go`: DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
 - [x] Step 8 — `auth.go`: BearerHMAC, CookieSession (+ CSRF), BasicAuth, AnyAuth, SignToken
 - [x] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
-- [ ] Step 10 — `module.go`: Module[T], auto-routing, lifecycle enforcement, content negotiation, cache, signal dispatch, At/Cache/Middleware/On options
+- [x] Step 10 — `module.go`: Module[T any], At/Cache/Auth/Middleware/Repo options, lifecycle, content negotiation, signals, per-module LRU
 - [ ] Step 11 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown
 - [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool
 

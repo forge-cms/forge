@@ -262,34 +262,39 @@ func (cacheMaxEntriesOption) isOption() {}
 // The default is 1000 entries.
 func CacheMaxEntries(n int) Option { return cacheMaxEntriesOption{n: n} }
 
-// lruEntry is a node in the doubly-linked LRU list and the cached response.
-type lruEntry struct {
+// cacheEntry is a node in the doubly-linked LRU list inside [CacheStore].
+type cacheEntry struct {
 	key     string
 	body    []byte
 	header  http.Header
 	status  int
 	expires time.Time
-	prev    *lruEntry
-	next    *lruEntry
+	prev    *cacheEntry
+	next    *cacheEntry
 }
 
-// lruCache is a thread-safe LRU cache of HTTP responses.
-type lruCache struct {
+// CacheStore is a thread-safe LRU cache of HTTP responses used by
+// [InMemoryCache] and by [Module] for signal-triggered invalidation.
+// Use [NewCacheStore] to create one.
+type CacheStore struct {
 	mu      sync.Mutex
-	entries map[string]*lruEntry
-	head    *lruEntry // most recently used
-	tail    *lruEntry // least recently used
+	entries map[string]*cacheEntry
+	head    *cacheEntry // most recently used
+	tail    *cacheEntry // least recently used
 	max     int
 	count   int
 	ttl     time.Duration
 }
 
-func newLRUCache(max int, ttl time.Duration) *lruCache {
-	return &lruCache{entries: make(map[string]*lruEntry), max: max, ttl: ttl}
+// NewCacheStore returns a CacheStore with the given TTL per entry and maximum
+// entry count. When the store is full, the least-recently-used entry is evicted.
+func NewCacheStore(ttl time.Duration, max int) *CacheStore {
+	return &CacheStore{entries: make(map[string]*cacheEntry), max: max, ttl: ttl}
 }
 
 // get retrieves an entry. Returns nil if absent or expired (lazy eviction).
-func (c *lruCache) get(key string) *lruEntry {
+// Caller must hold c.mu.
+func (c *CacheStore) get(key string) *cacheEntry {
 	e := c.entries[key]
 	if e == nil {
 		return nil
@@ -303,7 +308,8 @@ func (c *lruCache) get(key string) *lruEntry {
 }
 
 // set inserts or replaces an entry, evicting the LRU tail if at capacity.
-func (c *lruCache) set(e *lruEntry) {
+// Caller must hold c.mu.
+func (c *CacheStore) set(e *cacheEntry) {
 	if old, ok := c.entries[e.key]; ok {
 		c.remove(old)
 	}
@@ -315,19 +321,19 @@ func (c *lruCache) set(e *lruEntry) {
 	}
 }
 
-func (c *lruCache) remove(e *lruEntry) {
+func (c *CacheStore) remove(e *cacheEntry) {
 	delete(c.entries, e.key)
 	c.count--
 	c.unlink(e)
 }
 
-func (c *lruCache) evict() {
+func (c *CacheStore) evict() {
 	if c.tail != nil {
 		c.remove(c.tail)
 	}
 }
 
-func (c *lruCache) pushFront(e *lruEntry) {
+func (c *CacheStore) pushFront(e *cacheEntry) {
 	e.prev = nil
 	e.next = c.head
 	if c.head != nil {
@@ -339,7 +345,7 @@ func (c *lruCache) pushFront(e *lruEntry) {
 	}
 }
 
-func (c *lruCache) moveToFront(e *lruEntry) {
+func (c *CacheStore) moveToFront(e *cacheEntry) {
 	if c.head == e {
 		return
 	}
@@ -347,7 +353,7 @@ func (c *lruCache) moveToFront(e *lruEntry) {
 	c.pushFront(e)
 }
 
-func (c *lruCache) unlink(e *lruEntry) {
+func (c *CacheStore) unlink(e *cacheEntry) {
 	if e.prev != nil {
 		e.prev.next = e.next
 	} else {
@@ -362,8 +368,20 @@ func (c *lruCache) unlink(e *lruEntry) {
 	e.next = nil
 }
 
-// sweep removes all expired entries.
-func (c *lruCache) sweep() {
+// Flush removes all entries from the cache immediately. Used by [Module] to
+// invalidate the cache after a write operation (create, update, delete).
+func (c *CacheStore) Flush() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]*cacheEntry)
+	c.head = nil
+	c.tail = nil
+	c.count = 0
+}
+
+// Sweep removes all expired entries. Called periodically by [InMemoryCache]
+// background goroutine and available for use by [Module].
+func (c *CacheStore) Sweep() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := time.Now()
@@ -415,13 +433,13 @@ func InMemoryCache(ttl time.Duration, opts ...Option) func(http.Handler) http.Ha
 			max = m.n
 		}
 	}
-	cache := newLRUCache(max, ttl)
+	cache := NewCacheStore(ttl, max)
 
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			cache.sweep()
+			cache.Sweep()
 		}
 	}()
 
@@ -460,7 +478,7 @@ func InMemoryCache(ttl time.Duration, opts ...Option) func(http.Handler) http.Ha
 				for k, v := range rec.ResponseWriter.Header() {
 					h[k] = v
 				}
-				e := &lruEntry{
+				e := &cacheEntry{
 					key:     key,
 					body:    rec.body,
 					header:  h,

@@ -20,7 +20,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | ✅ Done | 2026-03-01 |
 | 9 | middleware.go | ✅ Done | 2026-03-01 |
-| 10 | module.go | 🔲 Not started | — |
+| 10 | module.go | ✅ Done | 2026-03-01 |
 | 11 | forge.go | 🔲 Not started | — |
 | P1 | forge-pgx (separate module) | 🔲 Not started | — |
 
@@ -890,36 +890,192 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 ### Step 10 — module.go
 
-**Depends on:** node, context, auth, signals, storage, errors
-**Decisions:** Decision 4 (content negotiation), 14 (lifecycle), 19 (MCP no-op); Amendment P2 (cache)
+**Depends on:** node, context, auth, signals, storage, errors, middleware
+**Decisions:** Decision 4 (content negotiation), 14 (lifecycle), 19 (MCP no-op); Amendments M1, M2, M3, P2
+**Files:** `module.go`, `module_test.go`
+**Status:** ✅ Done
 
-- [ ] `forge.Option` type (consistent with Steps 2 and 3)
-- [ ] Internal `forge.Module[T forge.Node]` struct
-- [ ] `app.Content(prototype T, opts ...Option)` — registers module; derives prefix from type name as default
-- [ ] `forge.At(prefix string) Option` — overrides URL prefix
-- [ ] `forge.Cache(ttl time.Duration) Option` — enables per-module LRU; max 1000 entries; cache key: `"{method}:{fullURL}:{Accept}"`; `X-Cache: HIT/MISS`; invalidated on AfterCreate/Update/Delete
-- [ ] `forge.Middleware(mws ...func(http.Handler) http.Handler) Option` — per-module middleware
-- [ ] Auto-routing via Go 1.22 `net/http` ServeMux:
-  - `GET /{prefix}` → list
-  - `GET /{prefix}/{slug}` → show
-  - `POST /{prefix}` → create
-  - `PUT /{prefix}/{slug}` → update
-  - `DELETE /{prefix}/{slug}` → delete
-- [ ] Lifecycle enforcement on all public GET:
-  - Draft / Scheduled / Archived → 404 for Guest (never leaks existence)
-  - Editor+ → sees all statuses
-  - Author → sees own Draft/Scheduled/Archived
-- [ ] Content negotiation (pre-compiled Accept matching per module, not per request):
-  - `application/json` → always available
-  - `text/html` → requires `forge.Templates(...)` registered
-  - `text/markdown` → requires T implements `forge.Markdownable`; else 406
-  - `text/plain` → always available, derived from content
-  - `*/*` or missing Accept → JSON
-  - `Vary: Accept` set automatically
-- [ ] Struct tag validation + `Validate()` run automatically before Save (via `forge.RunValidation`)
-- [ ] `forge.MCP(options ...any) Option` delegates to mcp.go no-op
-- [ ] Tests: lifecycle enforcement (Guest 404, Editor 200, Author own), content negotiation (all types), cache HIT/MISS/invalidation, validation aborts create/update
-- [ ] Benchmark: full request lifecycle (in-memory repo, JSON response)
+#### 10.1 — Amendments (M1, M2, M3, M4)
+
+- [x] Document Amendment M1 (`forge.Repo[T any]` storage injection) in `DECISIONS.md`
+- [x] Document Amendment M2 (export `CacheStore` from `middleware.go`) in `DECISIONS.md`
+- [x] Document Amendment M3 (`Module[T any]` not `[T forge.Node]`) in `DECISIONS.md`
+- [x] Document Amendment M4 (`stringField` embedded struct fix in `storage.go`) in `DECISIONS.md`
+- [x] Update `middleware.go`: rename `lruCache` → `CacheStore` (exported), add `NewCacheStore`,
+      add `Flush()`, update `lruEntry` → `cacheEntry` (exported), update `InMemoryCache` to use
+      `*CacheStore`; keep all existing behaviour unchanged
+- [x] Update `storage.go`: fix `stringField` to handle embedded struct fields via `goFieldPath`
+- [x] Update `middleware_test.go` if any internal type references need updating (none needed)
+
+#### 10.2 — Option types (`module.go`)
+
+- [x] `atOption{ prefix string }` implementing `isOption()` + `forge.At(prefix string) Option`
+- [x] `cacheOption{ ttl time.Duration }` + `forge.Cache(ttl time.Duration) Option`
+- [x] `middlewareOption{ mws []func(http.Handler) http.Handler }` +
+      `forge.Middleware(mws ...func(http.Handler) http.Handler) Option`
+- [x] `authOption{ opts []Option }` + `forge.Auth(opts ...Option) Option`
+      (wraps `roleOption` values: `Read`, `Write`, `Delete` from `roles.go`)
+- [x] `repoOption[T any]{ repo Repository[T] }` (generic struct implementing `isOption()`) +
+      `forge.Repo[T any](r Repository[T]) Option`
+- [x] Default role constants used when no `forge.Auth(...)` given:
+      `Read(Guest)`, `Write(Author)`, `Delete(Editor)`
+
+#### 10.3 — `Markdownable` interface + `contentNegotiator`
+
+- [x] `type Markdownable interface{ Markdown() string }` — exported; declared in `module.go`
+- [x] Unexported `contentNegotiator` struct built once at module construction:
+  ```go
+  type contentNegotiator struct {
+      json  bool // always true
+      html  bool // true only if forge.Templates option given (Milestone 3)
+      md    bool // true if prototype implements Markdownable
+      plain bool // always true
+  }
+  ```
+- [x] `negotiate(r *http.Request) string` method — returns canonical content-type string;
+      uses `strings.Contains` on `Accept` header; order: json → html → md → plain → json (fallback)
+- [x] `Vary: Accept` set on every negotiated response
+
+#### 10.4 — `Module[T any]` struct + `NewModule` + reflection helpers
+
+- [x] Unexported reflection helpers (cached in `sync.Map` keyed by `reflect.Type`):
+  - `nodeStatus(v any) Status`  — reads `Status` field
+  - `nodeSlug(v any) string`    — reads `Slug` field
+  - `nodeID(v any) string`      — reads `ID` field
+  - `setNodeID(v any, id string)` — sets `ID` field
+  - `setNodeSlug(v any, slug string)` — sets `Slug` field
+- [x] `Module[T any]` struct:
+  ```go
+  type Module[T any] struct {
+      prefix      string
+      repo        Repository[T]
+      readRole    Role
+      writeRole   Role
+      deleteRole  Role
+      signals     map[Signal][]signalHandler
+      cache       *CacheStore          // nil if no forge.Cache option
+      middlewares []func(http.Handler) http.Handler
+      neg         contentNegotiator
+      debounce    *debouncer
+      proto       reflect.Type         // reflect.TypeOf(T)
+  }
+  ```
+- [x] `NewModule[T any](proto T, opts ...Option) *Module[T]`:
+  - Parses all options via type switch
+  - Panics if no `repoOption[T]` found: `"forge: Module[T] requires a Repository; use forge.Repo(...)"`
+  - Defaults: `readRole = Guest`, `writeRole = Author`, `deleteRole = Editor`
+  - Detects `Markdownable` by interface assertion on zero-value `proto`
+  - Creates `*CacheStore` via `NewCacheStore(ttl, 1000)` if `cacheOption` present
+  - Wires `signalOption` values from `On[T]` calls into `signals` map
+  - Creates `debouncer` (2s) for `SitemapRegenerate` signal
+
+#### 10.5 — `Register(mux *http.ServeMux)` and middleware wrapping
+
+- [x] `Register(mux *http.ServeMux)` registers five routes:
+  ```
+  GET  /{prefix}         → listHandler
+  GET  /{prefix}/{slug}  → showHandler
+  POST /{prefix}         → createHandler
+  PUT  /{prefix}/{slug}  → updateHandler
+  DELETE /{prefix}/{slug}→ deleteHandler
+  ```
+- [x] Each route handler is wrapped with `Chain(handler, m.middlewares...)` if middlewares present
+- [x] `ContextFrom(w, r)` called at the start of every handler (before any other logic)
+
+#### 10.6 — `listHandler`
+
+- [x] Lifecycle filter: build `ListOptions` with appropriate status filter based on `ctx.User()` roles:
+  - Guest → only `Published`
+  - Author → all statuses
+  - Editor+ → all statuses
+- [x] Call `m.repo.List(ctx, opts)` — return 200 with negotiated content type
+- [x] On cache hit (`GET` only): write cached response + `X-Cache: HIT`; return early
+- [x] On cache miss: serve response, store in cache if status 200, set `X-Cache: MISS`
+
+#### 10.7 — `showHandler`
+
+- [x] Extract `slug` via `r.PathValue("slug")`
+- [x] `m.repo.Get(ctx, slug)` — on `ErrNotFound`: `WriteError(w, r, ErrNotFound)`
+- [x] Lifecycle enforcement:
+  - If `nodeStatus(item) != Published && !ctx.User().HasRole(Author)` → `WriteError(w, r, ErrNotFound)`
+  - Author (no Editor) sees all non-published content in this module (Amendment M3 simplified rule)
+  - Editor+ sees everything
+- [x] Content negotiation:
+  - `application/json` → `json.NewEncoder(w).Encode(item)`
+  - `text/markdown` → `item.(Markdownable).Markdown()` if `neg.md`, else 406
+  - `text/plain` → naive markdown-strip (remove `#`, `*`, `_`, links); stdlib only
+  - `text/html` → 406 `"HTML templates not registered"` until Milestone 3
+- [x] Cache: same HIT/MISS pattern as listHandler
+
+#### 10.8 — `createHandler`
+
+- [x] Role check: `ctx.User().HasRole(m.writeRole)` → else `WriteError(w, r, ErrForbidden)`
+- [x] Decode: `json.NewDecoder(r.Body).Decode(&item)` → on error: 400
+- [x] Set `ID = NewID()`, auto-generate `Slug` from first required string field if empty
+- [x] `RunValidation(&item)` → on error: `WriteError(w, r, err)` (aborts; 422)
+- [x] `dispatchBefore(ctx, m.signals[BeforeCreate], item)` → on error: `WriteError`
+- [x] `m.repo.Save(ctx, item)`
+- [x] `dispatchAfter(ctx, m.signals[AfterCreate], item)`
+- [x] Signal status-based hooks: `AfterPublish` if `nodeStatus == Published`
+- [x] Invalidate cache: `if m.cache != nil { m.cache.Flush() }`
+- [x] Debounce `SitemapRegenerate` signal
+- [x] Respond 201 with JSON-encoded item
+
+#### 10.9 — `updateHandler`
+
+- [x] Role check: `ctx.User().HasRole(m.writeRole)` → else `WriteError(w, r, ErrForbidden)`
+- [x] Fetch existing: `m.repo.Get(ctx, slug)` → ErrNotFound → WriteError
+- [x] Decode request body into `item`
+- [x] `RunValidation(&item)` → on error: WriteError (422)
+- [x] `dispatchBefore(ctx, m.signals[BeforeUpdate], item)` → on error: WriteError
+- [x] `m.repo.Save(ctx, item)`
+- [x] `dispatchAfter(ctx, m.signals[AfterUpdate], item)`
+- [x] Status-based hooks: `AfterPublish` / `AfterUnpublish` / `AfterArchive`
+- [x] Cache flush + sitemap debounce
+- [x] Respond 200 with JSON-encoded item
+
+#### 10.10 — `deleteHandler`
+
+- [x] Role check: `ctx.User().HasRole(m.deleteRole)` → else `WriteError(w, r, ErrForbidden)`
+- [x] Fetch existing: `m.repo.Get(ctx, slug)` → ErrNotFound → WriteError
+- [x] `dispatchBefore(ctx, m.signals[BeforeDelete], item)` → on error: WriteError
+- [x] `m.repo.Delete(ctx, slug)` (assumes `Repository[T]` has `Delete(ctx, slug string) error`;
+      add `Delete` to `Repository[T]` interface in storage.go if not present)
+- [x] `dispatchAfter(ctx, m.signals[AfterDelete], item)`
+- [x] Cache flush + sitemap debounce
+- [x] Respond 204 No Content
+
+#### 10.11 — Tests (`module_test.go`)
+
+- [x] `TestModuleListGuestPublishedOnly` — Guest GET list; only published items returned
+- [x] `TestModuleListAuthorSeesAll` — Author GET list; all statuses returned
+- [x] `TestModuleShowPublishedGuest` — Guest GET show; published item → 200
+- [x] `TestModuleShowDraftGuest` — Guest GET show; draft item → 404
+- [x] `TestModuleShowDraftAuthor` — Author GET show; draft item → 200
+- [x] `TestModuleCreateValidation` — POST with invalid body → 422, repo unchanged
+- [x] `TestModuleCreateSuccess` — POST valid body → 201, ID and Slug set
+- [x] `TestModuleUpdateForbiddenGuest` — Guest PUT → 403
+- [x] `TestModuleDeleteForbiddenAuthor` — Author DELETE → 403
+- [x] `TestModuleContentNegotiationJSON` — GET with `Accept: application/json` → JSON body
+- [x] `TestModuleContentNegotiationMarkdown` — GET with `Accept: text/markdown` + Markdownable → markdown body
+- [x] `TestModuleContentNegotiationMarkdownUnsupported` — GET `Accept: text/markdown` + non-Markdownable → 406
+- [x] `TestModuleContentNegotiationHTML` — GET `Accept: text/html` → 406 (no templates)
+- [x] `TestModuleCacheMISS` — first GET → `X-Cache: MISS`
+- [x] `TestModuleCacheHIT` — second identical GET → `X-Cache: HIT`
+- [x] `TestModuleCacheInvalidatedOnCreate` — POST → subsequent GET is MISS
+- [x] `TestModuleSignalBeforeCreateAborts` — BeforeCreate returns error → 500, not saved
+- [x] `TestModuleSignalAfterCreateFires` — AfterCreate goroutine fires
+- [x] `BenchmarkModuleRequest` — in-memory repo, JSON GET show, warm cache
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestModule" ./...` — all green
+- [x] `go test -bench BenchmarkModuleRequest ./...` — runs without error
+- [x] `go test ./...` — full suite green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendments M1, M2, M3, M4 drafted and documented
 
 ---
 

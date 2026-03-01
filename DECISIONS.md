@@ -952,6 +952,131 @@ AfterPublish signal fires
 
 ---
 
+### Amendment M1 — Storage injection via forge.Repo[T any] Option (amends Decision 2)
+
+**Decision:** `Module[T any]` receives its `Repository[T]` via `forge.Repo[T any](r Repository[T]) Option`.
+This option is never written by application developers. `App.Content` (Step 11) calls it
+internally after auto-creating a SQL-backed repository from `Config.DB` and type metadata.
+Tests supply it directly using `forge.NewMemoryRepo[T]()`.
+
+**Rationale:**
+The README shows `app.Content(&BlogPost{}, forge.At("/posts"), ...)` with no visible repo argument.
+A hidden injection mechanism (e.g., a method on `Module`) would require `Module[T]` to carry
+a pointer that is only valid after `App.Content` completes registration — a partial construction
+pattern that violates the invariant that all options are resolved at `NewModule` time.
+The `Option` pattern resolves this cleanly: `App.Content` builds a `Repository[T]` from the DB
+and calls `forge.Repo(repo)` as the last option before constructing the module. Call sites
+that omit a `forge.Repo(...)` (e.g., in unit tests run without an App) get a clear panic at
+construction time: `"forge: Module[T] requires a Repository; use forge.Repo(...)"`. This is a
+fail-fast contract rather than a nil-dereference at first request.
+
+**Consequences:**
+- `forge.Repo[T any](r Repository[T]) Option` added to `module.go`
+- `App.Content` (Step 11) always supplies `forge.Repo(repo)` — it is never a user concern
+- Module construction panics if no `forge.Repo(...)` is provided (dev-time safety)
+- Power users who need a custom repo (read-through cache, audit repo, etc.) can supply it
+
+---
+
+### Amendment M2 — Export CacheStore from middleware.go (amends Amendment P2)
+
+**Decision:** The unexported `lruCache` type in `middleware.go` is promoted to an exported
+`CacheStore` struct with an exported API: `NewCacheStore(ttl time.Duration, max int) *CacheStore`,
+`Get(key string) (*cacheEntry, bool)`, `Set(key string, e *cacheEntry)`, `Flush()`, `Sweep()`.
+`InMemoryCache` middleware is updated to use `*CacheStore` internally (no external behaviour
+change). `Module[T]` holds a `*CacheStore` for module-level cache management with
+signal-triggered invalidation via `Flush()`.
+
+**Rationale:**
+`forge.Cache(ttl)` on a module differs fundamentally from `forge.InMemoryCache(ttl)` middleware:
+the module cache must be invalidated on write signals (AfterCreate/Update/Delete). The
+middleware cache has no `Flush` method and no signal hooks. Sharing the implementation but
+exposing a controlled public surface (`CacheStore`) avoids duplication and keeps both uses
+aligned. Since `lruCache` was never exported, promoting it is backward-compatible.
+
+**Exported API added to middleware.go:**
+```go
+type CacheStore struct { /* unexported fields */ }
+func NewCacheStore(ttl time.Duration, max int) *CacheStore
+func (c *CacheStore) Get(key string) (status int, header http.Header, body []byte, ok bool)
+func (c *CacheStore) Set(key string, status int, header http.Header, body []byte)
+func (c *CacheStore) Flush()
+func (c *CacheStore) Sweep()
+```
+
+**`InMemoryCache` middleware is unchanged at the call site** — it creates its own `*CacheStore`
+internally. `CacheMaxEntries(n)` option continues to work as before.
+
+**Consequences:**
+- `middleware.go` gains `CacheStore` exported type + `NewCacheStore` constructor
+- `middleware_test.go` may reference `CacheStore` directly (optional)
+- `module.go` uses `*CacheStore` for all module-level caching
+- `forge.Cache(ttl)` option enables module caching; `forge.Middleware(forge.InMemoryCache(ttl))`
+  is middleware-scoped caching — distinct concepts, clear in godoc
+
+---
+
+### Amendment M3 — Module[T any] type parameter (amends Step 10 spec)
+
+**Decision:** `Module[T any]` uses the unconstrained `[T any]` type parameter, not
+`[T forge.Node]`. The backlog spec was written before Amendment S3 locked all generic helpers
+to `[T any]`. `Node` struct fields (`ID`, `Slug`, `Status`) are accessed at runtime via
+reflection using the same `sync.Map`-keyed cache pattern established in `storage.go`.
+
+**Field access pattern:**
+```go
+// Reflection helpers (unexported, module.go)
+func nodeStatus(v any) Status { /* reflect field "Status" → Status */ }
+func nodeSlug(v any) string   { /* reflect field "Slug" → string */ }
+func nodeID(v any) string     { /* reflect field "ID" → string */ }
+```
+
+**Rationale:** Identical to Amendment S3 — a `forge.Node` type constraint creates a hidden
+coupling between the generic type system and one concrete struct, excluding future content
+types that embed `Node` via pointer or composition patterns not yet anticipated.
+
+**Consequences:**
+- `Module[T any]` — not `Module[T forge.Node]`
+- Reflection helpers read `Status`, `Slug`, `ID` by name; reflect.Type cached in `sync.Map`
+- `NewModule[T any](proto T, opts ...Option) *Module[T]` captures `reflect.TypeOf(proto)` once
+- The Step 10 backlog spec text is updated to reflect `[T any]`
+
+---
+
+### Amendment M4 — MemoryRepo supports embedded struct fields (amends Step 7)
+
+**Decision:** `stringField` in `storage.go` is updated to handle embedded struct field
+promotion via `reflect.Type.FieldByName` with a `sync.Map`-backed path cache
+(`goFieldPathCache`). The existing `goFields` map (flat field → index) is preserved
+for internal use; `stringField` now uses the path-aware `goFieldPath` function.
+
+**Rationale:**
+`MemoryRepo` uses `stringField(v, "ID")` and `stringField(v, "Slug")` to locate
+fields for keying and lookup. Content types always embed `forge.Node` rather than
+declaring `ID`, `Slug`, `Status` as direct fields. The original `goFields` function
+only scanned top-level fields via `t.NumField()`, missing promoted fields from
+embedded structs. As a result, `Save` keyed all items by `""` (empty string),
+causing every save to overwrite the same entry and `FindBySlug` to always return
+`ErrNotFound`.
+
+The new `goFieldPath(t, name)` function uses `t.FieldByName(name)` which correctly
+traverses embedded structs. The returned `[]int` index path is cached per
+`(reflect.Type, fieldName)` pair to avoid repeated reflection work.
+
+**Impact on existing code:** Zero. The `repoItem` type used in `storage_test.go`
+has flat fields — `FieldByName` returns the same single-element path `[i]` as
+before, and all existing storage tests continue to pass.
+
+**Consequences:**
+- `goFieldPathCache sync.Map` added to `storage.go`
+- `goFieldPathKey` unexported struct added as the cache key
+- `goFieldPath(t reflect.Type, name string) []int` added to `storage.go`
+- `stringField` updated to use `FieldByIndex(goFieldPath(...))` instead of
+  `goFields` map with `Field(idx)`
+- `goFields` is retained for potential future use (not removed)
+
+---
+
 ### Amendment P2 — Cache eviction policy (amends Middleware)
 
 **Decision:** `forge.InMemoryCache` implements LRU eviction with a configurable
