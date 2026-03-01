@@ -179,10 +179,16 @@ Never update only one file — always keep both in sync.
 
 ### When to create a milestone backlog
 
-Before writing any code for a milestone:
+Creating `Milestone{N}_BACKLOG.md` is the **first and only action** when starting
+a new milestone. It is not optional and not skippable.
+
 1. Create `Milestone{N}_BACKLOG.md` with full step detail
 2. Add the step summaries to `BACKLOG.md` under the relevant milestone section
-3. Both files must be reviewed and confirmed before implementation starts
+3. Present both files to the user for review
+4. Wait for **explicit user confirmation** before writing any code
+
+Do not propose Step 1 implementation in the same session as backlog creation
+without explicit user approval.
 
 ### Structure of a milestone backlog file
 
@@ -301,7 +307,26 @@ must be true:
 - [ ] `README.md` — no broken examples
 - [ ] Post-milestone DRY/performance/security review completed and findings resolved
 - [ ] Any deferred steps documented in target milestone with reason
+- [ ] **Retrospective completed** — process and codebase reviewed; findings applied to
+      `copilot-instructions.md` and `BACKLOG.md` before the gate commit
 - [ ] Milestone gate commit proposed and approved
+
+The retrospective covers two questions:
+1. **Process** — what worked, what didn't, what workflow rules need updating?
+2. **Codebase** — do any future milestones need adjusting based on what was built?
+
+The retrospective is not optional. No milestone is closed without it.
+
+### Starting the next milestone
+
+The first action after a milestone gate commit is **always** to create
+`Milestone{N+1}_BACKLOG.md`. No implementation may begin until:
+
+1. `Milestone{N+1}_BACKLOG.md` is created with full step detail
+2. Step summaries are added to `BACKLOG.md` under the new milestone section
+3. Both files are reviewed and **explicitly confirmed** by the user
+
+Only after confirmation may Step 1 of the new milestone begin.
 
 ### Naming convention
 
