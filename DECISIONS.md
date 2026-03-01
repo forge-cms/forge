@@ -640,11 +640,14 @@ Forge runs an internal ticker (default: every 60 seconds) that queries for
 Higher roles inherit all permissions of lower roles.
 
 ```
-Admin   (level 4)  →  full access including app configuration
-Editor  (level 3)  →  create, update, delete any content — sees all drafts
-Author  (level 2)  →  create, update own content — sees own drafts
-Guest   (level 1)  →  read Published content (unauthenticated)
+Admin   (level 40)  →  full access including app configuration
+Editor  (level 30)  →  create, update, delete any content — sees all drafts
+Author  (level 20)  →  create, update own content — sees own drafts
+Guest   (level 10)  →  read Published content (unauthenticated)
 ```
+
+> **Note:** Levels use a spacing of 10 — see Amendment R1. Absolute values are not
+> part of the public API; only relative ordering is guaranteed.
 
 Custom roles are inserted into the hierarchy:
 ```go
@@ -891,6 +894,32 @@ app.Run() →
 - Missing template directory → startup failure with path in error message
 - `forge.TemplatesOptional("templates/posts")` exists for cases where HTML is truly optional
 - Hot-reload in development: `forge.TemplatesWatch("templates/posts")` re-parses on file change
+
+---
+
+### Amendment R1 — Role levels use spacing of 10 (amends Decision 15)
+
+**Decision:** Built-in role levels are assigned in multiples of 10 (Guest=10, Author=20,
+Editor=30, Admin=40) rather than consecutive integers (1, 2, 3, 4).
+
+**Rationale:**
+With consecutive levels, registering a custom role between two adjacent built-ins
+(e.g. between Author=2 and Editor=3) is mathematically impossible — there is no integer
+strictly between 2 and 3. The fluent builder API in Decision 15 (`Above(Author).Below(Editor)`)
+would silently produce an incorrect level (the last call wins, resulting in the
+lower bound rather than a midpoint).
+
+Spaced levels (10, 20, 30, 40) leave nine slots between every pair of adjacent
+built-in roles, making the intent of the builder API correct and testable.
+
+**Consequences:**
+- `levelOf(Guest)=10`, `levelOf(Author)=20`, `levelOf(Editor)=30`, `levelOf(Admin)=40`
+- Custom roles inserted with `Above(Author).Below(Editor)` receive level 29 (Editor−1),
+  which is correctly > 20 (Author) and < 30 (Editor)
+- The absolute numeric values of levels are **not part of the public API**;
+  only relative ordering is guaranteed
+- `TestRoleLevel` asserts the concrete values 10/20/30/40 and must be updated if
+  built-in levels are ever renumbered (which requires a new amendment)
 
 ---
 

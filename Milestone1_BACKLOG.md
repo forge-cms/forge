@@ -12,7 +12,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | errors.go | ✅ Done | 2026-03-01 |
-| 2 | roles.go | 🔲 Not started | — |
+| 2 | roles.go | ✅ Done | 2026-03-01 |
 | 3 | mcp.go | 🔲 Not started | — |
 | 4 | node.go | 🔲 Not started | — |
 | 5 | context.go | 🔲 Not started | — |
@@ -107,16 +107,84 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 **Depends on:** nothing
 **Decisions:** Decision 15
+**Files:** `roles.go`, `roles_test.go`
 
-- [ ] `forge.Role` type (string-based with level)
-- [ ] Level system: `Guest`(1), `Author`(2), `Editor`(3), `Admin`(4)
-- [ ] Exported constants: `forge.Admin`, `forge.Editor`, `forge.Author`, `forge.Guest`
-- [ ] `forge.Role("custom")` fluent builder with `.Below(role)` and `.Above(role)`
-- [ ] `forge.Read(role forge.Role) Option` — module option (stub at this step)
-- [ ] `forge.Write(role forge.Role) Option` — module option (stub at this step)
-- [ ] `forge.Delete(role forge.Role) Option` — module option (stub at this step)
-- [ ] Role stored as string — level derived at lookup, not at storage
-- [ ] Table-driven tests: level comparison, custom role placement
+#### 2.1 — `forge.Role` type and built-in constants
+
+- [x] Declare `forge.Role` as a named `string` type with godoc
+- [x] Declare unexported `roleLevels` as `map[Role]int` — the single source of
+      truth for level lookups; populated at init time for built-in roles
+- [x] Declare the four built-in constants with **spaced levels** (10/20/30/40)
+      so custom roles can always be inserted between built-ins:
+  - `Guest  Role = "guest"`  → level 10
+  - `Author Role = "author"` → level 20
+  - `Editor Role = "editor"` → level 30
+  - `Admin  Role = "admin"`  → level 40
+- [x] Unexported `levelOf(r Role) int` — single map lookup; returns 0 for unknown roles
+- [x] godoc on every exported symbol
+
+#### 2.2 — Custom role registration (fluent builder)
+
+- [x] Declare unexported `roleBuilder` struct: `name string`, `level int`
+- [x] `forge.NewRole(name string) roleBuilder` — exported constructor; level starts at 0
+- [x] `(rb roleBuilder) Above(r Role) roleBuilder` — returns new builder with
+      `level = levelOf(r) + 1`; does not mutate existing roles
+- [x] `(rb roleBuilder) Below(r Role) roleBuilder` — returns new builder with
+      `level = levelOf(r) - 1`; minimum level enforced at 1
+- [x] `(rb roleBuilder) Register() (Role, error)` — writes name+level into
+      `roleLevels`; idempotent if same name+level already registered; returns
+      a `*ValidationError` via `forge.Err` if same name registered with
+      different level; returns `forge.Role(rb.name)`
+- [x] godoc on `NewRole`, `Above`, `Below`, `Register`
+
+#### 2.3 — Role comparison (free functions)
+
+- [x] `forge.HasRole(userRoles []Role, required Role) bool` — returns true if
+      any role in `userRoles` has `levelOf(role) >= levelOf(required)`;
+      unknown roles (level 0) never satisfy any requirement; no allocations
+- [x] `forge.IsRole(userRoles []Role, required Role) bool` — returns true if
+      any role in `userRoles` exactly matches `required`; no allocations
+- [x] godoc on both functions; note that `HasRole` is hierarchical and
+      `IsRole` is an exact match
+
+#### 2.4 — `forge.Option` stub and module permission options
+
+- [x] Declare `forge.Option` as an exported interface with unexported marker
+      method `isOption()` — this is the canonical definition; module.go (Step 10)
+      will use it directly without redeclaring
+- [x] Declare unexported `roleOption` struct: `signal string`, `role Role`;
+      implements `Option` via `isOption()`
+- [x] `forge.Read(r Role) Option`   → `roleOption{signal: "read",   role: r}`
+- [x] `forge.Write(r Role) Option`  → `roleOption{signal: "write",  role: r}`
+- [x] `forge.Delete(r Role) Option` → `roleOption{signal: "delete", role: r}`
+- [x] godoc on `Option`, `Read`, `Write`, `Delete`
+
+#### 2.5 — Tests (`roles_test.go`)
+
+- [x] `TestRoleLevel` — all four built-in roles return correct level from `levelOf`
+- [x] `TestHasRole` — table-driven:
+  - Admin satisfies Admin, Editor, Author, Guest
+  - Editor satisfies Editor, Author, Guest; not Admin
+  - Author satisfies Author, Guest; not Editor, not Admin
+  - Guest satisfies Guest only
+  - Unknown role satisfies nothing
+- [x] `TestIsRole` — table-driven: exact match only; Admin does not satisfy Editor
+- [x] `TestNewRole` — `NewRole("publisher").Above(Author).Below(Editor)` gives
+      level between Author (20) and Editor (30); verified via `levelOf` after `Register()`
+- [x] `TestRegisterIdempotent` — same name + same level → no error
+- [x] `TestRegisterConflict` — same name + different level → returns `forge.Error`
+- [x] `TestModuleOptionStubs` — `Read`, `Write`, `Delete` return non-nil `Option`;
+      type-assert to `roleOption` and check `signal` and `role` fields
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestRole|TestHasRole|TestIsRole|TestNewRole|TestRegister|TestModuleOption" ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment R1 drafted:
+      built-in role levels use spacing of 10 (10/20/30/40) to allow custom roles
+      between adjacent built-ins. Decision 15 updated to reflect new values.
 
 ---
 

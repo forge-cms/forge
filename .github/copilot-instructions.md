@@ -47,6 +47,57 @@ not the convenient one.
 
 ---
 
+## Standard step workflow
+
+Every step — without exception — follows this exact sequence:
+
+### 1. Plan the step
+- Write a detailed plan covering: what types/functions will be defined, their
+  signatures, performance considerations, and how they will be tested.
+- Present the plan to the user before writing any code.
+
+### 2. Document the plan in the milestone backlog
+- Expand the step's section in `Milestone{N}_BACKLOG.md` with numbered
+  sub-sections (N.1, N.2, …) and atomic checkboxes.
+- Every step ends with a verification block and the architecture review checkbox.
+- Save the file. Confirm with the user before starting implementation.
+
+### 3. Implement the step
+- One step = one file (implementation + test file). Never mix two files in one step.
+- Never plan or implement two steps in the same session without explicit user approval.
+- Tick checkboxes in the backlog as each task is completed.
+- Run verification after implementation: `go build`, `go vet`, `gofmt`, `go test`.
+
+### 4. Architecture and decision review
+- After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
+- Ask: does this implementation reveal a gap, ambiguity, or conflict?
+- If yes: draft a new Decision or Amendment and present it to the user before proceeding.
+- The step is not complete until the review checkbox is ticked.
+
+### 5. Update the backlog
+- Mark the step `✅ Done` in the Progress table with the completion date.
+- Never batch updates — update immediately after the step is verified.
+
+### 6. Propose a commit message
+- Write a conventional commit message (format below).
+- Present it to the user for approval. Do not commit without explicit user approval.
+
+### Commit message format
+
+```
+{type}({scope}): {short description} (Milestone {N}, Step {N})
+
+{Body: what was implemented, bullet points if multiple items}
+
+Decisions: {Decision numbers and Amendment IDs referenced}
+Milestone: {N} / Step {N} ✅
+```
+
+Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`  
+Scope: the file name without extension (e.g. `errors`, `roles`, `node`)
+
+---
+
 ## Milestone planning process
 
 Before implementing any milestone, a dedicated backlog file must be created and
@@ -109,13 +160,13 @@ One-line description of the milestone goal.
 ### Rules for steps
 
 - **One step = one file** (implementation + test file). Never mix two files in one step.
+- **Steps are strictly separate** — never plan or implement two steps in the same
+  session without explicit user approval.
 - **Steps are ordered by dependency layer** — a step may not be started until all
   steps it depends on are marked ✅.
 - **Sub-sections (N.M)** break the step into logical implementation chunks: define
   the type, implement the logic, write the tests, verify. Keep sub-sections small
   enough that each can be completed and verified in one sitting.
-- **Every sub-section ends with a verification block** for the step it belongs to,
-  or the step ends with a shared verification block if substeps are tightly coupled.
 - **Checkboxes are atomic** — each `- [ ]` item must be a single, unambiguous task.
   Never write "implement X" without specifying what X requires.
 - **Every step ends with an architecture and decision review.** After the verification
@@ -125,6 +176,9 @@ One-line description of the milestone goal.
   - Does the file's dependency graph still match the rules in `ARCHITECTURE.md`?
   If yes to any of the above, a new Decision or Amendment must be proposed and agreed
   upon before the next step begins. The step is not complete until this review is done.
+- **Every step ends with a commit.** After the architecture review, write a commit
+  message following the standard format and wait for user approval before committing.
+  Never commit without approval.
   Add the following checkbox at the end of every step's verification block:
   ```
   - [ ] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required,
