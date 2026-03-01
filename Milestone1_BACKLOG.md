@@ -14,7 +14,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 1 | errors.go | ✅ Done | 2026-03-01 |
 | 2 | roles.go | ✅ Done | 2026-03-01 |
 | 3 | mcp.go | ✅ Done | 2026-03-01 |
-| 4 | node.go | 🔲 Not started | — |
+| 4 | node.go | ✅ Done | 2026-03-01 |
 | 5 | context.go | 🔲 Not started | — |
 | 6 | signals.go | 🔲 Not started | — |
 | 7 | storage.go | 🔲 Not started | — |
@@ -239,33 +239,122 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 **Depends on:** errors
 **Decisions:** Decision 1, 10, 14; Amendment S1
+**Files:** `node.go`, `node_test.go`
 
-- [ ] `forge.Status` type + constants: `Draft`, `Published`, `Scheduled`, `Archived`
-- [ ] `forge.Node` struct:
-  - `ID string`
-  - `Slug string`
-  - `Status Status`
-  - `PublishedAt time.Time`
-  - `ScheduledAt *time.Time`
-  - `CreatedAt time.Time`
-  - `UpdatedAt time.Time`
-- [ ] `forge.NewID() string` — UUID v7 via `crypto/rand`
-- [ ] `forge.GenerateSlug(input string) string` — lowercase, whitelist `[a-z0-9-]`, max 200 chars, trim leading/trailing hyphens
-- [ ] `forge.UniqueSlug(base string, exists func(string) bool) string` — appends `-2`, `-3` etc. on collision
-- [ ] Struct tag validation via reflection (cached in `sync.Map`):
-  - `forge:"required"` — field must not be zero value
-  - `forge:"min=N"` — string min length / number min value
-  - `forge:"max=N"` — string max length / number max value
-  - `forge:"email"` — valid email address
-  - `forge:"url"` — valid URL
-  - `forge:"slug"` — valid slug `[a-z0-9-]`
-  - `forge:"oneof=a,b,c"` — value must be one of the listed options
-- [ ] `forge.ValidateStruct(v any) error` — runs tag validation; returns `*ValidationError` or nil
-- [ ] `forge.Validatable` interface: `Validate() error`
-- [ ] `forge.RunValidation(v any) error` — runs `ValidateStruct` first; if OK and `v` implements `Validatable`, calls `v.Validate()`
-- [ ] Reflection cache: `sync.Map` keyed by `reflect.Type`; populated on first use per type
-- [ ] Table-driven tests: UUID format, slug generation, all tag constraints, collision suffix, RunValidation chain
-- [ ] Benchmark: `ValidateStruct` per type (first call vs. cached)
+#### 4.1 — `forge.Status` type and constants
+
+- [x] Declare `forge.Status` as a named `string` type with godoc
+- [x] Constants: `Draft`, `Published`, `Scheduled`, `Archived` (string values match Decision 14)
+- [x] godoc on each constant explaining its meaning and visibility rules
+
+#### 4.2 — `forge.Node` struct
+
+- [x] `forge.Node` struct with fields in order:
+  - `ID string` — UUID v7, primary key, immutable after creation
+  - `Slug string` — URL-safe, unique within a module
+  - `Status Status` — lifecycle state, enforced by public endpoints
+  - `PublishedAt time.Time` — zero until first publish
+  - `ScheduledAt *time.Time` — nil unless `Status == Scheduled`
+  - `CreatedAt time.Time` — set on insert, never updated
+  - `UpdatedAt time.Time` — updated on every Save
+- [x] godoc on struct (embed in content types; carries lifecycle) and each field
+
+#### 4.3 — `forge.NewID()` — UUID v7
+
+- [x] Implement UUID v7 spec: 48-bit millisecond timestamp (big-endian in bytes 0–5),
+      version nibble `7` in high 4 bits of byte 6, variant `10` in high 2 bits of byte 8,
+      remaining bits filled with `crypto/rand`
+- [x] Output format: `xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx` (36 chars)
+- [x] Panic on `crypto/rand` failure (unrecoverable platform error)
+- [x] No third-party UUID library — stdlib `crypto/rand` + `crypto/rand.Reader` only
+- [x] godoc: references Amendment S1; explains time-ordering benefit
+
+#### 4.4 — `forge.GenerateSlug` and `forge.UniqueSlug`
+
+- [x] `forge.GenerateSlug(input string) string`:
+  - Lowercase the input (Unicode-aware via `strings.ToLower`)
+  - Byte-level loop: spaces → `-`; `[a-z0-9-]` kept; all others dropped
+  - Collapse consecutive hyphens to one
+  - Trim leading/trailing hyphens
+  - Truncate to max 200 bytes
+  - Return `"untitled"` if result is empty
+  - No `regexp` — byte loop for zero extra allocations
+- [x] `forge.UniqueSlug(base string, exists func(string) bool) string`:
+  - Returns `base` if `exists(base)` is false
+  - Otherwise tries `base-2`, `base-3`, … until `exists` returns false
+  - No upper bound required (callers ensure slugs eventually become available)
+- [x] godoc on both functions
+
+#### 4.5 — Reflection-cached tag validation engine
+
+- [x] `fieldConstraint` unexported type: stores field index, field kind, and a slice
+      of checker functions `func(reflect.Value) *fieldError`
+- [x] `typeCache sync.Map` — keyed by `reflect.Type`; value `[]fieldConstraint`
+- [x] `parseConstraints(t reflect.Type) []fieldConstraint` — unexported; iterates
+      struct fields; parses `forge:"..."` tag; builds checker slice; panics on
+      unrecognised tag key with a clear message (fail-fast at startup)
+- [x] Supported constraints (comma-separated in one tag):
+  - `required` — `reflect.Value.IsZero()` fails
+  - `min=N` — `len(string)` or numeric value `< N` fails
+  - `max=N` — `len(string)` or numeric value `> N` fails
+  - `email` — must contain exactly one `@` with non-empty local and domain parts
+  - `url` — parsed by `url.Parse`; must have scheme and host
+  - `slug` — only `[a-z0-9-]`, non-empty
+  - `oneof=a|b|c` — string value must be one of the listed options (pipe-separated; see Amendment R2)
+- [x] All errors for a single struct are collected (no short-circuit); each produces
+      a `*fieldError` with `Field` = struct field name
+
+#### 4.6 — Public validation API
+
+- [x] `forge.ValidateStruct(v any) error`:
+  - Dereferences pointer; panics if `v` is not a struct
+  - Loads constraints from `typeCache` (Store on first call via `LoadOrStore`)
+  - Runs all constraints; collects `*fieldError` values; returns `*ValidationError` or nil
+- [x] `forge.Validatable` interface: `Validate() error` — godoc: implement on content
+      types for business-rule validation; called after tag validation
+- [x] `forge.RunValidation(v any) error`:
+  - Calls `ValidateStruct(v)`; if non-nil, returns immediately (no Validate() called)
+  - If nil and `v` implements `Validatable`, calls `v.Validate()`
+  - If `Validate()` returns a `*ValidationError`, merge its fields into a new
+    `*ValidationError` and return
+  - If `Validate()` returns any other non-nil error, return it as-is
+- [x] godoc on all three
+
+#### 4.7 — Tests (`node_test.go`)
+
+- [x] `TestNewID` — generate 1000 IDs; assert:
+  - length = 36; hyphens at positions 8, 13, 18, 23
+  - byte 14 (version nibble) = `'7'`
+  - byte 19 (variant) is `'8'`, `'9'`, `'a'`, or `'b'`
+  - no two IDs are equal (uniqueness)
+- [x] `TestGenerateSlug` — table-driven:
+  - `"Hello World"` → `"hello-world"`
+  - `"Go 1.22!"` → `"go-122"`
+  - `"  --leading"` → `"leading"`
+  - `"a/b/c"` → `"abc"`
+  - string of 250 `'a'` → length ≤ 200
+  - `""` → `"untitled"`
+  - `"café"` → `"caf"` (non-ASCII dropped)
+- [x] `TestUniqueSlug` — no collision, one collision, five collisions
+- [x] `TestValidateStruct` — table-driven for every constraint; multi-constraint
+      field; unknown forge tag panics; nested struct not traversed (flat only)
+- [x] `TestRunValidation` — three cases:
+  - Tags fail → `Validate()` NOT called (use a spy)
+  - Tags pass, `Validate()` returns error → returned as-is
+  - Tags pass, `Validate()` returns nil → nil
+- [x] `BenchmarkValidateStructCached` — first-call vs subsequent; subsequent must
+      not use reflection
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestNewID|TestGenerateSlug|TestUniqueSlug|TestValidate|TestRunValidation" ./...` — all green
+- [x] `go test -bench BenchmarkValidateStructCached ./...` — ~100 ns/op cached
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment R2 drafted: `oneof=`
+      tag uses `|` as value separator to avoid conflict with the tag constraint
+      comma separator. Decision 10 example updated.
 
 ---
 

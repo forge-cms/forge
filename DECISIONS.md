@@ -473,7 +473,7 @@ forge:"max=N"              string max length / number max value
 forge:"email"              valid email address
 forge:"url"                valid URL
 forge:"slug"               valid URL slug (a-z, 0-9, -)
-forge:"oneof=a,b,c"        value must be one of the listed options
+forge:"oneof=a|b|c"        value must be one of the listed options (| separator — see Amendment R2)
 ```
 
 **Consequences:**
@@ -920,6 +920,31 @@ built-in roles, making the intent of the builder API correct and testable.
   only relative ordering is guaranteed
 - `TestRoleLevel` asserts the concrete values 10/20/30/40 and must be updated if
   built-in levels are ever renumbered (which requires a new amendment)
+
+---
+
+### Amendment R2 — `oneof` tag uses `|` as value separator (amends Decision 10)
+
+**Decision:** The `oneof=` tag constraint uses `|` (pipe) as the separator between
+allowed values, not `,` (comma) as shown in the Decision 10 example.
+
+**Rationale:**
+The `forge:"..."` tag parser splits the entire tag value on `,` to find individual
+constraints. A tag such as `forge:"oneof=draft,published,archived"` would be parsed as
+three separate constraints — `oneof=draft`, `published`, and `archived` — the last two
+being unrecognised keys that trigger a panic.
+
+Using `|` as the within-`oneof` separator avoids this ambiguity entirely:
+```
+forge:"required,oneof=draft|published|archived"
+```
+
+**Consequences:**
+- Decision 10 example `forge:"oneof=a,b,c"` becomes `forge:"oneof=a|b|c"`
+- The parsing rule is: split the tag on `,`; for any part starting with `oneof=`,
+  split the remainder on `|` to get the allowed values
+- `|` is not a valid value in any Forge-managed string field, so no escaping is needed
+- Documentation and examples must use `|` consistently
 
 ---
 
