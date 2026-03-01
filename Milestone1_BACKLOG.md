@@ -18,7 +18,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 5 | context.go | ✅ Done | 2026-03-01 |
 | 6 | signals.go | ✅ Done | 2026-03-01 |
 | 7 | storage.go | ✅ Done | 2026-03-01 |
-| 8 | auth.go | 🔲 Not started | — |
+| 8 | auth.go | ✅ Done | 2026-03-01 |
 | 9 | middleware.go | 🔲 Not started | — |
 | 10 | module.go | 🔲 Not started | — |
 | 11 | forge.go | 🔲 Not started | — |
@@ -633,23 +633,133 @@ When a step is done: change `🔲` to `✅` and record the date.
 ### Step 8 — auth.go
 
 **Depends on:** errors, roles, context
-**Decisions:** Decision 15; Amendment S6 (CSRF), S7 (BasicAuth warning)
+**Decisions:** Decision 15, Amendment S6 (CSRF), Amendment S7 (BasicAuth warning), Amendment S8 (AuthFunc interface)
+**Files:** `auth.go`, `auth_test.go`
+**Status:** ✅ Done
 
-- [ ] `forge.User` struct: `ID string`, `Name string`, `Roles []Role`
-- [ ] `user.HasRole(role forge.Role) bool` — hierarchical (Admin includes Editor includes Author)
-- [ ] `user.Is(role forge.Role) bool` — exact match only
-- [ ] `forge.AuthFunc` type: `func(r *http.Request) (forge.User, bool)`
-- [ ] `forge.BearerHMAC(secret string) forge.AuthFunc` — HMAC-SHA256; Bearer prefix in Authorization header
-- [ ] `forge.SignToken(user forge.User, secret string) (string, error)` — generates HMAC-signed token
-- [ ] `forge.CookieSession(name, secret string, opts ...Option) forge.AuthFunc`
-  - Cookie-based auth
-  - Automatic CSRF: token in `forge_csrf` Necessary cookie; client echoes via `X-CSRF-Token` header or `_csrf` form field; rotates on new auth
-  - `forge.WithoutCSRF` opt-out option
-- [ ] `forge.BasicAuth(username, password string) forge.AuthFunc`
-  - Standard HTTP Basic Auth
-  - Logs structured `WARN` at startup if `Env != forge.Development` (once in `app.Run`, not per request)
-- [ ] `forge.AnyAuth(fns ...forge.AuthFunc) forge.AuthFunc` — first match wins
-- [ ] Tests: BearerHMAC valid/invalid token, CookieSession CSRF rotation, BasicAuth warning trigger, AnyAuth fallback chain
+#### 8.1 — `forge.AuthFunc` interface and capability interfaces
+
+- [x] Declare `forge.AuthFunc` interface with one unexported method:
+  ```go
+  type AuthFunc interface{ authenticate(*http.Request) (User, bool) }
+  ```
+- [x] Declare unexported capability interface `productionWarner`:
+  ```go
+  type productionWarner interface{ warnIfProduction(w io.Writer) }
+  ```
+  Used by Step 11 (`app.Run`) to detect `BasicAuth` in non-development environments.
+- [x] Declare unexported capability interface `csrfAware`:
+  ```go
+  type csrfAware interface{ csrfEnabled() bool }
+  ```
+  Used by Step 9 (auth middleware) to decide whether to validate CSRF tokens.
+- [x] godoc on `AuthFunc`: "AuthFunc authenticates an incoming HTTP request and
+  returns the identified User and whether authentication succeeded. Use
+  BearerHMAC, CookieSession, BasicAuth, or AnyAuth to obtain an AuthFunc.
+  Implement this interface to provide a custom authentication scheme."
+
+#### 8.2 — `User.HasRole` and `User.Is` methods
+
+- [x] `func (u User) HasRole(role Role) bool` — declared in `auth.go`;
+      delegates to `HasRole(u.Roles, role)` from `roles.go`
+- [x] `func (u User) Is(role Role) bool` — delegates to `IsRole(u.Roles, role)`
+      from `roles.go`
+- [x] godoc on both methods including examples:
+  `user.HasRole(forge.Editor)` — true for Editor and Admin
+  `user.Is(forge.Author)` — true only for exactly Author
+
+#### 8.3 — `SignToken` and token helpers
+
+- [x] Token format: `base64url(json(User)) + "." + base64url(hmac-sha256(secret, payload))`
+      — pure stdlib (`crypto/hmac`, `crypto/sha256`, `encoding/base64`, `encoding/json`)
+- [x] Unexported `encodeToken(user User, secret string) (string, error)` —
+      JSON-marshal user; compute HMAC-SHA256 over payload bytes; return `payload.sig`
+- [x] Unexported `decodeToken(token, secret string) (User, error)` — split on `.`;
+      verify HMAC constant-time; JSON-unmarshal payload; return User or `ErrUnauth`
+- [x] `func SignToken(user User, secret string) (string, error)` — exported thin
+      wrapper over `encodeToken`
+- [x] godoc: "SignToken produces a signed token encoding the given User. Pass the
+      token to the client; validate it later with BearerHMAC or CookieSession."
+
+#### 8.4 — `BearerHMAC`
+
+- [x] Unexported struct `bearerAuthFn{ secret string }` implementing `AuthFunc`:
+  - `authenticate(r)`: extract `Authorization: Bearer <token>` header; call
+    `decodeToken`; return `(GuestUser, false)` on any failure
+- [x] `func BearerHMAC(secret string) AuthFunc` — returns `&bearerAuthFn{secret}`
+- [x] godoc: "BearerHMAC returns an AuthFunc that validates HMAC-signed bearer tokens
+      in the Authorization header. Generate tokens with SignToken."
+
+#### 8.5 — `CSRFCookieName`, `WithoutCSRF`, and `CookieSession`
+
+- [x] `const CSRFCookieName = "forge_csrf"` — exported; used by client-side AJAX
+      code to read the CSRF cookie and populate `X-CSRF-Token`
+- [x] Unexported struct `withoutCSRFOption{}` implementing `forge.Option`
+      (marker `isOption()` from `roles.go`)
+- [x] `var WithoutCSRF Option = withoutCSRFOption{}` — exported opt-out flag
+- [x] Unexported struct `cookieAuthFn{ name, secret string; csrf bool }`
+      implementing `AuthFunc` and `csrfAware`:
+  - `authenticate(r)`: read named cookie; call `decodeToken`; return
+    `(GuestUser, false)` on missing/invalid cookie
+  - `csrfEnabled() bool`: return `c.csrf`
+- [x] `func CookieSession(name, secret string, opts ...Option) AuthFunc` —
+      inspect opts for `withoutCSRFOption`; default `csrf = true`
+- [x] godoc on `CookieSession`, `WithoutCSRF`, `CSRFCookieName`
+
+#### 8.6 — `BasicAuth`
+
+- [x] Unexported struct `basicAuthFn{ username, password string }` implementing
+      `AuthFunc` and `productionWarner`:
+  - `authenticate(r)`: parse Basic credentials from `Authorization` header;
+    use `subtle.ConstantTimeCompare` for both username and password;
+    on success return `User{ID: username, Name: username, Roles: []Role{Guest}}`
+  - `warnIfProduction(w io.Writer)`: write Amendment S7 warning text to `w`
+- [x] `func BasicAuth(username, password string) AuthFunc`
+- [x] godoc warning note: "BasicAuth should not be used in production.
+      Consider BearerHMAC or CookieSession."
+
+#### 8.7 — `AnyAuth`
+
+- [x] Unexported struct `anyAuthFn{ fns []AuthFunc }` implementing `AuthFunc`,
+      `productionWarner`, and `csrfAware`:
+  - `authenticate(r)`: iterate `fns`; return first `(user, true)` result;
+    return `(GuestUser, false)` if none match
+  - `warnIfProduction(w io.Writer)`: forward call to any child implementing `productionWarner`
+  - `csrfEnabled() bool`: return true if any child implements `csrfAware` and returns true
+- [x] `func AnyAuth(fns ...AuthFunc) AuthFunc` — returns `&anyAuthFn{fns: fns}`
+- [x] godoc: "AnyAuth returns an AuthFunc that tries each provided AuthFunc in order
+      and returns the first successful result."
+
+#### 8.8 — Tests (`auth_test.go`)
+
+- [x] `TestUserHasRole` — hierarchical delegation to `HasRole` free function
+- [x] `TestUserIs` — exact match delegation to `IsRole` free function
+- [x] `TestSignTokenRoundTrip` — `SignToken` then `decodeToken` → same User
+- [x] `TestSignTokenTampered` — altered payload → `ErrUnauth`
+- [x] `TestBearerHMACValid` — correct token → `(user, true)`
+- [x] `TestBearerHMACInvalid` — wrong secret → `(GuestUser, false)`
+- [x] `TestBearerHMACMissingHeader` — no Authorization → `(GuestUser, false)`
+- [x] `TestCookieSessionValid` — signed cookie → `(user, true)`
+- [x] `TestCookieSessionInvalid` — bad cookie value → `(GuestUser, false)`
+- [x] `TestCookieSessionNoCookie` — missing cookie → `(GuestUser, false)`
+- [x] `TestCookieSessionCSRFEnabled` — default `csrfEnabled() == true`
+- [x] `TestCookieSessionWithoutCSRF` — `WithoutCSRF` opt → `csrfEnabled() == false`
+- [x] `TestBasicAuthValid` — matching credentials → `(user, true)`
+- [x] `TestBasicAuthInvalid` — wrong password → `(GuestUser, false)`
+- [x] `TestBasicAuthProductionWarn` — `warnIfProduction` writes expected string
+- [x] `TestAnyAuthFirstWins` — first matching func wins; second not called
+- [x] `TestAnyAuthNoneMatch` — all fail → `(GuestUser, false)`
+- [x] `TestAnyAuthForwardsWarn` — `productionWarner` forwarded through `AnyAuth`
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestUser|TestSign|TestBearer|TestCookie|TestBasic|TestAnyAuth" ./...` — all green
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment S8 agreed:
+      AuthFunc is an interface with unexported `authenticate` method; consistent
+      with Option and Signal; enables capability detection in Steps 9 and 11
 
 ---
 

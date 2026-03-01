@@ -882,6 +882,53 @@ the caller's concrete type argument, not by a package-level constraint.
 
 ---
 
+### Amendment S8 — `AuthFunc` is an interface, not a named function type (amends Decision 15)
+
+**Decision:** `forge.AuthFunc` is declared as an interface with one unexported method:
+
+```go
+type AuthFunc interface{ authenticate(*http.Request) (User, bool) }
+```
+
+The backlog originally specified `type AuthFunc func(r *http.Request) (User, bool)` (a named
+function type). This is changed to an interface because two downstream steps require
+capability detection on `AuthFunc` values without package-level globals:
+
+- **Step 9 (middleware):** must detect whether a given `AuthFunc` enables CSRF validation
+  (`csrfAware` interface with `csrfEnabled() bool`).
+- **Step 11 (`app.Run`):** must detect whether a given `AuthFunc` should emit a production
+  warning (`productionWarner` interface with `warnIfProduction(io.Writer)`).
+
+With a named function type, both requirements demand a parallel registry (a `sync.Map` or
+global slice keyed by function pointer) — fragile, not thread-safe at init time, and
+impossible to test in isolation. With an interface, each concrete `AuthFunc` struct
+implements whichever capability interfaces apply; detection is a simple type assertion.
+
+**Call-site syntax** — identical before and after this amendment:
+```go
+app.Auth(forge.BearerHMAC(secret))
+app.Auth(forge.CookieSession("forge_session", secret))
+app.Auth(forge.BearerHMAC(secret), forge.CookieSession("forge_session", secret))
+```
+
+Developers never call `.authenticate()` directly — they only pass `AuthFunc` values to
+factory functions and to `app.Auth(...)`.
+
+**Consequences for developer/AI experience:**
+1. **Call-site syntax** — unchanged; no visible difference at the point of use
+2. **README** — no changes required; all factory-function examples remain valid
+3. **AI generation accuracy** — AI assistants only write factory calls, never the interface
+   method directly; correct code generated without consulting docs
+4. **Consistency** — `AuthFunc` joins `Option` (roles.go) and `Signal` (signals.go) as an
+   unexported-method interface; one pattern applied across all extension points
+5. **Step 9/11 detection** — type assertions against `productionWarner` / `csrfAware`;
+   clean, idiomatic, zero globals
+
+**Rule:** `forge.AuthFunc` is an interface. Custom authentication schemes implement it by
+declaring a struct and an unexported `authenticate(*http.Request) (User, bool)` method.
+
+---
+
 ### Amendment P1 — Asynchronous sitemap regeneration (amends Decision 9)
 
 **Decision:** Sitemap regeneration runs asynchronously in a dedicated goroutine.

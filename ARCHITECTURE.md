@@ -17,7 +17,7 @@ github.com/forge-cms/forge/
 ├── node.go           Node, Status, lifecycle constants
 ├── module.go         Module[T], Option type, routing, lifecycle enforcement
 ├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext()
-├── auth.go           BearerHMAC, CookieSession, BasicAuth, User, SignToken
+├── auth.go           AuthFunc (interface), BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
 ├── roles.go          Role type, hierarchy, HasRole(), Is(), built-in constants
 ├── head.go           Head struct, Image, Excerpt(), URL(), Crumbs(), Crumb()
 ├── errors.go         Error interface, sentinel errors, WriteError(), ValidationError
@@ -148,6 +148,12 @@ type Markdownable interface {
 // Validatable — implement to run custom validation after struct-tag validation
 type Validatable interface {
     Validate() error
+}
+
+// AuthFunc — implement to provide a custom authentication scheme
+// Forge provides BearerHMAC, CookieSession, BasicAuth, and AnyAuth
+type AuthFunc interface {
+    authenticate(*http.Request) (User, bool)
 }
 
 // Repository[T] — implement to provide a custom storage backend
