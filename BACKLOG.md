@@ -37,7 +37,7 @@ The minimum needed for a developer to build something real.
 | 4 | node.go | ✅ Done | 2026-03-01 |
 | 5 | context.go | ✅ Done | 2026-03-01 |
 | 6 | signals.go | ✅ Done | 2026-03-01 |
-| 7 | storage.go | 🔲 Not started | — |
+| 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | 🔲 Not started | — |
 | 9 | middleware.go | 🔲 Not started | — |
 | 10 | module.go | 🔲 Not started | — |
@@ -50,7 +50,7 @@ The minimum needed for a developer to build something real.
 - [x] Step 4 — `node.go`: Node struct, Status type, NewID (UUID v7), GenerateSlug, UniqueSlug, struct tag validation engine, RunValidation
 - [x] Step 5 — `context.go`: User struct, GuestUser, Context interface, contextImpl, ContextFrom, NewTestContext
 - [x] Step 6 — `signals.go`: Signal type and constants, On[T] generic option, dispatchBefore, dispatchAfter, debouncer
-- [ ] Step 7 — `storage.go`: DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
+- [x] Step 7 — `storage.go`: DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
 - [ ] Step 8 — `auth.go`: BearerHMAC, CookieSession (+ CSRF), BasicAuth, AnyAuth, SignToken
 - [ ] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
 - [ ] Step 10 — `module.go`: Module[T], auto-routing, lifecycle enforcement, content negotiation, cache, signal dispatch, At/Cache/Middleware/On options

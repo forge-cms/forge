@@ -857,6 +857,31 @@ developers and confined entirely to signals.go.
 
 ---
 
+### Amendment S3 — `Repository[T any]` and `MemoryRepo[T any]` use unconstrained type parameter (amends ARCHITECTURE.md)
+
+**Decision:** `Repository[T any]` and `MemoryRepo[T any]` use an unconstrained type parameter
+`[T any]`, not `[T forge.Node]`. `ARCHITECTURE.md` incorrectly specified `[T forge.Node]` —
+Go generics do not support struct types as type constraints; only interfaces may appear there.
+This is consistent with `Query[T any]`, `QueryOne[T any]`, and `On[T any]`.
+
+**Call-site syntax:**
+```go
+type ArticleRepo = forge.MemoryRepo[Article]
+```
+
+**Consequences for developer/AI experience:**
+1. **Call-site syntax** — identical; no impact on how the type is used
+2. **ARCHITECTURE.md** — corrected in the same step; `Repository[T Node]` → `Repository[T any]`
+3. **README.md** — corrected in the same step
+4. **AI generation accuracy** — `[T any]` is the idiomatic Go pattern; AI assistants generate
+   it correctly without consulting docs
+5. **Consistency** — matches every other generic helper in the package
+
+**Rule:** All generic helpers in the `forge` package use `[T any]`. Type safety is enforced by
+the caller's concrete type argument, not by a package-level constraint.
+
+---
+
 ### Amendment P1 — Asynchronous sitemap regeneration (amends Decision 9)
 
 **Decision:** Sitemap regeneration runs asynchronously in a dedicated goroutine.

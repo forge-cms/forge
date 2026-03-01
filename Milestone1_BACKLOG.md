@@ -17,7 +17,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 4 | node.go | ✅ Done | 2026-03-01 |
 | 5 | context.go | ✅ Done | 2026-03-01 |
 | 6 | signals.go | ✅ Done | 2026-03-01 |
-| 7 | storage.go | 🔲 Not started | — |
+| 7 | storage.go | ✅ Done | 2026-03-01 |
 | 8 | auth.go | 🔲 Not started | — |
 | 9 | middleware.go | 🔲 Not started | — |
 | 10 | module.go | 🔲 Not started | — |
@@ -513,28 +513,120 @@ When a step is done: change `🔲` to `✅` and record the date.
 ### Step 7 — storage.go
 
 **Depends on:** node, errors
-**Decisions:** Decision 2, 22
+**Decisions:** Decision 2, Decision 22, Amendment S3 (Repository[T any])
 **Unlocks:** forge-pgx (Step P1 can start after this)
+**Files:** `storage.go`, `storage_test.go`
+**Status:** ✅ Done
 
-- [ ] `forge.DB` interface:
+#### 7.1 — `forge.DB` interface
+
+- [x] Declare `forge.DB` interface with three methods (verbatim from Decision 22):
   ```go
   QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
   ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
   QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
   ```
-- [ ] `forge.Query[T any](ctx context.Context, db forge.DB, query string, args ...any) ([]T, error)` — struct scanning with reflection cache
-- [ ] `forge.QueryOne[T any](ctx context.Context, db forge.DB, query string, args ...any) (T, error)` — returns `ErrNotFound` if no rows
-- [ ] Field mapping: `db` tag first, then field name lowercased
-- [ ] Reflection cache: `sync.Map` keyed by `reflect.Type`; scan struct fields once per type
-- [ ] `forge.Repository[T forge.Node]` interface: `FindByID`, `FindBySlug`, `FindAll`, `Save`, `Delete`
-- [ ] `forge.MemoryRepo[T forge.Node]` struct + `forge.NewMemoryRepo[T]() *MemoryRepo[T]`
-  - Thread-safe via `sync.RWMutex`
-  - `FindByID`, `FindBySlug`, `FindAll` (respects `ListOptions`)
-  - `Save` — upsert
-  - `Delete` — returns `ErrNotFound` if not found
-- [ ] `forge.ListOptions` struct: `Page int`, `PerPage int`, `OrderBy string`, `Desc bool`; `Offset() int` method
-- [ ] Tests: `Query[T]` scanning, `QueryOne[T]` not-found, `MemoryRepo` full CRUD + `ListOptions`
-- [ ] Benchmark: `Query[T]` scanning (first call vs. cached reflection)
+- [x] godoc: "DB is satisfied by *sql.DB, *sql.Tx, and forgepgx.Wrap(pool).
+      Users never implement this directly."
+
+#### 7.2 — Reflection scan cache
+
+- [x] Unexported `dbField` struct: `{ index int; name string }` — maps a
+      column name to the struct field index
+- [x] Unexported `dbFieldCache sync.Map` — keyed by `reflect.Type`,
+      stores `[]dbField`; populated once per type on first use
+- [x] Unexported `dbFields(t reflect.Type) []dbField` — returns cached
+      slice; on cache miss: iterate exported fields, map `db` tag name
+      (fallback: `strings.ToLower(field.Name)`), store, return
+
+#### 7.3 — `forge.Query[T any]`
+
+- [x] `func Query[T any](ctx context.Context, db DB, query string, args ...any) ([]T, error)`
+- [x] Calls `db.QueryContext`; returns wrapped error on failure
+- [x] Calls `rows.Columns()` to get ordered column names
+- [x] For each row: allocate `T` via `reflect.New`; build scan-target
+      slice matched to columns via `dbFields` cache; call `rows.Scan`
+- [x] Returns `[]T` — empty slice (not nil) on zero rows
+- [x] `T` may be a pointer type (e.g. `*BlogPost`) — handle both `T`
+      and `*T` using `reflect.TypeOf((*T)(nil)).Elem()`
+
+#### 7.4 — `forge.QueryOne[T any]`
+
+- [x] `func QueryOne[T any](ctx context.Context, db DB, query string, args ...any) (T, error)`
+- [x] Delegates to `Query[T]`
+- [x] Returns zero value of `T` + `ErrNotFound` if result slice is empty
+- [x] Returns first element otherwise
+
+#### 7.5 — `forge.ListOptions`
+
+- [x] `type ListOptions struct { Page int; PerPage int; OrderBy string; Desc bool }`
+- [x] `func (o ListOptions) Offset() int` — `max(0, (Page-1)*PerPage)`;
+      Page ≤ 0 treated as page 1
+- [x] godoc on struct and method
+
+#### 7.6 — `forge.Repository[T any]` interface
+
+- [x] Declare `Repository[T any]` interface with five methods using
+      stdlib `context.Context` (not `forge.Context` — dependency rule):
+  ```go
+  FindByID(ctx context.Context, id string) (T, error)
+  FindBySlug(ctx context.Context, slug string) (T, error)
+  FindAll(ctx context.Context, opts ListOptions) ([]T, error)
+  Save(ctx context.Context, node T) error
+  Delete(ctx context.Context, id string) error
+  ```
+- [x] godoc: "Repository is the storage interface for a content type.
+      Implement it to provide a custom backend. Use MemoryRepo for tests."
+
+#### 7.7 — `forge.MemoryRepo[T any]` and `forge.NewMemoryRepo[T any]`
+
+- [x] `type MemoryRepo[T any] struct` — unexported fields:
+      `mu sync.RWMutex`, `items map[string]T`, `order []string`
+- [x] `func NewMemoryRepo[T any]() *MemoryRepo[T]` — initialises map
+- [x] `FindByID` — read-lock; return copy + `ErrNotFound` if absent
+- [x] `FindBySlug` — read-lock; iterate items; match via reflection on
+      `Slug` field (string); return `ErrNotFound` if no match
+- [x] `FindAll` — read-lock; collect all items in insertion order;
+      apply `ListOptions`: OrderBy (reflect string field, case-insensitive;
+      fallback: insertion order), Desc flag, Page+PerPage slice
+- [x] `Save` — write-lock; read `ID` field via reflection; upsert into
+      map; append to `order` only on insert
+- [x] `Delete` — write-lock; return `ErrNotFound` if absent; delete from
+      map and remove from `order` slice
+- [x] All reflection field access uses `dbFields` cache (same pattern
+      as Query[T]) — no duplicate reflection logic
+
+#### 7.8 — Tests (`storage_test.go`)
+
+- [x] Fake `database/sql` driver: minimal implementation of
+      `driver.Driver`, `driver.Conn`, `driver.Stmt`, `driver.Rows`
+      inline in test file — zero imports beyond stdlib
+- [x] `TestQueryScansRows` — Query[T] returns correctly scanned slice
+- [x] `TestQueryReturnsEmptySliceNotNil` — zero rows → `[]T{}`, not nil
+- [x] `TestQueryOneNotFound` — zero rows → `ErrNotFound`
+- [x] `TestQueryOneReturnsFirst` — multiple rows → first row returned
+- [x] `TestListOptionsOffset` — table-driven: page 1 → 0, page 2/PerPage
+      10 → 10, page 0 → 0
+- [x] `TestMemoryRepoSaveAndFindByID` — Save then FindByID round-trip
+- [x] `TestMemoryRepoFindBySlug` — Save then FindBySlug round-trip
+- [x] `TestMemoryRepoFindAll` — pagination via ListOptions
+- [x] `TestMemoryRepoDelete` — Delete removes item; second Delete →
+      `ErrNotFound`
+- [x] `TestMemoryRepoDeleteNotFound` — Delete on empty repo → `ErrNotFound`
+- [x] `BenchmarkQueryScanCached` — first call vs. subsequent; confirm
+      cache prevents repeated reflection
+
+#### Verification
+
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestQuery|TestMemoryRepo|TestListOptions" ./...` — all green
+- [x] `go test -bench BenchmarkQuery ./...` — runs without error
+- [x] Review ARCHITECTURE.md and DECISIONS.md — Amendment S3 drafted:
+      Repository[T any] and MemoryRepo[T any] use unconstrained type
+      parameter (not [T forge.Node]) — Go generics do not support
+      struct constraints; consistent with Query[T any] and On[T any]
 
 ---
 

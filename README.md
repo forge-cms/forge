@@ -744,7 +744,7 @@ type BlogPost struct {
 For testing, prototyping, and custom backends:
 
 ```go
-type Repository[T Node] interface {
+type Repository[T any] interface {
     FindByID(ctx context.Context, id string) (T, error)
     FindBySlug(ctx context.Context, slug string) (T, error)
     FindAll(ctx context.Context, opts forge.ListOptions) ([]T, error)

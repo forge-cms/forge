@@ -151,7 +151,7 @@ type Validatable interface {
 }
 
 // Repository[T] — implement to provide a custom storage backend
-type Repository[T Node] interface {
+type Repository[T any] interface {
     FindByID(ctx context.Context, id string) (T, error)
     FindBySlug(ctx context.Context, slug string) (T, error)
     FindAll(ctx context.Context, opts ListOptions) ([]T, error)
