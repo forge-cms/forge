@@ -200,6 +200,9 @@ type ListOptions struct {
 	OrderBy string
 	// Desc reverses the sort order when true.
 	Desc bool
+	// Status restricts results to items whose Status field matches one of the
+	// given values. An empty or nil slice means return all statuses.
+	Status []Status
 }
 
 // Offset returns the zero-based row offset for the page described by o.
@@ -280,13 +283,31 @@ func (r *MemoryRepo[T]) FindBySlug(_ context.Context, slug string) (T, error) {
 	return zero, ErrNotFound
 }
 
+// statusMatch reports whether the Status field of item matches any of the
+// given statuses. Returns true when statuses is empty (no filter applied).
+func statusMatch[T any](item T, statuses []Status) bool {
+	if len(statuses) == 0 {
+		return true
+	}
+	s := Status(stringField(item, "Status"))
+	for _, allowed := range statuses {
+		if s == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // FindAll returns items in insertion order, with optional sorting and
 // pagination from opts. When opts.PerPage is 0, all items are returned.
 func (r *MemoryRepo[T]) FindAll(_ context.Context, opts ListOptions) ([]T, error) {
 	r.mu.RLock()
 	all := make([]T, 0, len(r.order))
 	for _, id := range r.order {
-		all = append(all, r.items[id])
+		item := r.items[id]
+		if statusMatch(item, opts.Status) {
+			all = append(all, item)
+		}
 	}
 	r.mu.RUnlock()
 
@@ -352,16 +373,33 @@ func stringField[T any](v T, name string) string {
 	return f.String()
 }
 
+// sortPair bundles an item with its pre-extracted sort key to avoid
+// repeated reflection calls inside the sort comparator.
+type sortPair[T any] struct {
+	item T
+	key  string
+}
+
 // sortItems sorts items in-place by the named string field.
 // Non-string fields and missing fields sort to the end.
 // Uses a stable sort so equal elements preserve insertion order.
+// Each item's sort key is extracted once before sorting, avoiding O(N log N)
+// reflection calls in the comparator.
 func sortItems[T any](items []T, field string, desc bool) {
-	sort.SliceStable(items, func(i, j int) bool {
-		a := stringField(items[i], field)
-		b := stringField(items[j], field)
+	if len(items) == 0 {
+		return
+	}
+	pairs := make([]sortPair[T], len(items))
+	for i, item := range items {
+		pairs[i] = sortPair[T]{item: item, key: stringField(item, field)}
+	}
+	sort.SliceStable(pairs, func(i, j int) bool {
 		if desc {
-			return a > b
+			return pairs[i].key > pairs[j].key
 		}
-		return a < b
+		return pairs[i].key < pairs[j].key
 	})
+	for i, p := range pairs {
+		items[i] = p.item
+	}
 }

@@ -2,9 +2,12 @@ package forge
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // — User methods ——————————————————————————————————————————————————————————
@@ -61,7 +64,7 @@ func TestSignTokenRoundTrip(t *testing.T) {
 	secret := "test-secret-that-is-long-enough-32x"
 	original := User{ID: "u1", Name: "Alice", Roles: []Role{Editor}}
 
-	token, err := SignToken(original, secret)
+	token, err := SignToken(original, secret, 0)
 	if err != nil {
 		t.Fatalf("SignToken: %v", err)
 	}
@@ -84,7 +87,7 @@ func TestSignTokenRoundTrip(t *testing.T) {
 
 func TestSignTokenTampered(t *testing.T) {
 	secret := "test-secret-that-is-long-enough-32x"
-	token, _ := SignToken(User{ID: "u1", Name: "Alice", Roles: []Role{Editor}}, secret)
+	token, _ := SignToken(User{ID: "u1", Name: "Alice", Roles: []Role{Editor}}, secret, 0)
 
 	// Tamper: replace first character of payload
 	parts := strings.SplitN(token, ".", 2)
@@ -103,10 +106,47 @@ func TestSignTokenTampered(t *testing.T) {
 }
 
 func TestSignTokenWrongSecret(t *testing.T) {
-	token, _ := SignToken(User{ID: "u1"}, "secret-a-long-enough-32-chars-00")
+	token, _ := SignToken(User{ID: "u1"}, "secret-a-long-enough-32-chars-00", 0)
 	_, err := decodeToken(token, "secret-b-long-enough-32-chars-00")
 	if err == nil {
 		t.Fatal("expected error for wrong secret, got nil")
+	}
+}
+
+func TestSignTokenWithExpiry(t *testing.T) {
+	secret := "test-secret-that-is-long-enough-32x"
+	user := User{ID: "u1", Roles: []Role{Author}}
+
+	// A token with a future TTL must decode successfully.
+	tok, err := SignToken(user, secret, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+	got, err := decodeToken(tok, secret)
+	if err != nil {
+		t.Fatalf("decodeToken on fresh token: %v", err)
+	}
+	if got.ID != user.ID {
+		t.Fatalf("ID: got %q want %q", got.ID, user.ID)
+	}
+}
+
+func TestSignTokenExpiredRejects(t *testing.T) {
+	secret := "test-secret-that-is-long-enough-32x"
+	// Craft a token whose exp is 1 hour in the past.
+	raw, _ := json.Marshal(tokenPayload{
+		ID:    "u99",
+		Name:  "old",
+		Roles: []string{"guest"},
+		Exp:   time.Now().Add(-time.Hour).Unix(),
+	})
+	encoded := base64.RawURLEncoding.EncodeToString(raw)
+	sig := tokenHMAC(encoded, secret)
+	tok := encoded + "." + sig
+
+	_, err := decodeToken(tok, secret)
+	if err == nil {
+		t.Fatal("expected ErrUnauth for expired token, got nil")
 	}
 }
 
@@ -116,7 +156,7 @@ const testSecret = "test-hmac-secret-that-is-32chars"
 
 func signedToken(t *testing.T, user User) string {
 	t.Helper()
-	tok, err := SignToken(user, testSecret)
+	tok, err := SignToken(user, testSecret, 0)
 	if err != nil {
 		t.Fatalf("SignToken: %v", err)
 	}

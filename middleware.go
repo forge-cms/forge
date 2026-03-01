@@ -1,11 +1,13 @@
 package forge
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -131,7 +133,7 @@ func MaxBodySize(n int64) func(http.Handler) http.Handler {
 //   - X-Frame-Options: DENY
 //   - X-Content-Type-Options: nosniff
 //   - Referrer-Policy: strict-origin-when-cross-origin
-//   - Content-Security-Policy: default-src 'self'
+//   - Content-Security-Policy: default-src 'self'; frame-ancestors 'none'
 func SecurityHeaders() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +142,7 @@ func SecurityHeaders() func(http.Handler) http.Handler {
 			h.Set("X-Frame-Options", "DENY")
 			h.Set("X-Content-Type-Options", "nosniff")
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			h.Set("Content-Security-Policy", "default-src 'self'")
+			h.Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'")
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -212,12 +214,48 @@ func (rl *rateLimiter) sweep(maxAge time.Duration) {
 	}
 }
 
+// TrustedProxy returns an [Option] for [RateLimit] that reads the real client IP
+// from X-Real-IP or X-Forwarded-For headers instead of r.RemoteAddr. Use this
+// when the application runs behind a reverse proxy (nginx, Caddy, load balancer).
+func TrustedProxy() Option { return trustedProxyOption{} }
+
+type trustedProxyOption struct{}
+
+func (trustedProxyOption) isOption() {}
+
+// realClientIP extracts the originating client IP from trusted proxy headers.
+// Reads X-Real-IP first; falls back to the leftmost entry in X-Forwarded-For.
+// If neither header is present, falls back to r.RemoteAddr.
+func realClientIP(r *http.Request) string {
+	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
+		return ip
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.SplitN(xff, ",", 2)
+		return strings.TrimSpace(parts[0])
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
 // RateLimit returns middleware that enforces a per-IP token bucket rate limit
 // of n requests per duration d. Requests exceeding the limit receive a 429
 // Too Many Requests response with a Retry-After header.
 //
+// Pass [TrustedProxy] when the application runs behind a reverse proxy so that
+// the real client IP is read from X-Real-IP / X-Forwarded-For.
+//
 // A background goroutine sweeps stale IP buckets every d to bound memory usage.
-func RateLimit(n int, d time.Duration) func(http.Handler) http.Handler {
+func RateLimit(n int, d time.Duration, opts ...Option) func(http.Handler) http.Handler {
+	trusted := false
+	for _, o := range opts {
+		if _, ok := o.(trustedProxyOption); ok {
+			trusted = true
+		}
+	}
 	rl := &rateLimiter{
 		buckets: make(map[string]*ipBucket),
 		rate:    float64(n) / d.Seconds(),
@@ -234,9 +272,15 @@ func RateLimit(n int, d time.Duration) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				ip = r.RemoteAddr
+			var ip string
+			if trusted {
+				ip = realClientIP(r)
+			} else {
+				var err error
+				ip, _, err = net.SplitHostPort(r.RemoteAddr)
+				if err != nil {
+					ip = r.RemoteAddr
+				}
 			}
 			ok, wait := rl.allow(ip)
 			if !ok {
@@ -385,10 +429,15 @@ func (c *CacheStore) Sweep() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := time.Now()
+	// Collect expired keys first to avoid mutating the map during range.
+	var expired []*cacheEntry
 	for _, e := range c.entries {
 		if now.After(e.expires) {
-			c.remove(e)
+			expired = append(expired, e)
 		}
+	}
+	for _, e := range expired {
+		c.remove(e)
 	}
 }
 
@@ -397,16 +446,10 @@ type cacheRecorder struct {
 	http.ResponseWriter
 	status int
 	body   []byte
-	header http.Header
 }
 
 func newCacheRecorder(w http.ResponseWriter) *cacheRecorder {
-	// Copy headers already set on the delegate writer.
-	h := make(http.Header)
-	for k, v := range w.Header() {
-		h[k] = v
-	}
-	return &cacheRecorder{ResponseWriter: w, header: h, status: http.StatusOK}
+	return &cacheRecorder{ResponseWriter: w, status: http.StatusOK}
 }
 
 func (cr *cacheRecorder) WriteHeader(code int) {
@@ -504,4 +547,58 @@ func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.
 		h = middlewares[i](h)
 	}
 	return h
+}
+
+// — CSRF ——————————————————————————————————————————————————————————————————
+
+// CSRF returns middleware that validates the X-CSRF-Token request header against
+// the forge_csrf cookie on non-safe HTTP methods (POST, PUT, PATCH, DELETE).
+// It only activates when auth implements [csrfAware] and CSRF is enabled (i.e.
+// [CookieSession] without [WithoutCSRF]).
+//
+// The middleware also issues a new forge_csrf cookie when none is present,
+// allowing JavaScript clients to read it and send it as X-CSRF-Token.
+//
+// Apply CSRF after your auth middleware in the global chain or per-module:
+//
+//	app.Use(forge.CSRF(myAuth))
+func CSRF(auth AuthFunc) func(http.Handler) http.Handler {
+	ca, ok := auth.(csrfAware)
+	if !ok || !ca.csrfEnabled() {
+		// Auth method does not use cookies; CSRF not needed.
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Issue CSRF cookie when absent so clients can read the token.
+			if _, err := r.Cookie(CSRFCookieName); err != nil {
+				http.SetCookie(w, &http.Cookie{
+					Name:     CSRFCookieName,
+					Value:    NewID(),
+					HttpOnly: false, // must be readable by JavaScript
+					Secure:   true,
+					SameSite: http.SameSiteStrictMode,
+					Path:     "/",
+				})
+			}
+			// Safe methods do not require a token.
+			switch r.Method {
+			case http.MethodGet, http.MethodHead, http.MethodOptions:
+				next.ServeHTTP(w, r)
+				return
+			}
+			// Validate token on unsafe methods.
+			cookie, err := r.Cookie(CSRFCookieName)
+			if err != nil || cookie.Value == "" {
+				WriteError(w, r, ErrForbidden)
+				return
+			}
+			header := r.Header.Get("X-CSRF-Token")
+			if subtle.ConstantTimeCompare([]byte(header), []byte(cookie.Value)) != 1 {
+				WriteError(w, r, ErrForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

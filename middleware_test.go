@@ -156,7 +156,7 @@ func TestSecurityHeadersPresent(t *testing.T) {
 		"X-Frame-Options":           "DENY",
 		"X-Content-Type-Options":    "nosniff",
 		"Referrer-Policy":           "strict-origin-when-cross-origin",
-		"Content-Security-Policy":   "default-src 'self'",
+		"Content-Security-Policy":   "default-src 'self'; frame-ancestors 'none'",
 	}
 	for header, want := range checks {
 		if got := w.Header().Get(header); got != want {

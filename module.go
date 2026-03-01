@@ -193,42 +193,53 @@ func setNodeSlug(v any, slug string) {
 	rv.FieldByIndex(f.slug).SetString(slug)
 }
 
-// autoSlug inspects v for a non-empty string field to derive a URL slug from.
-// Checks for "Title", "Name", "Headline" first, then any string field tagged
-// forge:"required". Returns "" if no suitable field is found.
-func autoSlug(rv reflect.Value) string {
-	for rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
+// autoSlugCache stores the index path of the slug-source field per struct type.
+var autoSlugCache sync.Map
+
+// autoSlugFieldPath returns the cached reflect index path of the best field to
+// derive a slug from for struct type t. Checks Title, Name, Headline in order,
+// then falls back to the first top-level string field tagged forge:"required".
+// Returns nil when no suitable field is found. Result is immutable once stored.
+func autoSlugFieldPath(t reflect.Type) []int {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
 	}
-	t := rv.Type()
+	if v, ok := autoSlugCache.Load(t); ok {
+		return v.([]int)
+	}
 	for _, name := range []string{"Title", "Name", "Headline"} {
-		if idx, ok := fieldIndex(t, name); ok {
-			if f := t.Field(idx); f.Type.Kind() == reflect.String {
-				if s := rv.Field(idx).String(); s != "" {
-					return GenerateSlug(s)
-				}
-			}
+		if sf, ok := t.FieldByName(name); ok && sf.Type.Kind() == reflect.String {
+			autoSlugCache.Store(t, sf.Index)
+			return sf.Index
 		}
 	}
 	for i := 0; i < t.NumField(); i++ {
 		fi := t.Field(i)
 		if fi.Type.Kind() == reflect.String && strings.Contains(fi.Tag.Get("forge"), "required") {
-			if s := rv.Field(i).String(); s != "" {
-				return GenerateSlug(s)
-			}
+			path := []int{i}
+			autoSlugCache.Store(t, path)
+			return path
 		}
 	}
-	return ""
+	autoSlugCache.Store(t, ([]int)(nil))
+	return nil
 }
 
-// fieldIndex returns the index of the named field in t, or -1.
-func fieldIndex(t reflect.Type, name string) (int, bool) {
-	for i := 0; i < t.NumField(); i++ {
-		if t.Field(i).Name == name {
-			return i, true
-		}
+// autoSlug derives a URL slug from the first suitable string field of rv.
+// Field selection is cached per type via autoSlugFieldPath.
+func autoSlug(rv reflect.Value) string {
+	for rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
 	}
-	return -1, false
+	path := autoSlugFieldPath(rv.Type())
+	if path == nil {
+		return ""
+	}
+	s := rv.FieldByIndex(path).String()
+	if s == "" {
+		return ""
+	}
+	return GenerateSlug(s)
 }
 
 // stripMarkdown removes common Markdown formatting from s for text/plain output.
@@ -474,6 +485,15 @@ func (m *Module[T]) invalidateCache() {
 
 // — Content-type helpers ——————————————————————————————————————————————————
 
+// writeJSON writes a JSON response with the given status code.
+// Sets Content-Type: application/json and Vary: Accept.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Vary", "Accept")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v) //nolint:errcheck
+}
+
 // writeContent serialises v to w using ct content-type.
 // Sets Vary: Accept and Content-Type on every response.
 func writeContent(w http.ResponseWriter, ct string, v any) {
@@ -501,9 +521,7 @@ func writeContent(w http.ResponseWriter, ct string, v any) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body)) //nolint:errcheck
 	default: // application/json
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(v) //nolint:errcheck
+		writeJSON(w, http.StatusOK, v)
 	}
 }
 
@@ -574,21 +592,16 @@ func (m *Module[T]) listHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := m.repo.FindAll(ctx, ListOptions{})
+	// Lifecycle filter: push status constraint into the repository query.
+	// Guests see only Published; Authors and above see all statuses.
+	var statuses []Status
+	if !ctx.User().HasRole(Author) {
+		statuses = []Status{Published}
+	}
+	items, err := m.repo.FindAll(ctx, ListOptions{Status: statuses})
 	if err != nil {
 		WriteError(w, r, err)
 		return
-	}
-
-	// Lifecycle filter: guests see only Published content.
-	if !ctx.User().HasRole(Author) {
-		filtered := items[:0]
-		for _, item := range items {
-			if nodeStatusOf(item) == Published {
-				filtered = append(filtered, item)
-			}
-		}
-		items = filtered
 	}
 
 	ct := m.neg.negotiate(r)
@@ -636,7 +649,7 @@ func (m *Module[T]) createHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Assign a new ID and auto-generate a slug if not provided.
+	// Assign a new ID and auto-generate a unique slug if not provided.
 	f := getNodeFields(elemType)
 	id := NewID()
 	pv.Elem().FieldByIndex(f.id).SetString(id)
@@ -645,6 +658,11 @@ func (m *Module[T]) createHandler(w http.ResponseWriter, r *http.Request) {
 		if slug == "" {
 			slug = id[:8]
 		}
+		// Guarantee uniqueness by appending a counter suffix when the slug exists.
+		slug = UniqueSlug(slug, func(s string) bool {
+			_, err := m.repo.FindBySlug(ctx, s)
+			return err == nil
+		})
 		pv.Elem().FieldByIndex(f.slug).SetString(slug)
 	}
 
@@ -678,9 +696,7 @@ func (m *Module[T]) createHandler(w http.ResponseWriter, r *http.Request) {
 	m.invalidateCache()
 	m.triggerSitemap(ctx)
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(item) //nolint:errcheck
+	writeJSON(w, http.StatusCreated, item)
 }
 
 // updateHandler serves PUT /{prefix}/{slug}.
@@ -747,9 +763,7 @@ func (m *Module[T]) updateHandler(w http.ResponseWriter, r *http.Request) {
 	m.invalidateCache()
 	m.triggerSitemap(ctx)
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(item) //nolint:errcheck
+	writeJSON(w, http.StatusOK, item)
 }
 
 // deleteHandler serves DELETE /{prefix}/{slug}.

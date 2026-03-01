@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // AuthFunc authenticates an incoming HTTP request and returns the identified
@@ -71,17 +72,24 @@ type tokenPayload struct {
 	ID    string   `json:"id"`
 	Name  string   `json:"name"`
 	Roles []string `json:"roles"`
+	Exp   int64    `json:"exp,omitempty"` // Unix seconds; 0 means no expiry
 }
 
 // encodeToken JSON-marshals user, computes HMAC-SHA256 over the base64url payload,
 // and returns "payload.signature" (both base64url-encoded, no padding).
-func encodeToken(user User, secret string) (string, error) {
+// When ttl > 0 an expiry timestamp is embedded in the payload.
+func encodeToken(user User, secret string, ttl time.Duration) (string, error) {
 	roles := make([]string, len(user.Roles))
 	for i, r := range user.Roles {
 		roles[i] = string(r)
 	}
 
-	raw, err := json.Marshal(tokenPayload{ID: user.ID, Name: user.Name, Roles: roles})
+	var exp int64
+	if ttl > 0 {
+		exp = time.Now().Add(ttl).Unix()
+	}
+
+	raw, err := json.Marshal(tokenPayload{ID: user.ID, Name: user.Name, Roles: roles, Exp: exp})
 	if err != nil {
 		return "", fmt.Errorf("forge: encodeToken marshal: %w", err)
 	}
@@ -115,6 +123,11 @@ func decodeToken(token, secret string) (User, error) {
 		return GuestUser, ErrUnauth
 	}
 
+	// Reject expired tokens.
+	if p.Exp != 0 && time.Now().Unix() > p.Exp {
+		return GuestUser, ErrUnauth
+	}
+
 	roles := make([]Role, len(p.Roles))
 	for i, r := range p.Roles {
 		roles[i] = Role(r)
@@ -135,10 +148,13 @@ func tokenHMAC(payload, secret string) string {
 // the client (e.g. as a JSON response body); validate it later with [BearerHMAC]
 // or [CookieSession].
 //
+// When ttl > 0 the token contains an expiry timestamp; [decodeToken] rejects
+// tokens whose expiry has passed. Use ttl = 0 for tokens with no expiry.
+//
 // The token format is: base64url(json(User)) + "." + base64url(hmac-sha256(secret, payload)).
 // Roles are stored as strings for forward compatibility (Decision 15).
-func SignToken(user User, secret string) (string, error) {
-	return encodeToken(user, secret)
+func SignToken(user User, secret string, ttl time.Duration) (string, error) {
+	return encodeToken(user, secret, ttl)
 }
 
 // — BearerHMAC —————————————————————————————————————————————————————————————

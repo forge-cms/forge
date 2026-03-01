@@ -1813,3 +1813,103 @@ Zero-dependency is preserved for the core module.
 - README explains all three tiers clearly with code examples
 - BACKLOG updated: `forge-pgx` added as a parallel deliverable to Milestone 1
 - `forge.Query[T]` and `forge.QueryOne[T]` accept `forge.DB`, not `*sql.DB`
+
+---
+
+### Amendment S10 — Token expiry in SignToken (amends auth.go)
+
+**Decision:** `SignToken(user User, secret string, ttl time.Duration) (string, error)` gains
+a `ttl` parameter. When `ttl > 0` an `exp` (Unix seconds) field is embedded in the token
+payload. `decodeToken` rejects tokens whose `exp` is non-zero and in the past with
+`ErrUnauth`. `ttl = 0` means no expiry (default for tests and long-lived service tokens).
+
+**Rationale:**
+Tokens with no expiry are a common attack vector — a stolen token is valid forever until
+the signing secret is rotated (which invalidates all users). An explicit TTL limits the
+blast radius of a token leak to the configured window.
+
+**Call-site syntax:**
+```go
+// 24-hour session token (typical web app)
+tok, err := forge.SignToken(user, secret, 24*time.Hour)
+
+// No expiry (service-to-service, long-lived CLI tokens)
+tok, err := forge.SignToken(user, secret, 0)
+```
+
+**Consequences:**
+- `tokenPayload` gains `Exp int64 \`json:"exp,omitempty"\`` field (backward-compatible — old tokens without `exp` decode fine with `Exp = 0` → no expiry)
+- `encodeToken` gains `ttl time.Duration` parameter
+- `decodeToken` validates `Exp` before returning the user
+- All existing `SignToken` call sites in tests updated to pass `0`
+
+---
+
+### Amendment S11 — CSRF middleware (amends middleware.go / auth.go)
+
+**Decision:** `forge.CSRF(auth AuthFunc) func(http.Handler) http.Handler` enforces
+the double-submit cookie pattern for cookie-session authentication.
+
+**Mechanism:**
+1. When the `forge_csrf` cookie is absent, CSRF issues a new random token cookie (`HttpOnly: false`, `Secure: true`, `SameSite: Strict`).
+2. Safe methods (GET, HEAD, OPTIONS) are passed through without validation.
+3. Unsafe methods must supply the cookie value as the `X-CSRF-Token` request header, compared with `crypto/subtle.ConstantTimeCompare`.
+4. If the CSRF middleware is constructed with an `AuthFunc` that is not `csrfAware` (e.g. `BearerHMAC`), it is a passthrough no-op.
+
+**Applied as:**
+```go
+// Global, applied to all routes
+app.Use(forge.CSRF(myAuth))
+
+// Per-module only
+forge.NewModule(&Post{}, forge.Middleware(forge.CSRF(myAuth)), forge.Repo(repo))
+```
+
+**Consequences:**
+- `CSRF(auth AuthFunc)` added to `middleware.go`
+- Requires `crypto/subtle` and `strings` imports in `middleware.go`
+- `forge_csrf` cookie value is a UUID v7 (`NewID()`) random token
+
+---
+
+### Amendment S12 — RateLimit trusted proxy support (amends middleware.go)
+
+**Decision:** `RateLimit(n int, d time.Duration, opts ...Option)` gains an optional
+`forge.TrustedProxy()` option. When set, the real client IP is read from
+`X-Real-IP` (nginx standard) or the leftmost entry in `X-Forwarded-For`, falling
+back to `r.RemoteAddr`.
+
+**Rationale:**
+In any standard deployment behind a reverse proxy, `r.RemoteAddr` is the proxy's
+IP address, meaning all clients share one rate-limit bucket.
+
+**Call-site syntax:**
+```go
+// Direct exposure (development, raw VPS)
+app.Use(forge.RateLimit(100, time.Minute))
+
+// Behind nginx / Caddy / load balancer
+app.Use(forge.RateLimit(100, time.Minute, forge.TrustedProxy()))
+```
+
+**Consequences:**
+- `TrustedProxy() Option` + `trustedProxyOption` added to `middleware.go`
+- `realClientIP(r *http.Request) string` unexported helper added
+- `RateLimit` signature changed to variadic opts (backward-compatible)
+
+---
+
+### Amendment M5 — ListOptions.Status filter (amends storage.go)
+
+**Decision:** `ListOptions` gains a `Status []Status` field. `MemoryRepo.FindAll`
+applies the filter server-side (in the repository), not in application memory.
+
+**Rationale:**
+The previous implementation in `listHandler` fetched all items with `FindAll(ctx, ListOptions{})` then filtered in Go memory. For a 100k-post repository this allocates the full collection on every unauthenticated list request. Pushing the filter into the repository is the correct abstraction — real DB implementations can apply a `WHERE status = ?` clause.
+
+**Consequences:**
+- `Status []Status` added to `ListOptions` (zero value = return all statuses — backward-compatible)
+- `statusMatch[T any](item T, statuses []Status) bool` unexported helper in `storage.go`
+- `MemoryRepo.FindAll` filters via `statusMatch` before collecting items
+- `listHandler` passes `Status: []Status{Published}` for guest users; `nil` for authors
+- In-Go filter loop after `FindAll` removed from `listHandler`
