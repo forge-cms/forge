@@ -1,0 +1,241 @@
+package forge
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+)
+
+// Error is implemented by all Forge errors. Callers should use errors.As to
+// inspect the concrete type — never type-assert directly against a sentinel.
+type Error interface {
+	error
+	// Code returns a machine-readable error identifier (e.g. "not_found").
+	Code() string
+	// HTTPStatus returns the HTTP status code that should be sent to the client.
+	HTTPStatus() int
+	// Public returns a message that is safe to expose to API clients.
+	Public() string
+}
+
+// sentinelError is the unexported concrete type backing the package-level
+// sentinel error variables (ErrNotFound, ErrGone, etc.).
+type sentinelError struct {
+	code   string
+	status int
+	public string
+}
+
+func (e *sentinelError) Error() string   { return e.public }
+func (e *sentinelError) Code() string    { return e.code }
+func (e *sentinelError) HTTPStatus() int { return e.status }
+func (e *sentinelError) Public() string  { return e.public }
+
+// newSentinel creates a package-level sentinel error. Unexported — callers
+// reference the pre-declared vars (ErrNotFound, ErrGone, …).
+func newSentinel(status int, code, public string) Error {
+	return &sentinelError{code: code, status: status, public: public}
+}
+
+// Sentinel errors for well-known HTTP failure conditions.
+var (
+	// ErrNotFound indicates the requested resource does not exist. → 404
+	ErrNotFound = newSentinel(http.StatusNotFound, "not_found", "Not found")
+
+	// ErrGone indicates the resource existed but has been permanently removed. → 410
+	ErrGone = newSentinel(http.StatusGone, "gone", "This content has been removed")
+
+	// ErrForbidden indicates the authenticated user lacks permission. → 403
+	ErrForbidden = newSentinel(http.StatusForbidden, "forbidden", "Forbidden")
+
+	// ErrUnauth indicates the request requires authentication. → 401
+	ErrUnauth = newSentinel(http.StatusUnauthorized, "unauthorized", "Unauthorized")
+
+	// ErrConflict indicates a state conflict (e.g. duplicate slug). → 409
+	ErrConflict = newSentinel(http.StatusConflict, "conflict", "Conflict")
+)
+
+// fieldError holds a single field-level validation failure. Unexported — only
+// used as input to the JSON encoder and within ValidationError.
+type fieldError struct {
+	field   string
+	message string
+}
+
+// ValidationError is returned when one or more fields fail validation.
+// It implements forge.Error with HTTP status 422.
+//
+// Create with [Err] for a single field, or [Require] to collect several.
+type ValidationError struct {
+	fields []fieldError
+}
+
+func (e *ValidationError) HTTPStatus() int { return http.StatusUnprocessableEntity }
+func (e *ValidationError) Code() string    { return "validation_failed" }
+func (e *ValidationError) Public() string  { return "Validation failed" }
+
+// Error returns a human-readable summary of all validation failures.
+func (e *ValidationError) Error() string {
+	if len(e.fields) == 1 {
+		return fmt.Sprintf("validation failed: %s: %s", e.fields[0].field, e.fields[0].message)
+	}
+	parts := make([]string, len(e.fields))
+	for i, f := range e.fields {
+		parts[i] = f.field + ": " + f.message
+	}
+	return "validation failed: " + strings.Join(parts, ", ")
+}
+
+// Err returns a [ValidationError] for a single field. The returned error
+// implements forge.Error and will produce a 422 response with field details.
+//
+//	return forge.Err("title", "required")
+func Err(field, message string) *ValidationError {
+	return &ValidationError{fields: []fieldError{{field: field, message: message}}}
+}
+
+// Require collects [ValidationError] values from errs into a single
+// ValidationError. Nil values are silently skipped. Returns nil if every
+// input is nil. Returns the first non-nil non-ValidationError error unchanged.
+//
+//	return forge.Require(
+//	    forge.Err("title", "required"),
+//	    forge.Err("body",  "minimum 50 characters"),
+//	)
+func Require(errs ...error) error {
+	var collected []fieldError
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		var ve *ValidationError
+		if errors.As(err, &ve) {
+			collected = append(collected, ve.fields...)
+		} else {
+			// Unexpected non-ValidationError — return it unchanged.
+			return err
+		}
+	}
+	if len(collected) == 0 {
+		return nil
+	}
+	return &ValidationError{fields: collected}
+}
+
+// WriteError writes the correct HTTP error response for err. It should be the
+// only error-to-HTTP translation in handler code — call it and return.
+//
+// Behaviour by error type:
+//   - [*ValidationError]    → 422 with a JSON fields array
+//   - [forge.Error] 4xx     → the error's own status, code, and public message
+//   - [forge.Error] 5xx     → logged internally; generic 500 sent to client
+//   - any other error       → logged internally; generic 500 sent to client
+//
+// The X-Request-ID header is echoed from the response (if already set by
+// upstream middleware) or from the incoming request. A new ID is never
+// generated here — that is [ContextFrom]'s responsibility.
+func WriteError(w http.ResponseWriter, r *http.Request, err error) {
+	// Resolve the request ID from the response headers first (set by
+	// ContextFrom), then fall back to the inbound request header.
+	requestID := w.Header().Get("X-Request-ID")
+	if requestID == "" {
+		requestID = r.Header.Get("X-Request-ID")
+	}
+	if requestID != "" {
+		w.Header().Set("X-Request-ID", requestID)
+	}
+
+	wantsHTML := strings.Contains(r.Header.Get("Accept"), "text/html")
+
+	var ve *ValidationError
+	var fe Error
+
+	switch {
+	case errors.As(err, &ve):
+		respond(w, r, http.StatusUnprocessableEntity, requestID, ve, wantsHTML)
+
+	case errors.As(err, &fe):
+		if fe.HTTPStatus() >= 500 {
+			slog.Error("forge: internal error",
+				"error", err.Error(),
+				"request_id", requestID,
+			)
+			generic500 := newSentinel(http.StatusInternalServerError, "internal_error", "Internal server error")
+			respond(w, r, http.StatusInternalServerError, requestID, generic500, wantsHTML)
+		} else {
+			respond(w, r, fe.HTTPStatus(), requestID, fe, wantsHTML)
+		}
+
+	default:
+		slog.Error("forge: unhandled error",
+			"error", err.Error(),
+			"request_id", requestID,
+		)
+		generic500 := newSentinel(http.StatusInternalServerError, "internal_error", "Internal server error")
+		respond(w, r, http.StatusInternalServerError, requestID, generic500, wantsHTML)
+	}
+}
+
+// respond writes a JSON or minimal HTML error response.
+func respond(w http.ResponseWriter, r *http.Request, status int, requestID string, err Error, wantsHTML bool) {
+	// TODO(templates): render templates/errors/{status}.html when template
+	// support is available (Milestone 3 — templates.go). For now, fall back
+	// to a minimal inline HTML page.
+	if wantsHTML {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		fmt.Fprintf(w, htmlErrorPage, status, err.Public(), requestID)
+		return
+	}
+
+	body := errorResponse{
+		Error: errorBody{
+			Code:      err.Code(),
+			Message:   err.Public(),
+			RequestID: requestID,
+		},
+	}
+
+	if ve, ok := err.(*ValidationError); ok {
+		body.Error.Fields = make([]fieldJSON, len(ve.fields))
+		for i, f := range ve.fields {
+			body.Error.Fields[i] = fieldJSON{Field: f.field, Message: f.message}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+// errorResponse is the top-level JSON envelope for all error responses.
+type errorResponse struct {
+	Error errorBody `json:"error"`
+}
+
+// errorBody holds the fields that appear inside the "error" key.
+type errorBody struct {
+	Code      string      `json:"code"`
+	Message   string      `json:"message"`
+	RequestID string      `json:"request_id"`
+	Fields    []fieldJSON `json:"fields,omitempty"`
+}
+
+// fieldJSON is the JSON representation of a single validation field error.
+type fieldJSON struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+// htmlErrorPage is a minimal fallback HTML template used when Accept: text/html
+// and no template directory has been registered (Milestone 3).
+// Placeholders: %d = status code, %s = public message, %s = request_id.
+const htmlErrorPage = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>%d</title></head>
+<body><h1>%s</h1><p>Request ID: %s</p></body>
+</html>
+`

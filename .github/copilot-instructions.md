@@ -9,6 +9,9 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
    Do not work around them. If a decision seems wrong, raise it explicitly.
 2. Read `ARCHITECTURE.md` — package structure, request lifecycle, stable interfaces.
 3. Read `BACKLOG.md` — current milestone and implementation order.
+4. Read the milestone backlog file for the current milestone (e.g. `Milestone1_BACKLOG.md`).
+   This is the authoritative task list. Do not implement anything not listed there.
+   Do not skip steps — the order is load-bearing (dependency layers).
 
 ## Non-negotiable rules
 
@@ -41,3 +44,94 @@ not the convenient one.
 - Prefer interfaces over concrete types in function signatures
 - Table-driven tests with `t.Run`
 - Benchmarks for anything on the hot path (request handling, validation, scanning)
+
+---
+
+## Milestone planning process
+
+Before implementing any milestone, a dedicated backlog file must be created and
+agreed upon. This file is the single source of truth for that milestone.
+
+### When to create a milestone backlog
+
+Create `Milestone{N}_BACKLOG.md` in the repo root before writing any code for
+that milestone. The file must be reviewed and confirmed before implementation starts.
+
+### Structure of a milestone backlog file
+
+The file follows this structure exactly:
+
+```
+# Forge — Milestone {N} Backlog (v{semver})
+
+One-line description of the milestone goal.
+
+---
+
+## Progress
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1    | foo.go | 🔲 Not started | — |
+...
+
+---
+
+## Layer {N} — {Layer name} ({dependency note})
+
+### Step {N} — {filename}
+
+**Depends on:** {nothing | list of files}
+**Decisions:** {Decision numbers and Amendment IDs}
+**Files:** `{impl file}`, `{test file}`
+
+#### {N}.{M} — {Sub-section name}
+
+- [ ] Specific, atomic implementation task
+- [ ] Another task
+...
+
+#### Verification
+
+- [ ] `go build ./...` — no errors
+- [ ] `go vet ./...` — clean
+- [ ] `gofmt -l .` — returns nothing
+- [ ] `go test -v -run Test{Name} ./...` — all green
+
+---
+
+## Completion criteria for Milestone {N}
+
+- [ ] Criterion 1
+...
+```
+
+### Rules for steps
+
+- **One step = one file** (implementation + test file). Never mix two files in one step.
+- **Steps are ordered by dependency layer** — a step may not be started until all
+  steps it depends on are marked ✅.
+- **Sub-sections (N.M)** break the step into logical implementation chunks: define
+  the type, implement the logic, write the tests, verify. Keep sub-sections small
+  enough that each can be completed and verified in one sitting.
+- **Every sub-section ends with a verification block** for the step it belongs to,
+  or the step ends with a shared verification block if substeps are tightly coupled.
+- **Checkboxes are atomic** — each `- [ ]` item must be a single, unambiguous task.
+  Never write "implement X" without specifying what X requires.
+
+### Progress tracking
+
+- Mark a step `🔲 In progress` in the Progress table when work begins.
+- Mark a step `✅ Done` and record the date when all its checkboxes are ticked
+  and its verification block passes.
+- Never mark a step done if `go test ./...` is red.
+- Update `Milestone1_BACKLOG.md` (or the relevant file) after every step — do not
+  batch updates.
+
+### Naming convention
+
+| Milestone | File |
+|-----------|------|
+| Milestone 1 | `Milestone1_BACKLOG.md` |
+| Milestone 2 | `Milestone2_BACKLOG.md` |
+| … | … |

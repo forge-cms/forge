@@ -11,7 +11,7 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | errors.go | 🔲 Not started | — |
+| 1 | errors.go | ✅ Done | 2026-03-01 |
 | 2 | roles.go | 🔲 Not started | — |
 | 3 | mcp.go | 🔲 Not started | — |
 | 4 | node.go | 🔲 Not started | — |
@@ -36,68 +36,68 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 #### 1.1 — `forge.Error` interface
 
-- [ ] Declare `forge.Error` interface embedding `error` with methods `Code() string`, `HTTPStatus() int`, `Public() string`
-- [ ] godoc comment: all Forge errors implement this; callers use `errors.As` to inspect — never type-assert directly
+- [x] Declare `forge.Error` interface embedding `error` with methods `Code() string`, `HTTPStatus() int`, `Public() string`
+- [x] godoc comment: all Forge errors implement this; callers use `errors.As` to inspect — never type-assert directly
 
 #### 1.2 — `sentinelError` (unexported concrete type)
 
-- [ ] Unexported `sentinelError` struct with fields `code string`, `status int`, `public string`
-- [ ] `Error() string` returns `Public()`
-- [ ] Unexported constructor `newSentinel(status int, code, public string) forge.Error`
+- [x] Unexported `sentinelError` struct with fields `code string`, `status int`, `public string`
+- [x] `Error() string` returns `Public()`
+- [x] Unexported constructor `newSentinel(status int, code, public string) forge.Error`
 
 #### 1.3 — Sentinel vars
 
-- [ ] `ErrNotFound` → 404, `"not_found"`, `"Not found"`
-- [ ] `ErrGone` → 410, `"gone"`, `"This content has been removed"`
-- [ ] `ErrForbidden` → 403, `"forbidden"`, `"Forbidden"`
-- [ ] `ErrUnauth` → 401, `"unauthorized"`, `"Unauthorized"`
-- [ ] `ErrConflict` → 409, `"conflict"`, `"Conflict"`
+- [x] `ErrNotFound` → 404, `"not_found"`, `"Not found"`
+- [x] `ErrGone` → 410, `"gone"`, `"This content has been removed"`
+- [x] `ErrForbidden` → 403, `"forbidden"`, `"Forbidden"`
+- [x] `ErrUnauth` → 401, `"unauthorized"`, `"Unauthorized"`
+- [x] `ErrConflict` → 409, `"conflict"`, `"Conflict"`
 
 #### 1.4 — `ValidationError`
 
-- [ ] Unexported `fieldError` value type with `Field string` and `Message string`
-- [ ] Exported `ValidationError` struct implementing `forge.Error`: status 422, code `"validation_failed"`, public `"Validation failed"`; carries `[]fieldError` internally
-- [ ] `Error()` returns `"validation failed: {field}: {message}"` for single-field; joined for multi-field
-- [ ] `forge.Err(field, message string) *ValidationError` — creates a single-field ValidationError
+- [x] Unexported `fieldError` value type with `Field string` and `Message string`
+- [x] Exported `ValidationError` struct implementing `forge.Error`: status 422, code `"validation_failed"`, public `"Validation failed"`; carries `[]fieldError` internally
+- [x] `Error()` returns `"validation failed: {field}: {message}"` for single-field; joined for multi-field
+- [x] `forge.Err(field, message string) *ValidationError` — creates a single-field ValidationError
 
 #### 1.5 — `forge.Require`
 
-- [ ] `forge.Require(errs ...error) error` — skips nils; collects `*ValidationError` values via `errors.As`; returns `nil` if all inputs are nil; returns combined `*ValidationError` with merged `[]fieldError` if any found; returns first unexpected non-nil non-ValidationError as-is
+- [x] `forge.Require(errs ...error) error` — skips nils; collects `*ValidationError` values via `errors.As`; returns `nil` if all inputs are nil; returns combined `*ValidationError` with merged `[]fieldError` if any found; returns first unexpected non-nil non-ValidationError as-is
 
 #### 1.6 — `forge.WriteError`
 
-- [ ] `forge.WriteError(w http.ResponseWriter, r *http.Request, err error)` with `errors.As` dispatch chain:
+- [x] `forge.WriteError(w http.ResponseWriter, r *http.Request, err error)` with `errors.As` dispatch chain:
   - `*ValidationError` → 422, JSON with populated `fields` array
   - `forge.Error` with `HTTPStatus() < 500` → use its status / code / public directly
   - `forge.Error` with `HTTPStatus() >= 500` → `slog.Error` with `request_id`; respond with generic 500
   - anything else → `slog.Error` with `request_id`; respond with generic 500
-- [ ] Request ID: read from `w.Header().Get("X-Request-ID")` first, fall back to `r.Header.Get("X-Request-ID")`; if neither present, leave blank (set upstream by `ContextFrom` in normal flow)
-- [ ] Set `X-Request-ID` on `w` if not already present
-- [ ] JSON response shape always `Content-Type: application/json`:
+- [x] Request ID: read from `w.Header().Get("X-Request-ID")` first, fall back to `r.Header.Get("X-Request-ID")`; if neither present, leave blank (set upstream by `ContextFrom` in normal flow)
+- [x] Set `X-Request-ID` on `w` if not already present
+- [x] JSON response shape always `Content-Type: application/json`:
   ```json
   {"error": {"code": "...", "message": "...", "request_id": "...", "fields": [{"field": "...", "message": "..."}]}}
   ```
-- [ ] `fields` key omitted (or empty array) for non-validation errors
-- [ ] HTML fallback: serve minimal built-in string when `Accept: text/html`; add TODO comment referencing templates.go (Milestone 3)
+- [x] `fields` key omitted (or empty array) for non-validation errors
+- [x] HTML fallback: serve minimal built-in string when `Accept: text/html`; add TODO comment referencing templates.go (Milestone 3)
 
 #### 1.7 — Tests (`errors_test.go`)
 
-- [ ] All 5 sentinels: correct `HTTPStatus()`, `Code()`, `Public()`, `Error()`
-- [ ] `forge.Err("title", "required")`: correct field, message, 422 status
-- [ ] `forge.Require(nil, forge.Err("x","y"), nil, forge.Err("a","b"))`: collects both, ignores nils
-- [ ] `forge.Require(nil, nil)`: returns nil
-- [ ] `forge.WriteError` with sentinel → correct HTTP status in response recorder
-- [ ] `forge.WriteError` with `*ValidationError` → 422, `fields` array in JSON body
-- [ ] `forge.WriteError` with `fmt.Errorf("internal")` → 500, no internal detail in body
-- [ ] `forge.WriteError` echoes `X-Request-ID` when present on request
-- [ ] All test cases table-driven with `t.Run`
+- [x] All 5 sentinels: correct `HTTPStatus()`, `Code()`, `Public()`, `Error()`
+- [x] `forge.Err("title", "required")`: correct field, message, 422 status
+- [x] `forge.Require(nil, forge.Err("x","y"), nil, forge.Err("a","b"))`: collects both, ignores nils
+- [x] `forge.Require(nil, nil)`: returns nil
+- [x] `forge.WriteError` with sentinel → correct HTTP status in response recorder
+- [x] `forge.WriteError` with `*ValidationError` → 422, `fields` array in JSON body
+- [x] `forge.WriteError` with `fmt.Errorf("internal")` → 500, no internal detail in body
+- [x] `forge.WriteError` echoes `X-Request-ID` when present on request
+- [x] All test cases table-driven with `t.Run`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestError ./...` — all green
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestError ./...` — all green
 
 ---
 
