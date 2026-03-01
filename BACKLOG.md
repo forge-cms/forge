@@ -12,8 +12,8 @@ All architectural decisions are locked in `DECISIONS.md`.
 
 | Milestone | Description | Status |
 |-----------|-------------|--------|
-| M1 | Core (v0.1.0) | 🔲 In progress |
-| M2 | SEO & Head (v0.2.0) | 🔲 Not started |
+| M1 | Core (v0.1.0) | ✅ Done |
+| M2 | App & SEO (v0.2.0) | 🔲 Not started |
 | M3 | Templates & Rendering (v0.3.0) | 🔲 Not started |
 | M4 | Social & AI (v0.4.0) | 🔲 Not started |
 | M5 | Cookies & Compliance (v0.5.0) | 🔲 Not started |
@@ -41,8 +41,8 @@ The minimum needed for a developer to build something real.
 | 8 | auth.go | ✅ Done | 2026-03-01 |
 | 9 | middleware.go | ✅ Done | 2026-03-01 |
 | 10 | module.go | ✅ Done | 2026-03-01 |
-| 11 | forge.go | 🔲 Not started | — |
-| P1 | forge-pgx | 🔲 Not started | — |
+| 11 | forge.go | ⏸ Deferred — see M2 | — |
+| P1 | forge-pgx | ⏸ Deferred — see M2 | — |
 
 - [x] Step 1 — `errors.go`: forge.Error interface, sentinel errors, ValidationError, Require, WriteError
 - [x] Step 2 — `roles.go`: Role type, built-in roles, level hierarchy, HasRole, IsRole, NewRole builder, Read/Write/Delete options
@@ -54,20 +54,22 @@ The minimum needed for a developer to build something real.
 - [x] Step 8 — `auth.go`: BearerHMAC, CookieSession (+ CSRF), BasicAuth, AnyAuth, SignToken
 - [x] Step 9 — `middleware.go`: RequestLogger, Recoverer, CORS, MaxBodySize, RateLimit, SecurityHeaders, InMemoryCache, Chain
 - [x] Step 10 — `module.go`: Module[T any], At/Cache/Auth/Middleware/Repo options, lifecycle, content negotiation, signals, per-module LRU
-- [ ] Step 11 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown
-- [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool
+- [ ] ⏸ Step 11 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown — **Deferred to Milestone 2 Step 1** (module.go scope grew to cover all routing; App bootstrapping is a natural M2 entry point)
+- [ ] ⏸ Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool — **Deferred to Milestone 2**
 
 ---
 
-## Milestone 2 — SEO & Head (v0.2.0)
+## Milestone 2 — App & SEO (v0.2.0)
 
-Metadata, structured data, sitemaps, and robots.txt.
+App bootstrapping, metadata, structured data, sitemaps, and robots.txt.
 **Detail:** Milestone2_BACKLOG.md *(not yet created)*
 
-- [ ] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
-- [ ] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
-- [ ] Step 3 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
-- [ ] Step 4 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
+- [ ] Step 1 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown — *deferred from M1 Step 11*
+- [ ] Step 2 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
+- [ ] Step 3 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
+- [ ] Step 4 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
+- [ ] Step 5 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
+- [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool — *deferred from M1 Step P1*
 
 ---
 
@@ -88,7 +90,7 @@ Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
 **Detail:** Milestone4_BACKLOG.md *(not yet created)*
 
 - [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides
-- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option
+- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option — **Note:** `Markdownable` will migrate here from `module.go` (planned move, not a breaking change in v0.x)
 - [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, Feed(Disabled) opt-out, signal-driven regeneration
 
 ---

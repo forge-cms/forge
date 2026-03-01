@@ -22,6 +22,10 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
 - Go 1.22 minimum — do not use features introduced after 1.22
 - `gofmt` always — no exceptions
 - godoc comments on every exported symbol
+- A fix or improvement that changes a file **other than** the current step's file
+  is an **Amendment**, not a fix. Stop, draft the Amendment, get approval, then implement.
+- A step that is deferred or descoped must be documented in `Milestone{N}_BACKLOG.md`
+  immediately with the reason and the target milestone. Never silently skip.
 
 ## Before planning or writing anything
 
@@ -94,6 +98,8 @@ Every step — without exception — follows this exact sequence:
 ### 3. Implement the step
 - One step = one file (implementation + test file). Never mix two files in one step.
 - Never plan or implement two steps in the same session without explicit user approval.
+- Before writing any code, scan all existing files for patterns, types, or helpers
+  that overlap with what you are about to implement. Reuse and extend — never duplicate.
 - Tick checkboxes in the backlog as each task is completed.
 - Run verification after implementation: `go build`, `go vet`, `gofmt`, `go test`.
 
@@ -101,10 +107,12 @@ Every step — without exception — follows this exact sequence:
 - After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
 - Ask: does this implementation reveal a gap, ambiguity, or conflict?
 - If yes: draft a new Decision or Amendment and present it to the user before proceeding.
+- Check this step's implementation against all previously implemented files: does it
+  duplicate logic, diverge from an established pattern, or require a change to another
+  file? Any change that crosses a file boundary requires an Amendment — not a fix.
 - After each step, consider whether `ARCHITECTURE.md` needs updating: new exported
   symbols, corrected interface locations, changed behaviour, new middleware, or
-  planned files that are now implemented. If yes, update `ARCHITECTURE.md` before
-  proposing the commit.
+  planned files that are now implemented. Update it before proposing the commit.
 - The step is not complete until the review checkbox is ticked.
 
 ### 5. Update the backlog
@@ -216,6 +224,8 @@ One-line description of the milestone goal.
 - [ ] `go vet ./...` — clean
 - [ ] `gofmt -l .` — returns nothing
 - [ ] `go test -v -run Test{Name} ./...` — all green
+- [ ] `BACKLOG.md` — step table row and summary checkbox updated
+- [ ] `README.md` — no examples broken by this step
 
 ---
 
@@ -265,6 +275,33 @@ One-line description of the milestone goal.
 - If all steps in a milestone are complete, update the milestone row in the
   `BACKLOG.md` top Progress table to ✅.
 - Never batch updates — update immediately after each step is verified.
+
+### Deferred and descoped steps
+
+If a step cannot be completed in the current milestone (scope change, dependency
+not ready, decision not yet made):
+
+1. Update its row in `Milestone{N}_BACKLOG.md` Progress table to `⏸ Deferred`
+2. Add a note under the step heading: **Deferred to:** Milestone X — reason.
+3. Add the step to the target milestone's backlog (or create a tracking entry).
+4. Update its row in `BACKLOG.md` to `⏸ Deferred — see M{X}`.
+5. Never silently drop a step. Every deferral must be traceable.
+
+### Milestone gate
+
+Before declaring a milestone complete and starting the next one, all of these
+must be true:
+
+- [ ] `go test ./...` — all green
+- [ ] `go vet ./...` — clean
+- [ ] `gofmt -l .` — returns nothing
+- [ ] All exported symbols have godoc comments (`go doc ./...` — no missing)
+- [ ] `ARCHITECTURE.md` reflects current state (symbols, lifecycle, dependencies)
+- [ ] `BACKLOG.md` both tiers in sync — milestone row marked ✅
+- [ ] `README.md` — no broken examples
+- [ ] Post-milestone DRY/performance/security review completed and findings resolved
+- [ ] Any deferred steps documented in target milestone with reason
+- [ ] Milestone gate commit proposed and approved
 
 ### Naming convention
 
