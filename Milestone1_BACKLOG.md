@@ -21,8 +21,8 @@ When a step is done: change `🔲` to `✅` and record the date.
 | 8 | auth.go | ✅ Done | 2026-03-01 |
 | 9 | middleware.go | ✅ Done | 2026-03-01 |
 | 10 | module.go | ✅ Done | 2026-03-01 |
-| 11 | forge.go | 🔲 Not started | — |
-| P1 | forge-pgx (separate module) | 🔲 Not started | — |
+| 11 | forge.go | ⏸ Deferred — see M2 Step 1 | — |
+| P1 | forge-pgx (separate module) | ⏸ Deferred — see M2 Step P1 | — |
 
 ---
 
@@ -1083,6 +1083,8 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 ### Step 11 — forge.go
 
+**Deferred to:** Milestone 2, Step 1 — `module.go` scope grew to cover all routing and lifecycle; `App` bootstrapping is a natural M2 entry point once all M1 primitives are stable.
+
 **Depends on:** all other files
 **Decisions:** Decision 20 (configuration), Decision 22 (DB in Config)
 
@@ -1117,6 +1119,8 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 ### Step P1 — github.com/forge-cms/forge-pgx
 
+**Deferred to:** Milestone 2, Step P1 — depends on `forge.go` (Step 11 / M2 Step 1) being stable before the adapter makes sense to publish.
+
 **Can start:** after Step 7 (forge.DB is defined)
 **Separate Go module** — new repository under forge-cms org
 
@@ -1136,11 +1140,11 @@ When a step is done: change `🔲` to `✅` and record the date.
 
 Milestone is complete when all of the following are satisfied:
 
-- [ ] `go build ./...` — no errors, no warnings
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test ./...` — all tests green
-- [ ] All exported symbols have godoc comments
-- [ ] Benchmarks implemented for: UUID generation, struct tag validation (cached vs. uncached), `Query[T]` scanning, LRU cache HIT/MISS, full request lifecycle
-- [ ] `forge.NewTestContext` + `forge.NewMemoryRepo[T]` used in tests — no database required for unit tests
-- [ ] forge-pgx: `forgepgx.Wrap(pool)` tested against real PostgreSQL
+- [x] `go build ./...` — no errors, no warnings
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test ./...` — all tests green (verified 2026-03-02)
+- [x] All exported symbols have godoc comments
+- [x] Benchmarks implemented for: UUID generation, struct tag validation (cached vs. uncached), `Query[T]` scanning, LRU cache HIT/MISS, full request lifecycle
+- [x] `forge.NewTestContext` + `forge.NewMemoryRepo[T]` used in tests — no database required for unit tests
+- [ ] ⏸ forge-pgx: `forgepgx.Wrap(pool)` tested against real PostgreSQL — **Deferred to Milestone 2 Step P1**

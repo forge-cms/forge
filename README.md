@@ -35,6 +35,24 @@ app.Run(":8080")
 One block. A complete, production-ready content module with authentication,
 role-based access, SEO, social sharing, AI indexing, caching, and HTML templates.
 
+> **Development status — v0.1.0 (Milestone 1 complete)**
+> The example above shows the intended v1.0 API. `forge.New`, `app.Content`,
+> `app.Use`, and `app.Run` are implemented in **Milestone 2** (coming next).
+> The full core — content types, roles, auth, JWT, middleware, signals, storage,
+> and per-module routing — is available today via `forge.NewModule`:
+>
+> ```go
+> repo := forge.NewMemoryRepo[*Post]()
+> m := forge.NewModule((*Post)(nil), forge.Repo(repo))
+> mux := http.NewServeMux()
+> m.Register(mux)
+> http.ListenAndServe(":8080", forge.Chain(mux,
+>     forge.RequestLogger(),
+>     forge.Recoverer(),
+>     forge.SecurityHeaders(),
+> ))
+> ```
+
 ---
 
 ## Why Forge?
