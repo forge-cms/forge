@@ -78,7 +78,7 @@ A developer can write `forge.New(cfg)`, wire up modules, and run a real server.
 ## Milestone 3 — SEO & Head (v0.3.0)
 
 Metadata, structured data, sitemaps, and robots.txt.
-**Detail:** Milestone3_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone3_BACKLOG.md](Milestone3_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
