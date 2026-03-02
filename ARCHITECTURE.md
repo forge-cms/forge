@@ -14,6 +14,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 |------|--------|
 | 2026-03-01 | Initial architecture document drafted (Milestone 1 planning) |
 | 2026-03-01 | Updated to reflect Milestone 1 completion: corrected request lifecycle order, added `CacheStore`, `CSRF`, `TrustedProxy`, updated `SignToken` signature, added `ListOptions.Status`, fixed `Markdownable` location to `module.go`, marked future-milestone files as planned |
+| 2026-03-02 | Milestone renumbering: M2 split into App Bootstrap (M2) and SEO & Head (M3); all subsequent milestones shifted +1 |
 
 ---
 
@@ -46,15 +47,15 @@ github.com/forge-cms/forge/
 
 ```
 ├── forge.go          App, Config, New()                                    (Milestone 2)
-├── head.go           Head struct, SEO/social metadata                      (Milestone 2)
-├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 3)
-├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 4)
-├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 4)
-├── sitemap.go        SitemapConfig, generation, debounce goroutine         (Milestone 4)
-├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 4)
+├── head.go           Head struct, SEO/social metadata                      (Milestone 3)
+├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 4)
+├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
+├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
+├── sitemap.go        SitemapConfig, generation, debounce goroutine         (Milestone 3)
+├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 5)
 ├── ai.go             AIDoc, LLMsTxt, content negotiation helpers           (Milestone 5)
 ├── social.go         OpenGraph, TwitterCard, LinkedIn meta rendering       (Milestone 5)
-└── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 5)
+└── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
 
 ---
@@ -242,7 +243,7 @@ type ListOptions struct {
 ### Planned (future milestones)
 
 ```go
-// Headable — implement to control SEO, social, and AI metadata  (head.go, Milestone 2)
+// Headable — implement to control SEO, social, and AI metadata  (head.go, Milestone 3)
 type Headable interface {
     Head() Head
 }
@@ -252,7 +253,7 @@ type AIDocSummary interface {
     AIDocSummary() string
 }
 
-// SitemapPriority — optional; per-item sitemap priority         (sitemap.go, Milestone 4)
+// SitemapPriority — optional; per-item sitemap priority         (sitemap.go, Milestone 3)
 type SitemapPriority interface {
     SitemapPriority() float64
 }
@@ -278,16 +279,16 @@ middleware.go   — depends on: errors, context, auth, node
 module.go       — depends on: node, context, signals, storage, errors, middleware
 
 ── planned ──────────────────────────────────────────────────────────────────
-head.go         — no internal dependencies                              (Milestone 2)
+head.go         — no internal dependencies                              (Milestone 3)
 forge.go        — depends on: all of the above                          (Milestone 2)
-templates.go    — depends on: head, context, node                       (Milestone 3)
-cookies.go      — depends on: errors                                    (Milestone 4)
-redirects.go    — depends on: node, errors                              (Milestone 4)
-sitemap.go      — depends on: node, signals                             (Milestone 4)
-rss.go          — depends on: node, signals, head                       (Milestone 4)
+templates.go    — depends on: head, context, node                       (Milestone 4)
+cookies.go      — depends on: errors                                    (Milestone 6)
+redirects.go    — depends on: node, errors                              (Milestone 7)
+sitemap.go      — depends on: node, signals                             (Milestone 3)
+rss.go          — depends on: node, signals, head                       (Milestone 5)
 ai.go           — depends on: node, head                                (Milestone 5)
 social.go       — depends on: head                                      (Milestone 5)
-scheduler.go    — depends on: node, signals, storage                    (Milestone 5)
+scheduler.go    — depends on: node, signals, storage                    (Milestone 8)
 ```
 
 The dependency graph has no cycles. `errors.go` and `roles.go` are the only
@@ -341,7 +342,7 @@ SitemapRegenerate
 
 ---
 
-## Scheduler *(planned — Milestone 5)*
+## Scheduler *(planned — Milestone 8)*
 
 The scheduled publishing loop runs as a goroutine started by `app.Run()`.
 
@@ -380,7 +381,7 @@ not string comparison on every request.
 
 ---
 
-## Redirect table *(planned — Milestone 4)*
+## Redirect table *(planned — Milestone 7)*
 
 The redirect table is a flat key-value store keyed by `FromPath`.
 It lives alongside the content — in the same database, same transaction.
@@ -443,7 +444,7 @@ module. It imports both `forge` and `pgx/v5`. Forge core never imports pgx.
 
 ---
 
-## Template data shape *(planned — Milestone 3)*
+## Template data shape *(planned — Milestone 4)*
 
 ```go
 // show handler

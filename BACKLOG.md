@@ -13,14 +13,15 @@ All architectural decisions are locked in `DECISIONS.md`.
 | Milestone | Description | Status |
 |-----------|-------------|--------|
 | M1 | Core (v0.1.0) | ✅ Done |
-| M2 | App & SEO (v0.2.0) | 🔲 Not started |
-| M3 | Templates & Rendering (v0.3.0) | 🔲 Not started |
-| M4 | Social & AI (v0.4.0) | 🔲 Not started |
-| M5 | Cookies & Compliance (v0.5.0) | 🔲 Not started |
-| M6 | Redirects (v0.6.0) | 🔲 Not started |
-| M7 | Scheduled publishing (v0.7.0) | 🔲 Not started |
-| M8 | v1.0.0 stabilisation | 🔲 Not started |
-| M9 | MCP support (v2) | 🔲 Not started |
+| M2 | App Bootstrap (v0.2.0) | 🔲 Not started |
+| M3 | SEO & Head (v0.3.0) | 🔲 Not started |
+| M4 | Templates & Rendering (v0.4.0) | 🔲 Not started |
+| M5 | Social & AI (v0.5.0) | 🔲 Not started |
+| M6 | Cookies & Compliance (v0.6.0) | 🔲 Not started |
+| M7 | Redirects (v0.7.0) | 🔲 Not started |
+| M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
+| M9 | v1.0.0 stabilisation | 🔲 Not started |
+| M10 | MCP support (v2) | 🔲 Not started |
 
 ---
 
@@ -59,75 +60,129 @@ The minimum needed for a developer to build something real.
 
 ---
 
-## Milestone 2 — App & SEO (v0.2.0)
+## Milestone 2 — App Bootstrap (v0.2.0)
 
-App bootstrapping, metadata, structured data, sitemaps, and robots.txt.
+A developer can write `forge.New(cfg)`, wire up modules, and run a real server.
 **Detail:** Milestone2_BACKLOG.md *(not yet created)*
 
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | forge.go | 🔲 Not started | — |
+| P1 | forge-pgx | 🔲 Not started | — |
+
 - [ ] Step 1 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), graceful shutdown — *deferred from M1 Step 11*
-- [ ] Step 2 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
-- [ ] Step 3 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
-- [ ] Step 4 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
-- [ ] Step 5 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
 - [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool — *deferred from M1 Step P1*
 
 ---
 
-## Milestone 3 — Templates & Rendering (v0.3.0)
+## Milestone 3 — SEO & Head (v0.3.0)
 
-HTML rendering, template helpers, content negotiation.
+Metadata, structured data, sitemaps, and robots.txt.
 **Detail:** Milestone3_BACKLOG.md *(not yet created)*
 
-- [ ] Step 1 — `templates.go`: Templates/TemplatesWatch/TemplatesOptional, list+show convention, startup parse, error pages
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | head.go | 🔲 Not started | — |
+| 2 | schema.go | 🔲 Not started | — |
+| 3 | sitemap.go | 🔲 Not started | — |
+| 4 | robots.go | 🔲 Not started | — |
+
+- [ ] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
+- [ ] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
+- [ ] Step 3 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
+- [ ] Step 4 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
+
+---
+
+## Milestone 4 — Templates & Rendering (v0.4.0)
+
+HTML rendering, template helpers, content negotiation.
+**Detail:** Milestone4_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | templates.go | 🔲 Not started | — |
+| 2 | templatehelpers.go | 🔲 Not started | — |
+| 3 | templatedata.go | 🔲 Not started | — |
+
+- [ ] Step 1 — `templates.go`: Templates/TemplatesWatch/TemplatesOptional, list+show convention, startup parse, error pages; wire HTML error page path in WriteError
 - [ ] Step 2 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries
 - [ ] Step 3 — `templatedata.go`: TemplateData[T] struct wiring Content, Head, User, Request
 
 ---
 
-## Milestone 4 — Social & AI (v0.4.0)
+## Milestone 5 — Social & AI (v0.5.0)
 
 Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
-**Detail:** Milestone4_BACKLOG.md *(not yet created)*
+**Detail:** Milestone5_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | social.go | 🔲 Not started | — |
+| 2 | ai.go | 🔲 Not started | — |
+| 3 | feed.go | 🔲 Not started | — |
 
 - [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides
-- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option — **Note:** `Markdownable` will migrate here from `module.go` (planned move, not a breaking change in v0.x)
+- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option — **Note:** `Markdownable` migrates here from `module.go` (planned move, not a breaking change in v0.x)
 - [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, Feed(Disabled) opt-out, signal-driven regeneration
 
 ---
 
-## Milestone 5 — Cookies & Compliance (v0.5.0)
+## Milestone 6 — Cookies & Compliance (v0.6.0)
 
 Typed cookie declarations, category-enforced consent, compliance manifest.
-**Detail:** Milestone5_BACKLOG.md *(not yet created)*
+**Detail:** Milestone6_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | cookies.go | 🔲 Not started | — |
+| 2 | cookiemanifest.go | 🔲 Not started | — |
 
 - [ ] Step 1 — `cookies.go`: Cookie struct, Necessary/Preferences/Analytics/Marketing categories, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, ConsentFor, app.Cookies
 - [ ] Step 2 — `cookiemanifest.go`: /.well-known/cookies.json endpoint, ManifestAuth option, consent state storage
 
 ---
 
-## Milestone 6 — Redirects (v0.6.0)
+## Milestone 7 — Redirects (v0.7.0)
 
 Automatic redirect tracking, 410 Gone, chain collapse, inspect endpoint.
-**Detail:** Milestone6_BACKLOG.md *(not yet created)*
+**Detail:** Milestone7_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | redirects.go | 🔲 Not started | — |
+| 2 | redirectmanifest.go | 🔲 Not started | — |
 
 - [ ] Step 1 — `redirects.go`: RedirectEntry, auto-create on slug/prefix rename, 410 on archive/delete, chain collapse, Redirects(From) bulk option, app.Redirect manual route
 - [ ] Step 2 — `redirectmanifest.go`: /.well-known/redirects.json inspect endpoint (Editor+)
 
 ---
 
-## Milestone 7 — Scheduled publishing (v0.7.0)
+## Milestone 8 — Scheduled publishing (v0.8.0)
 
 Adaptive ticker, Scheduled→Published transition, AfterPublish signal.
-**Detail:** Milestone7_BACKLOG.md *(not yet created)*
+**Detail:** Milestone8_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | scheduler.go | 🔲 Not started | — |
 
 - [ ] Step 1 — `scheduler.go`: adaptive ticker, fallback polling (60s), Scheduled→Published transition, PublishedAt assignment, AfterPublish signal, sitemap+feed trigger, graceful shutdown coordination
 
 ---
 
-## Milestone 8 — v1.0.0 stabilisation
+## Milestone 9 — v1.0.0 stabilisation
 
 Test coverage, benchmarks, godoc audit, example apps.
-**Detail:** Milestone8_BACKLOG.md *(not yet created)*
+**Detail:** Milestone9_BACKLOG.md *(not yet created)*
+
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | test suite | 🔲 Not started | — |
+| 2 | benchmarks | 🔲 Not started | — |
+| 3 | godoc audit | 🔲 Not started | — |
+| 4 | example apps | 🔲 Not started | — |
+| 5 | CHANGELOG.md | 🔲 Not started | — |
 
 - [ ] Step 1 — Full test suite: all packages, minimum 80% coverage
 - [ ] Step 2 — Benchmark suite: request throughput, cache hit rate, template render time
@@ -137,10 +192,10 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 ---
 
-## Milestone 9 — MCP support (v2)
+## Milestone 10 — MCP support (v2)
 
 Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
-**Detail:** Milestone9_BACKLOG.md *(not yet created)*
+**Detail:** Milestone10_BACKLOG.md *(not yet created)*
 
 - [ ] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
 - [ ] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
