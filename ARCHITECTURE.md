@@ -15,6 +15,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-01 | Initial architecture document drafted (Milestone 1 planning) |
 | 2026-03-01 | Updated to reflect Milestone 1 completion: corrected request lifecycle order, added `CacheStore`, `CSRF`, `TrustedProxy`, updated `SignToken` signature, added `ListOptions.Status`, fixed `Markdownable` location to `module.go`, marked future-milestone files as planned |
 | 2026-03-02 | Milestone renumbering: M2 split into App Bootstrap (M2) and SEO & Head (M3); all subsequent milestones shifted +1 |
+| 2026-03-02 | Milestone 2 Step 1: `forge.go` implemented — `Config`, `MustConfig`, `New`, `App` (`Use`/`Content`/`Handle`/`Run`/`Handler`), `Registrator` interface, graceful shutdown |
 
 ---
 
@@ -24,7 +25,7 @@ All files are in a single package: `forge`. There are no sub-packages.
 This is intentional — it eliminates circular import issues and keeps
 the API surface in one place. The file names are the organisation.
 
-### Implemented (Milestone 1)
+### Implemented (Milestone 1 + Milestone 2 Step 1)
 
 ```
 github.com/forge-cms/forge/
@@ -39,14 +40,15 @@ github.com/forge-cms/forge/
 ├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
-└── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
-                      Middleware, Repo, On options
+├── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
+│                     Middleware, Repo, On options
+└── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
+                      Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
 ```
 
 ### Planned (future milestones)
 
 ```
-├── forge.go          App, Config, New()                                    (Milestone 2)
 ├── head.go           Head struct, SEO/social metadata                      (Milestone 3)
 ├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 4)
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
@@ -209,11 +211,35 @@ type DB interface {
     ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
     QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
+
+// Registrator — implemented by *Module[T]; pass to App.Content for type-safe registration
+type Registrator interface {
+    Register(mux *http.ServeMux)
+}
 ```
 
-### Key exported functions and types (Milestone 1)
+### Key exported functions and types (Milestone 1 + Milestone 2 Step 1)
 
 ```go
+// App bootstrap (forge.go)
+type Config struct {
+    BaseURL      string        // required: canonical site URL, e.g. "https://example.com"
+    Secret       []byte        // required: min 16 bytes; used for HMAC tokens and cookies
+    DB           DB            // optional: *sql.DB or forgepgx.Wrap(pool)
+    HTTPS        bool          // optional: enable HTTP→HTTPS redirect
+    ReadTimeout  time.Duration // optional: default 5 s
+    WriteTimeout time.Duration // optional: default 10 s
+    IdleTimeout  time.Duration // optional: default 120 s
+}
+func MustConfig(cfg Config) Config           // validates Config; panics with descriptive msg
+func New(cfg Config) *App                    // creates App; applies default timeouts
+
+func (a *App) Use(mws ...func(http.Handler) http.Handler)  // append global middleware
+func (a *App) Handle(pattern string, h http.Handler)       // register raw handler
+func (a *App) Content(v any, opts ...Option)               // register *Module[T] or untyped module
+func (a *App) Handler() http.Handler                       // compose all routes + middleware
+func (a *App) Run(addr string) error                       // listen; graceful shutdown on SIGINT/SIGTERM
+
 // SignToken — ttl=0 means no expiry; ttl>0 embeds exp claim, rejected after expiry
 func SignToken(user User, secret string, ttl time.Duration) (string, error)
 

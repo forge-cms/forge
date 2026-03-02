@@ -35,23 +35,29 @@ app.Run(":8080")
 One block. A complete, production-ready content module with authentication,
 role-based access, SEO, social sharing, AI indexing, caching, and HTML templates.
 
-> **Development status — v0.1.0 (Milestone 1 complete)**
-> The example above shows the intended v1.0 API. `forge.New`, `app.Content`,
-> `app.Use`, and `app.Run` are implemented in **Milestone 2** (coming next).
-> The full core — content types, roles, auth, JWT, middleware, signals, storage,
-> and per-module routing — is available today via `forge.NewModule`:
+> **Development status — v0.2.0 (Milestone 2 Step 1 complete)**
+> `forge.New`, `app.Use`, `app.Content`, `app.Handle`, `app.Run`, and `app.Handler` are
+> implemented and production-ready. Pass a pre-built `*Module[T]` to `app.Content`:
 >
 > ```go
 > repo := forge.NewMemoryRepo[*Post]()
-> m := forge.NewModule((*Post)(nil), forge.Repo(repo))
-> mux := http.NewServeMux()
-> m.Register(mux)
-> http.ListenAndServe(":8080", forge.Chain(mux,
->     forge.RequestLogger(),
->     forge.Recoverer(),
->     forge.SecurityHeaders(),
-> ))
+> posts := forge.NewModule[*Post]((*Post)(nil),
+>     forge.Repo(repo),
+>     forge.Auth(forge.Read(forge.Guest), forge.Write(forge.Author)),
+>     forge.Cache(5*time.Minute),
+> )
+> app := forge.New(forge.MustConfig(forge.Config{
+>     BaseURL: os.Getenv("BASE_URL"),
+>     Secret:  []byte(os.Getenv("SECRET")),
+> }))
+> app.Use(forge.RequestLogger(), forge.Recoverer(), forge.SecurityHeaders())
+> app.Content(posts)
+> if err := app.Run(":8080"); err != nil {
+>     log.Fatal(err)
+> }
 > ```
+>
+> SEO, Social, AI indexing, and Templates arrive in Milestones 3–5.
 
 ---
 
