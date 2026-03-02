@@ -13,7 +13,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | Milestone | Description | Status |
 |-----------|-------------|--------|
 | M1 | Core (v0.1.0) | ✅ Done |
-| M2 | App Bootstrap (v0.2.0) | 🔲 Not started |
+| M2 | App Bootstrap (v0.2.0) | ✅ Done |
 | M3 | SEO & Head (v0.3.0) | 🔲 Not started |
 | M4 | Templates & Rendering (v0.4.0) | 🔲 Not started |
 | M5 | Social & AI (v0.5.0) | 🔲 Not started |

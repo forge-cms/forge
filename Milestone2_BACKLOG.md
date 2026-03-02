@@ -177,17 +177,17 @@ production-ready HTTP server with graceful shutdown.
 
 ## Completion criteria for Milestone 2
 
-- [ ] `go build ./...` — no errors, no warnings
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test ./...` — all non-integration tests green (forge and forge-pgx)
-- [ ] All exported symbols have godoc comments
-- [ ] `forge.New` / `app.Content` / `app.Use` / `app.Handle` / `app.Run` / `app.Handler` all work end-to-end in tests using `httptest`
-- [ ] `MustConfig` panics cleanly with descriptive messages on bad input
-- [ ] Graceful shutdown confirmed in test: server started, interrupt sent, clean exit within 2 s
-- [ ] `forge-pgx`: `Wrap(pool)` satisfies `forge.DB` at compile time; integration test tagged separately
-- [ ] `ARCHITECTURE.md` updated: forge.go symbols added, App bootstrap lifecycle documented
-- [ ] `README.md` status callout updated: forge.New and app.Content available in v0.2.0
-- [ ] Post-milestone DRY/performance/security review completed and findings resolved
-- [ ] Any deferred steps documented in target milestone with reason
-- [ ] Retrospective completed before milestone gate commit
+- [x] `go build ./...` — no errors, no warnings
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test ./...` — all non-integration tests green (forge and forge-pgx)
+- [x] All exported symbols have godoc comments
+- [x] `forge.New` / `app.Content` / `app.Use` / `app.Handle` / `app.Run` / `app.Handler` all work end-to-end in tests using `httptest`
+- [x] `MustConfig` panics cleanly with descriptive messages on bad input
+- [x] Graceful shutdown confirmed in test: server started, interrupt sent, clean exit within 2 s
+- [x] `forge-pgx`: `Wrap(pool)` satisfies `forge.DB` at compile time; integration test tagged separately
+- [x] `ARCHITECTURE.md` updated: forge.go symbols added, App bootstrap lifecycle documented
+- [x] `README.md` status callout updated: forge.New and app.Content available in v0.2.0
+- [x] Post-milestone DRY/performance/security review completed and findings resolved
+- [x] Any deferred steps documented in target milestone with reason
+- [x] Retrospective completed before milestone gate commit
