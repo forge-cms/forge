@@ -3,6 +3,8 @@
 **The Go web framework designed for how you actually think.**  
 Built for developers. Optimized for AI. Zero compromises on readability.
 
+⚠️ **Work in progress** — not ready for production use. API will change without notice.**
+
 ```go
 app := forge.New(forge.Config{
     BaseURL: "https://mysite.com",
