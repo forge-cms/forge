@@ -10,7 +10,7 @@ production-ready HTTP server with graceful shutdown.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | forge.go | ✅ Done | 2026-03-02 |
-| P1 | forge-pgx/pgx.go | 🔲 Not started | — |
+| P1 | forge-pgx/pgx.go | ✅ Done | 2026-03-02 |
 
 ---
 
@@ -139,41 +139,39 @@ production-ready HTTP server with graceful shutdown.
 
 #### P1.1 — Module scaffold
 
-- [ ] Create `forge-pgx/` directory in the workspace root
-- [ ] Create `forge-pgx/go.mod`: `module github.com/forge-cms/forge-pgx`, `go 1.22`, requires `github.com/forge-cms/forge` (replace directive pointing to `../`) and `github.com/jackc/pgx/v5`
-- [ ] Create `forge-pgx/go.sum` by running `go mod tidy` in the subdirectory
-- [ ] Confirm `forge-pgx/go.mod` does NOT appear in the root `go.mod` — it is a sibling module, not a sub-package
+- [x] Create `forge-pgx/` directory in the workspace root
+- [x] Create `forge-pgx/go.mod`: `module github.com/forge-cms/forge-pgx`, `go 1.22` / toolchain resolved by tidy, requires `github.com/forge-cms/forge` (replace directive pointing to `../`) and `github.com/jackc/pgx/v5 v5.8.0`
+- [x] Create `forge-pgx/go.sum` by running `go mod tidy` in the subdirectory
+- [x] Confirm `forge-pgx/go.mod` does NOT appear in the root `go.mod` — it is a sibling module, not a sub-package
 
 #### P1.2 — poolAdapter type
 
-- [ ] Define `package forgepgx` in `forge-pgx/pgx.go`
-- [ ] Define unexported `poolAdapter struct{ p *pgxpool.Pool }`
-- [ ] Define `Wrap(p *pgxpool.Pool) forge.DB` — the public constructor; returns `&poolAdapter{p}`; godoc explains this is the entry point
-- [ ] Implement `(a *poolAdapter) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)`:
-  - Opens a stdlib DB from the pool via `stdlib.OpenDBFromPool(a.p)` and calls `QueryContext`
-  - **Note:** `stdlib.OpenDBFromPool` is cheap — it wraps the pool without creating connections. See Decision 22 for benchmarks and rationale.
-- [ ] Implement `(a *poolAdapter) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)`: same pattern
-- [ ] Implement `(a *poolAdapter) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row`: same pattern
-- [ ] Godoc comment on `Wrap` and `poolAdapter` methods
-- [ ] Confirm `poolAdapter` satisfies `forge.DB` via compile-time assertion: `var _ forge.DB = (*poolAdapter)(nil)`
+- [x] Define `package forgepgx` in `forge-pgx/pgx.go`
+- [x] Define unexported `poolAdapter struct{ db *sql.DB }` — stores `*sql.DB` opened once via `stdlib.OpenDBFromPool(p)` at `Wrap` time
+- [x] Define `Wrap(p *pgxpool.Pool) forge.DB` — the public constructor; returns `&poolAdapter{db: stdlib.OpenDBFromPool(p)}`; godoc explains this is the entry point
+- [x] Implement `(a *poolAdapter) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)`: delegates to `a.db.QueryContext`
+- [x] Implement `(a *poolAdapter) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)`: delegates to `a.db.ExecContext`
+- [x] Implement `(a *poolAdapter) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row`: delegates to `a.db.QueryRowContext`
+- [x] Godoc comment on `Wrap` and `poolAdapter` methods
+- [x] Confirm `poolAdapter` satisfies `forge.DB` via compile-time assertion: `var _ forge.DB = (*poolAdapter)(nil)`
 
 #### P1.3 — Tests
 
-- [ ] `TestWrap_compilesAsForgeDB` — `var _ forge.DB = forgepgx.Wrap(nil)` (nil-safe compile check; does not make network calls; runs without a database)
-- [ ] `TestWrap_integration` tagged `//go:build integration`:
+- [x] `TestWrap_compilesAsForgeDB` in `pgx_test.go` — no build tag; documents the compile-time guarantee; runs without a database
+- [x] `TestWrap_integration` in `pgx_integration_test.go` tagged `//go:build integration`:
   - Reads `DATABASE_URL` from environment; skips with `t.Skip` if absent
   - Creates `pgxpool.Pool`, calls `forgepgx.Wrap(pool)`, exercises `ExecContext`/`QueryContext`/`QueryRowContext` with a `CREATE TEMP TABLE`, `INSERT`, `SELECT`
   - Confirms `forge.Query[T]` works end-to-end with the wrapped pool
-- [ ] `go test -v ./forge-pgx/...` (without `//go:build integration`) — runs compile check only; green without a database
+- [x] `go test -v ./forge-pgx/...` (without `//go:build integration`) — compile-check test green, no database required
 
 #### Verification
 
-- [ ] `go build ./forge-pgx/...` — no errors
-- [ ] `go vet ./forge-pgx/...` — clean
-- [ ] `gofmt -l ./forge-pgx/` — returns nothing
-- [ ] `go test -v ./forge-pgx/...` — compile-check test green (no database required)
-- [ ] `BACKLOG.md` — Step P1 row and summary checkbox updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./forge-pgx/...` — no errors
+- [x] `go vet ./forge-pgx/...` — clean
+- [x] `gofmt -l ./forge-pgx/` — returns nothing
+- [x] `go test -v ./forge-pgx/...` — compile-check test green (no database required)
+- [x] `BACKLOG.md` — Step P1 row and summary checkbox updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required
 
 ---
 

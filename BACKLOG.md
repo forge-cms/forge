@@ -68,10 +68,10 @@ A developer can write `forge.New(cfg)`, wire up modules, and run a real server.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | forge.go | ✅ Done | 2026-03-02 |
-| P1 | forge-pgx | 🔲 Not started | — |
+| P1 | forge-pgx | ✅ Done | 2026-03-02 |
 
 - [x] Step 1 — `forge.go`: Config, MustConfig, New, App (Use/Content/Handle/Run/Handler), Registrator, graceful shutdown — *deferred from M1 Step 11*
-- [ ] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool — *deferred from M1 Step P1*
+- [x] Step P1 — `forge-pgx` (separate module): forgepgx.Wrap(pool) thin adapter for pgx/v5 native pool — *deferred from M1 Step P1*
 
 ---
 

@@ -16,6 +16,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-01 | Updated to reflect Milestone 1 completion: corrected request lifecycle order, added `CacheStore`, `CSRF`, `TrustedProxy`, updated `SignToken` signature, added `ListOptions.Status`, fixed `Markdownable` location to `module.go`, marked future-milestone files as planned |
 | 2026-03-02 | Milestone renumbering: M2 split into App Bootstrap (M2) and SEO & Head (M3); all subsequent milestones shifted +1 |
 | 2026-03-02 | Milestone 2 Step 1: `forge.go` implemented — `Config`, `MustConfig`, `New`, `App` (`Use`/`Content`/`Handle`/`Run`/`Handler`), `Registrator` interface, graceful shutdown |
+| 2026-03-02 | Milestone 2 Step P1: `forge-pgx` module implemented — `Wrap(pool)` native pgx adapter satisfying `forge.DB` |
 
 ---
 
@@ -25,7 +26,7 @@ All files are in a single package: `forge`. There are no sub-packages.
 This is intentional — it eliminates circular import issues and keeps
 the API surface in one place. The file names are the organisation.
 
-### Implemented (Milestone 1 + Milestone 2 Step 1)
+### Implemented (Milestone 1 + Milestone 2)
 
 ```
 github.com/forge-cms/forge/
@@ -44,6 +45,9 @@ github.com/forge-cms/forge/
 │                     Middleware, Repo, On options
 └── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
                       Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
+
+github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
+└── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
 ```
 
 ### Planned (future milestones)
