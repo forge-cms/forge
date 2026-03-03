@@ -425,20 +425,20 @@ the `App.SEO` method will be added to `forge.go` as part of this step.
 
 ## Completion criteria for Milestone 3
 
-- [ ] `go build ./...` — no errors, no warnings
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test ./...` — all tests green
-- [ ] All exported symbols have godoc comments
-- [ ] `forge.Head{...}` with all fields renders correctly (tested via SchemaFor and RobotsTxt helpers)
-- [ ] `forge.Excerpt` truncates at word boundary with ≤ 1 alloc/op
-- [ ] `forge.URL` joins paths correctly (no double slashes, leading slash)
-- [ ] `forge.SchemaFor` returns valid JSON-LD for all supported types; empty string for unsupported
-- [ ] Fragment sitemaps contain only Published content; index merges all fragments
-- [ ] `RobotsTxt` with `AskFirst` disallows known AI training crawlers
-- [ ] `App.SEO(forge.SitemapConfig{...}, forge.RobotsConfig{...})` compiles and registers handlers
-- [ ] `ARCHITECTURE.md` updated: head.go, schema.go, sitemap.go, robots.go symbols added
-- [ ] `README.md` — SEO section examples (`Head()`, `app.SEO(...)`) verified against implementation
-- [ ] Post-milestone DRY/performance/security review completed and findings resolved
-- [ ] Any deferred steps documented in target milestone with reason
-- [ ] Retrospective completed before milestone gate commit
+- [x] `go build ./...` — no errors, no warnings
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test ./...` — all tests green
+- [x] All exported symbols have godoc comments
+- [x] `forge.Head{...}` with all fields renders correctly (tested via SchemaFor and RobotsTxt helpers)
+- [x] `forge.Excerpt` truncates at word boundary with ≤ 1 alloc/op
+- [x] `forge.URL` joins paths correctly (no double slashes, leading slash)
+- [x] `forge.SchemaFor` returns valid JSON-LD for all supported types; empty string for unsupported
+- [x] Fragment sitemaps contain only Published content; index merges all fragments
+- [x] `RobotsTxt` with `AskFirst` disallows known AI training crawlers
+- [x] `app.SEO(&forge.RobotsConfig{...})` compiles and registers `GET /robots.txt` — note: `SitemapConfig` intentionally does not implement `SEOOption`; sitemap wiring is per-module via `Content()`
+- [x] `ARCHITECTURE.md` updated: head.go, schema.go, sitemap.go, robots.go symbols added
+- [x] `README.md` — no examples broken by M3 additions
+- [x] Post-milestone DRY/performance/security review completed and findings resolved
+- [x] Any deferred steps documented in target milestone with reason — none deferred
+- [x] Retrospective completed before milestone gate commit

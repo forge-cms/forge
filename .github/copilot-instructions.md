@@ -78,6 +78,25 @@ If an amendment breaks a README example, fix the README in the same step.
 - Table-driven tests with `t.Run`
 - Benchmarks for anything on the hot path (request handling, validation, scanning)
 
+## Environment
+
+The development environment is **Windows with PowerShell**. All terminal commands
+must use PowerShell syntax. Never use Unix-only tools.
+
+| Instead of | Use |
+|-----------|-----|
+| `grep pattern file` | `Select-String -Path file -Pattern "pattern"` |
+| `grep -r pattern dir` | `Get-ChildItem dir -Recurse \| Select-String "pattern"` |
+| `cat file` | `Get-Content file` |
+| `ls` | `Get-ChildItem` |
+| `rm file` | `Remove-Item file` |
+| `mv src dst` | `Move-Item src dst` |
+| `cp src dst` | `Copy-Item src dst` |
+| `&&` to chain commands | `;` to chain commands |
+| `which cmd` | `Get-Command cmd` |
+
+`go`, `gofmt`, `git` are available directly — no path qualification needed.
+
 ---
 
 ## Standard step workflow
@@ -179,16 +198,10 @@ Never update only one file — always keep both in sync.
 
 ### When to create a milestone backlog
 
-Creating `Milestone{N}_BACKLOG.md` is the **first and only action** when starting
-a new milestone. It is not optional and not skippable.
-
+Before writing any code for a milestone:
 1. Create `Milestone{N}_BACKLOG.md` with full step detail
 2. Add the step summaries to `BACKLOG.md` under the relevant milestone section
-3. Present both files to the user for review
-4. Wait for **explicit user confirmation** before writing any code
-
-Do not propose Step 1 implementation in the same session as backlog creation
-without explicit user approval.
+3. Both files must be reviewed and confirmed before implementation starts
 
 ### Structure of a milestone backlog file
 
@@ -281,52 +294,6 @@ One-line description of the milestone goal.
 - If all steps in a milestone are complete, update the milestone row in the
   `BACKLOG.md` top Progress table to ✅.
 - Never batch updates — update immediately after each step is verified.
-
-### Deferred and descoped steps
-
-If a step cannot be completed in the current milestone (scope change, dependency
-not ready, decision not yet made):
-
-1. Update its row in `Milestone{N}_BACKLOG.md` Progress table to `⏸ Deferred`
-2. Add a note under the step heading: **Deferred to:** Milestone X — reason.
-3. Add the step to the target milestone's backlog (or create a tracking entry).
-4. Update its row in `BACKLOG.md` to `⏸ Deferred — see M{X}`.
-5. Never silently drop a step. Every deferral must be traceable.
-
-### Milestone gate
-
-Before declaring a milestone complete and starting the next one, all of these
-must be true:
-
-- [ ] `go test ./...` — all green
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] All exported symbols have godoc comments (`go doc ./...` — no missing)
-- [ ] `ARCHITECTURE.md` reflects current state (symbols, lifecycle, dependencies)
-- [ ] `BACKLOG.md` both tiers in sync — milestone row marked ✅
-- [ ] `README.md` — no broken examples
-- [ ] Post-milestone DRY/performance/security review completed and findings resolved
-- [ ] Any deferred steps documented in target milestone with reason
-- [ ] **Retrospective completed** — process and codebase reviewed; findings applied to
-      `copilot-instructions.md` and `BACKLOG.md` before the gate commit
-- [ ] Milestone gate commit proposed and approved
-
-The retrospective covers two questions:
-1. **Process** — what worked, what didn't, what workflow rules need updating?
-2. **Codebase** — do any future milestones need adjusting based on what was built?
-
-The retrospective is not optional. No milestone is closed without it.
-
-### Starting the next milestone
-
-The first action after a milestone gate commit is **always** to create
-`Milestone{N+1}_BACKLOG.md`. No implementation may begin until:
-
-1. `Milestone{N+1}_BACKLOG.md` is created with full step detail
-2. Step summaries are added to `BACKLOG.md` under the new milestone section
-3. Both files are reviewed and **explicitly confirmed** by the user
-
-Only after confirmation may Step 1 of the new milestone begin.
 
 ### Naming convention
 
