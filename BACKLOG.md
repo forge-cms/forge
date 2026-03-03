@@ -82,12 +82,12 @@ Metadata, structured data, sitemaps, and robots.txt.
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | head.go | 🔲 Not started | — |
+| 1 | head.go | ✅ Done | 2026-03-03 |
 | 2 | schema.go | 🔲 Not started | — |
 | 3 | sitemap.go | 🔲 Not started | — |
 | 4 | robots.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
+- [x] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
 - [ ] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
 - [ ] Step 3 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
 - [ ] Step 4 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append

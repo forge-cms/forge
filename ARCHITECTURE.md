@@ -17,6 +17,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-02 | Milestone renumbering: M2 split into App Bootstrap (M2) and SEO & Head (M3); all subsequent milestones shifted +1 |
 | 2026-03-02 | Milestone 2 Step 1: `forge.go` implemented — `Config`, `MustConfig`, `New`, `App` (`Use`/`Content`/`Handle`/`Run`/`Handler`), `Registrator` interface, graceful shutdown |
 | 2026-03-02 | Milestone 2 Step P1: `forge-pgx` module implemented — `Wrap(pool)` native pgx adapter satisfying `forge.DB` |
+| 2026-03-03 | Milestone 3 Step 1: `head.go` implemented — `Head`, `Image`, `Breadcrumb`, `Alternate`, `Headable`, `HeadFunc`, `Excerpt`, `URL`, `Crumbs`; `Module[T].headFunc` field added (Amendment A1) |
 
 ---
 
@@ -43,8 +44,10 @@ github.com/forge-cms/forge/
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
 ├── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
 │                     Middleware, Repo, On options
-└── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
-                      Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
+├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
+│                     Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
+└── head.go           Head, Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
+                      Excerpt, URL, Crumbs, Crumb, rich-result constants
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
@@ -53,7 +56,6 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ### Planned (future milestones)
 
 ```
-├── head.go           Head struct, SEO/social metadata                      (Milestone 3)
 ├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 4)
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)

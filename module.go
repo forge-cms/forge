@@ -289,6 +289,7 @@ type Module[T any] struct {
 	debounceMu  sync.Mutex
 	debounceCtx Context // last Context seen; used by debounced dispatch
 	proto       reflect.Type
+	headFunc    any // nil, or func(Context, T) Head set via HeadFunc option
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -363,6 +364,10 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		if ro, ok := o.(repoOption[T]); ok {
 			m.repo = ro.repo
 			repoFound = true
+		}
+		// headFuncOption[T] is generic — handled via direct type assertion.
+		if hfo, ok := o.(headFuncOption[T]); ok {
+			m.headFunc = hfo.fn
 		}
 	}
 

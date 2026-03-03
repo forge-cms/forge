@@ -9,7 +9,7 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | head.go | 🔲 Not started | — |
+| 1 | head.go | ✅ Done | 2026-03-03 |
 | 2 | schema.go | 🔲 Not started | — |
 | 3 | sitemap.go | 🔲 Not started | — |
 | 4 | robots.go | 🔲 Not started | — |
@@ -112,14 +112,14 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestExcerpt|TestURL|TestCrumbs|TestHead|TestHeadFunc ./...` — all green
-- [ ] `go test -bench BenchmarkExcerpt ./...` — ≤ 1 alloc/op
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestExcerpt|TestURL|TestCrumbs|TestHead|TestHeadFunc ./...` — all green
+- [x] `go test -bench BenchmarkExcerpt ./...` — 1 alloc/op ✅
+- [x] `BACKLOG.md` — step table row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required
 
 ---
 
