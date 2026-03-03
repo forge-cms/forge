@@ -18,6 +18,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-02 | Milestone 2 Step 1: `forge.go` implemented — `Config`, `MustConfig`, `New`, `App` (`Use`/`Content`/`Handle`/`Run`/`Handler`), `Registrator` interface, graceful shutdown |
 | 2026-03-02 | Milestone 2 Step P1: `forge-pgx` module implemented — `Wrap(pool)` native pgx adapter satisfying `forge.DB` |
 | 2026-03-03 | Milestone 3 Step 1: `head.go` implemented — `Head`, `Image`, `Breadcrumb`, `Alternate`, `Headable`, `HeadFunc`, `Excerpt`, `URL`, `Crumbs`; `Module[T].headFunc` field added (Amendment A1) |
+| 2026-03-03 | Milestone 3 Step 2: `schema.go` implemented — `SchemaFor`, 8 JSON-LD rich result types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization), BreadcrumbList, 6 provider interfaces (FAQProvider, HowToProvider, EventProvider, RecipeProvider, ReviewProvider, OrganizationProvider) |
 
 ---
 
@@ -48,6 +49,10 @@ github.com/forge-cms/forge/
 │                     Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
 └── head.go           Head, Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
                       Excerpt, URL, Crumbs, Crumb, rich-result constants
+└── schema.go         SchemaFor, FAQProvider, HowToProvider, EventProvider,
+                      RecipeProvider, ReviewProvider, OrganizationProvider,
+                      FAQEntry, HowToStep, EventDetails, RecipeDetails,
+                      ReviewDetails, OrganizationDetails
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter

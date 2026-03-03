@@ -14,7 +14,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 |-----------|-------------|--------|
 | M1 | Core (v0.1.0) | ✅ Done |
 | M2 | App Bootstrap (v0.2.0) | ✅ Done |
-| M3 | SEO & Head (v0.3.0) | 🔲 Not started |
+| M3 | SEO & Head (v0.3.0) | 🔲 In progress |
 | M4 | Templates & Rendering (v0.4.0) | 🔲 Not started |
 | M5 | Social & AI (v0.5.0) | 🔲 Not started |
 | M6 | Cookies & Compliance (v0.6.0) | 🔲 Not started |
@@ -83,12 +83,12 @@ Metadata, structured data, sitemaps, and robots.txt.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | head.go | ✅ Done | 2026-03-03 |
-| 2 | schema.go | 🔲 Not started | — |
+| 2 | schema.go | ✅ Done | 2026-03-03 |
 | 3 | sitemap.go | 🔲 Not started | — |
 | 4 | robots.go | 🔲 Not started | — |
 
 - [x] Step 1 — `head.go`: Head and Image structs, Excerpt, URL builder, Crumbs, Headable interface, HeadFunc option
-- [ ] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
+- [x] Step 2 — `schema.go`: JSON-LD structured data types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization, BreadcrumbList)
 - [ ] Step 3 — `sitemap.go`: per-module fragment, index merger, SitemapConfig, event-driven regeneration via debouncer
 - [ ] Step 4 — `robots.go`: auto-generated robots.txt, RobotsConfig, AskFirst AI crawler policy, sitemap URL append
 

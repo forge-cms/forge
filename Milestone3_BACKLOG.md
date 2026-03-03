@@ -10,7 +10,7 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | head.go | ✅ Done | 2026-03-03 |
-| 2 | schema.go | 🔲 Not started | — |
+| 2 | schema.go | ✅ Done | 2026-03-03 |
 | 3 | sitemap.go | 🔲 Not started | — |
 | 4 | robots.go | 🔲 Not started | — |
 
@@ -133,67 +133,67 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 
 #### 2.1 — JSON-LD base types
 
-- [ ] Define internal `ldBase struct` with `Context string \`json:"@context"\`` and `Type string \`json:"@type"\`` — embedded in all schema structs
-- [ ] All schema structs use `encoding/json` — no external dependencies
-- [ ] Godoc on package-level: "schema.go provides Go types for Google-supported JSON-LD rich results. Use SchemaFor to generate a <script type=\"application/ld+json\"> block from a forge.Head."
+- [x] Define internal `ldBase struct` with `Context string \`json:"@context"\`` and `Type string \`json:"@type"\`` — embedded in all schema structs
+- [x] All schema structs use `encoding/json` — no external dependencies
+- [x] Godoc on package-level: "schema.go provides Go types for Google-supported JSON-LD rich results. Use SchemaFor to generate a <script type=\"application/ld+json\"> block from a forge.Head."
 
 #### 2.2 — Article schema
 
-- [ ] Define `type articleSchema struct` with fields mapped to schema.org/Article:
+- [x] Define `type articleSchema struct` with fields mapped to schema.org/Article:
   `Headline`, `Description`, `Author` (personSchema), `DatePublished`, `DateModified`, `Image` (imageSchema), `URL`
-- [ ] Define `type personSchema struct { Type string; Name string }`
-- [ ] Define `type imageSchema struct` with URL, Width, Height
+- [x] Define `type personSchema struct { Type string; Name string }`
+- [x] Define `type imageSchema struct` with URL, Width, Height
 
 #### 2.3 — Product schema
 
-- [ ] Define `type productSchema struct`: Name, Description, Image (imageSchema), URL
+- [x] Define `type productSchema struct`: Name, Description, Image (imageSchema), URL
 
 #### 2.4 — FAQPage schema
 
-- [ ] Define `type faqPageSchema struct`: MainEntity []faqEntrySchema
-- [ ] Define `type faqEntrySchema struct`: Name (question), AcceptedAnswer answerSchema
-- [ ] Define `type answerSchema struct`: Text string
-- [ ] Note: FAQPage requires content-type to implement `FAQEntries() []forge.FAQEntry` — define `type FAQEntry struct { Question, Answer string }` and `type FAQProvider interface { FAQEntries() []FAQEntry }`
+- [x] Define `type faqPageSchema struct`: MainEntity []faqEntrySchema
+- [x] Define `type faqEntrySchema struct`: Name (question), AcceptedAnswer answerSchema
+- [x] Define `type answerSchema struct`: Text string
+- [x] Note: FAQPage requires content-type to implement `FAQEntries() []forge.FAQEntry` — define `type FAQEntry struct { Question, Answer string }` and `type FAQProvider interface { FAQEntries() []FAQEntry }`
 
 #### 2.5 — HowTo schema
 
-- [ ] Define `type howToSchema struct`: Name, Description, Step []howToStepSchema
-- [ ] Define `type howToStepSchema struct`: Name, Text string
-- [ ] Define `type HowToStep struct { Name, Text string }` and `type HowToProvider interface { HowToSteps() []HowToStep }`
+- [x] Define `type howToSchema struct`: Name, Description, Step []howToStepSchema
+- [x] Define `type howToStepSchema struct`: Name, Text string
+- [x] Define `type HowToStep struct { Name, Text string }` and `type HowToProvider interface { HowToSteps() []HowToStep }`
 
 #### 2.6 — Event schema
 
-- [ ] Define `type eventSchema struct`: Name, Description, StartDate, EndDate, Location (placeSchema), URL, Image (imageSchema)
-- [ ] Define `type placeSchema struct`: Name, Address string
-- [ ] Define `type EventDetails struct { StartDate, EndDate time.Time; Location, Address string }` and `type EventProvider interface { EventDetails() EventDetails }`
+- [x] Define `type eventSchema struct`: Name, Description, StartDate, EndDate, Location (placeSchema), URL, Image (imageSchema)
+- [x] Define `type placeSchema struct`: Name, Address string
+- [x] Define `type EventDetails struct { StartDate, EndDate time.Time; Location, Address string }` and `type EventProvider interface { EventDetails() EventDetails }`
 
 #### 2.7 — Recipe schema
 
-- [ ] Define `type recipeSchema struct`: Name, Description, RecipeIngredient []string, RecipeInstructions []howToStepSchema, Author (personSchema), Image (imageSchema)
-- [ ] Define `type RecipeDetails struct { Ingredients []string; Steps []HowToStep }` and `type RecipeProvider interface { RecipeDetails() RecipeDetails }`
+- [x] Define `type recipeSchema struct`: Name, Description, RecipeIngredient []string, RecipeInstructions []howToStepSchema, Author (personSchema), Image (imageSchema)
+- [x] Define `type RecipeDetails struct { Ingredients []string; Steps []HowToStep }` and `type RecipeProvider interface { RecipeDetails() RecipeDetails }`
 
 #### 2.8 — Review schema
 
-- [ ] Define `type reviewSchema struct`: Name, ReviewBody, Author (personSchema), ReviewRating (ratingSchema)
-- [ ] Define `type ratingSchema struct`: RatingValue float64; BestRating float64; WorstRating float64
-- [ ] Define `type ReviewDetails struct { Body string; Rating, BestRating, WorstRating float64 }` and `type ReviewProvider interface { ReviewDetails() ReviewDetails }`
+- [x] Define `type reviewSchema struct`: Name, ReviewBody, Author (personSchema), ReviewRating (ratingSchema)
+- [x] Define `type ratingSchema struct`: RatingValue float64; BestRating float64; WorstRating float64
+- [x] Define `type ReviewDetails struct { Body string; Rating, BestRating, WorstRating float64 }` and `type ReviewProvider interface { ReviewDetails() ReviewDetails }`
 
 #### 2.9 — Organization schema
 
-- [ ] Define `type organizationSchema struct`: Name, URL, Logo (imageSchema), Description
-- [ ] Define `type OrganizationDetails struct { Name, URL, Description string; Logo Image }` and `type OrganizationProvider interface { OrganizationDetails() OrganizationDetails }`
+- [x] Define `type organizationSchema struct`: Name, URL, Logo (imageSchema), Description
+- [x] Define `type OrganizationDetails struct { Name, URL, Description string; Logo Image }` and `type OrganizationProvider interface { OrganizationDetails() OrganizationDetails }`
 
 #### 2.10 — BreadcrumbList schema
 
-- [ ] Define `type breadcrumbListSchema struct`: ItemListElement []breadcrumbItemSchema
-- [ ] Define `type breadcrumbItemSchema struct`: Position int; Name string; ID (URL) string
-- [ ] BreadcrumbList is generated automatically from `Head.Breadcrumbs` — no extra interface needed
+- [x] Define `type breadcrumbListSchema struct`: ItemListElement []breadcrumbItemSchema
+- [x] Define `type breadcrumbItemSchema struct`: Position int; Name string; ID (URL) string
+- [x] BreadcrumbList is generated automatically from `Head.Breadcrumbs` — no extra interface needed
 
 #### 2.11 — SchemaFor function
 
-- [ ] Define `func SchemaFor(head Head, content any) string`
-- [ ] Returns a `<script type="application/ld+json">...</script>` string (empty string if Head.Type is empty)
-- [ ] Selection logic (switch on `head.Type`):
+- [x] Define `func SchemaFor(head Head, content any) string`
+- [x] Returns a `<script type="application/ld+json">...</script>` string (empty string if Head.Type is empty)
+- [x] Selection logic (switch on `head.Type`):
   - `Article` → articleSchema populated from Head; if content implements `Headable`, fields already in Head
   - `Product` → productSchema
   - `FAQPage` → requires content to implement `FAQProvider`; returns empty if not
@@ -202,28 +202,33 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
   - `Recipe` → requires `RecipeProvider`
   - `Review` → requires `ReviewProvider`
   - `Organization` → requires `OrganizationProvider`
-- [ ] Always appends BreadcrumbList if `len(head.Breadcrumbs) > 0` as a second JSON-LD block
-- [ ] Use `json.Marshal` — no `html/template` dependency (schema.go must be usable without templates)
-- [ ] Performance: one `strings.Builder`, two `json.Marshal` calls max; no reflection beyond `json.Marshal`
+- [x] Always appends BreadcrumbList if `len(head.Breadcrumbs) > 0` as a second JSON-LD block
+- [x] Use `json.Marshal` — no `html/template` dependency (schema.go must be usable without templates)
+- [x] Performance: one `strings.Builder`, two `json.Marshal` calls max; no reflection beyond `json.Marshal`
+
+**Implementation notes:**
+- Internal LD types named `ldNode`, `ldPerson`, `ldImage`, `ldArticle`, `ldProduct`, `ldFAQPage`, `ldHowTo`, `ldEvent`, `ldRecipe`, `ldReview`, `ldOrganization`, `ldBreadcrumbList`, `ldBreadcrumbItem`
+- `HowToStep` reused between HowTo and Recipe (no duplication)
+- Article and Product populated from Head directly — no provider interface needed
 
 #### 2.12 — Tests
 
-- [ ] `TestSchemaFor_Article` — non-empty output, valid JSON, correct @type
-- [ ] `TestSchemaFor_FAQPage` — needs FAQProvider implementation; correct question/answer structure
-- [ ] `TestSchemaFor_BreadcrumbList` — appended when Breadcrumbs non-empty
-- [ ] `TestSchemaFor_EmptyType` — returns empty string
-- [ ] `TestSchemaFor_UnknownType` — returns empty string (graceful)
-- [ ] `BenchmarkSchemaFor_Article` — baseline alloc count
+- [x] `TestSchemaFor_Article` — non-empty output, valid JSON, correct @type
+- [x] `TestSchemaFor_FAQPage` — needs FAQProvider implementation; correct question/answer structure
+- [x] `TestSchemaFor_BreadcrumbList` — appended when Breadcrumbs non-empty
+- [x] `TestSchemaFor_EmptyType` — returns empty string
+- [x] `TestSchemaFor_UnknownType` — returns empty string (graceful)
+- [x] `BenchmarkSchemaFor_Article` — baseline alloc count (5975 ns/op, 11 allocs/op)
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestSchemaFor ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestSchemaFor ./...` — all green (14/14)
+- [x] `BACKLOG.md` — step table row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required
 
 ---
 
