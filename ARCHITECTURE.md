@@ -37,6 +37,7 @@ github.com/forge-cms/forge/
 ├── roles.go          Role type, hierarchy, HasRole(), IsRole(), built-in constants, Option interface
 ├── mcp.go            MCP() no-op option (v1), MCPRead/MCPWrite constants
 ├── node.go           Node, Status, lifecycle constants, NewID(), GenerateSlug(), UniqueSlug(), ValidateStruct()
+│                     GetSlug(), GetPublishedAt(), GetStatus() getter methods (Amendment A2)
 ├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser
 ├── signals.go        Signal type, On[T]() option, dispatchBefore(), dispatchAfter(), debouncer
 ├── storage.go        DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
@@ -44,15 +45,20 @@ github.com/forge-cms/forge/
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
 ├── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
-│                     Middleware, Repo, On options
+│                     Middleware, Repo, On, SitemapConfig options;
+│                     setSitemap, regenerateSitemap (Amendment A3)
 ├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
-│                     Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM
+│                     Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM;
+│                     SitemapStore wiring in Content+Handler (Amendment A4)
 └── head.go           Head, Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
                       Excerpt, URL, Crumbs, Crumb, rich-result constants
 └── schema.go         SchemaFor, FAQProvider, HowToProvider, EventProvider,
                       RecipeProvider, ReviewProvider, OrganizationProvider,
                       FAQEntry, HowToStep, EventDetails, RecipeDetails,
                       ReviewDetails, OrganizationDetails
+└── sitemap.go        SitemapConfig, ChangeFreq, SitemapEntry, SitemapNode,
+                      SitemapPrioritiser, SitemapStore, SitemapEntries[T],
+                      WriteSitemapFragment, WriteSitemapIndex
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
@@ -64,7 +70,6 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 4)
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
-├── sitemap.go        SitemapConfig, generation, debounce goroutine         (Milestone 3)
 ├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 5)
 ├── ai.go             AIDoc, LLMsTxt, content negotiation helpers           (Milestone 5)
 ├── social.go         OpenGraph, TwitterCard, LinkedIn meta rendering       (Milestone 5)
@@ -290,8 +295,8 @@ type AIDocSummary interface {
     AIDocSummary() string
 }
 
-// SitemapPriority — optional; per-item sitemap priority         (sitemap.go, Milestone 3)
-type SitemapPriority interface {
+// SitemapPrioritiser — optional; per-item sitemap priority   (sitemap.go, Milestone 3)
+type SitemapPrioritiser interface {
     SitemapPriority() float64
 }
 ```

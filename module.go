@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -290,6 +291,10 @@ type Module[T any] struct {
 	debounceCtx Context // last Context seen; used by debounced dispatch
 	proto       reflect.Type
 	headFunc    any // nil, or func(Context, T) Head set via HeadFunc option
+
+	sitemapCfg   *SitemapConfig // nil when no SitemapConfig option given
+	sitemapStore *SitemapStore  // set by App.Content via setSitemap
+	baseURL      string         // set by App.Content via setSitemap
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -359,6 +364,9 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 			}
 		case signalOption:
 			m.signals[v.signal] = append(m.signals[v.signal], v.handler)
+		case SitemapConfig:
+			cfg := v
+			m.sitemapCfg = &cfg
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {
@@ -386,14 +394,16 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		}()
 	}
 
-	// Debouncer for SitemapRegenerate (Amendment P1: 2-second delay).
+	// Debouncer for sitemap regeneration (Decision 9: event-driven, 2-second delay).
 	m.debounce = newDebouncer(2*time.Second, func() {
 		m.debounceMu.Lock()
 		ctx := m.debounceCtx
 		m.debounceMu.Unlock()
-		if ctx != nil {
-			dispatchAfter(ctx, m.signals[SitemapRegenerate], nil)
+		if ctx == nil {
+			return
 		}
+		dispatchAfter(ctx, m.signals[SitemapRegenerate], nil)
+		m.regenerateSitemap(ctx)
 	})
 
 	return m
@@ -427,6 +437,63 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+m.prefix, create)
 	mux.Handle("PUT "+m.prefix+"/{slug}", update)
 	mux.Handle("DELETE "+m.prefix+"/{slug}", del)
+	if m.sitemapCfg != nil && m.sitemapStore != nil {
+		mux.Handle("GET "+m.prefix+"/sitemap.xml", m.sitemapStore.Handler())
+	}
+}
+
+// setSitemap is called by [App.Content] to inject the shared [SitemapStore]
+// and application BaseURL into this module.
+func (m *Module[T]) setSitemap(store *SitemapStore, baseURL string) {
+	m.sitemapStore = store
+	m.baseURL = baseURL
+}
+
+// regenerateSitemap rebuilds the fragment sitemap for this module and stores
+// the result in the shared [SitemapStore]. Called by the debouncer after every
+// publish/unpublish event. Skips silently when the store, repo, SitemapConfig,
+// or SitemapNode satisfaction is absent.
+func (m *Module[T]) regenerateSitemap(ctx Context) {
+	if m.sitemapStore == nil || m.repo == nil || m.sitemapCfg == nil {
+		return
+	}
+	items, err := m.repo.FindAll(ctx, ListOptions{Status: []Status{Published}})
+	if err != nil {
+		return
+	}
+	cfg := *m.sitemapCfg
+	freq := cfg.ChangeFreq
+	if freq == "" {
+		freq = Weekly
+	}
+	var entries []SitemapEntry
+	for _, item := range items {
+		sn, ok := any(item).(SitemapNode)
+		if !ok {
+			return
+		}
+		loc := sn.Head().Canonical
+		if loc == "" {
+			loc = strings.TrimRight(m.baseURL, "/") + "/" + sn.GetSlug()
+		}
+		priority := cfg.Priority
+		if sp, ok := any(item).(SitemapPrioritiser); ok {
+			priority = sp.SitemapPriority()
+		} else if priority <= 0 {
+			priority = 0.5
+		}
+		entries = append(entries, SitemapEntry{
+			Loc:        loc,
+			LastMod:    sn.GetPublishedAt(),
+			ChangeFreq: freq,
+			Priority:   priority,
+		})
+	}
+	var buf bytes.Buffer
+	if err := WriteSitemapFragment(&buf, entries); err != nil {
+		return
+	}
+	m.sitemapStore.Set(m.prefix+"/sitemap.xml", buf.Bytes())
 }
 
 // — Cache helpers —————————————————————————————————————————————————————————

@@ -76,6 +76,17 @@ type Node struct {
 	UpdatedAt time.Time
 }
 
+// GetSlug returns the URL slug for this node. Satisfies the [SitemapNode]
+// constraint, enabling generic sitemap generation without reflection.
+func (n *Node) GetSlug() string { return n.Slug }
+
+// GetPublishedAt returns the time this node was first published.
+// The zero time indicates the node has never been published.
+func (n *Node) GetPublishedAt() time.Time { return n.PublishedAt }
+
+// GetStatus returns the lifecycle status of this node.
+func (n *Node) GetStatus() Status { return n.Status }
+
 // NewID returns a new UUID v7 string. UUID v7 is time-ordered (48-bit
 // millisecond timestamp) with 74 bits of cryptographic randomness, which
 // keeps B-tree indexes compact while providing the same collision resistance

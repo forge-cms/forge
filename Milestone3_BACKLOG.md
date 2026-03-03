@@ -11,7 +11,7 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 |------|------|--------|-----------|
 | 1 | head.go | ✅ Done | 2026-03-03 |
 | 2 | schema.go | ✅ Done | 2026-03-03 |
-| 3 | sitemap.go | 🔲 Not started | — |
+| 3 | sitemap.go | ✅ Done | 2026-03-03 |
 | 4 | robots.go | 🔲 Not started | — |
 
 ---
@@ -236,89 +236,110 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 
 ### Step 3 — sitemap.go
 
-**Depends on:** head.go (Headable), node.go (Status, Published, PublishedAt), signals.go (Signal constants), module.go (Option interface)
-**Decisions:** Decision 9 (Sitemap strategy — fragment + index, event-driven regeneration)
+**Depends on:** head.go (Headable), node.go (Status, Published, PublishedAt), signals.go (Signal constants, debouncer), module.go (Option interface, Module[T])
+**Decisions:** Decision 9 (fragment + index, event-driven regeneration)
 **Files:** `sitemap.go`, `sitemap_test.go`
 
-**Amendment required before implementation:**
-`sitemap.go` needs to add `SitemapConfig` as a module option stored in `moduleConfig`, and register
-the fragment sitemap handler in `Module[T].Register()`. This requires adding fields to `module.go`.
-Draft the amendment, get approval, then implement both changes in this step.
-The amendment to `module.go` is an allowed cross-file change within this step's scope.
+**Amendments agreed before implementation:**
+- **A2** — `node.go`: add `GetSlug() string`, `GetPublishedAt() time.Time`, `GetStatus() Status` getter methods to `Node`
+- **A3** — `module.go`: add `sitemapCfg *SitemapConfig`, `sitemapStore *SitemapStore`, `baseURL string` fields to `Module[T]`; add `setSitemap` method; add `case SitemapConfig` to option loop; register sitemap route in `Register`; hook debouncer to `regenerateSitemap`
+- **A4** — `forge.go`: add `sitemapStore *SitemapStore` to `App`; wire `setSitemap` in `Content`; register `GET /sitemap.xml` in `Handler`
 
-#### 3.1 — SitemapConfig and ChangeFreq
+#### 3.1 — Amendment A2: Node getter methods (node.go)
 
-- [ ] Define `type ChangeFreq string` and constants: `Always`, `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly`, `Never`
-- [ ] Define `type SitemapConfig struct`:
-  - `ChangeFreq ChangeFreq` — default `Weekly` when zero
-  - `Priority   float64`   — 0.0–1.0; default `0.5` when zero
-- [ ] Implement `Option` interface on `SitemapConfig` (`applyOption(*moduleConfig)`) — stores config in `moduleConfig.sitemapConfig`
-- [ ] Add `sitemapConfig *SitemapConfig` to `moduleConfig` in `module.go` (amendment)
-- [ ] Godoc on SitemapConfig: "SitemapConfig configures the fragment sitemap for a module. Pass it to app.Content as an option."
+- [x] Add `func (n *Node) GetSlug() string { return n.Slug }` with godoc
+- [x] Add `func (n *Node) GetPublishedAt() time.Time { return n.PublishedAt }` with godoc
+- [x] Add `func (n *Node) GetStatus() Status { return n.Status }` with godoc
+- [x] `go build ./...` clean after change
 
-#### 3.2 — SitemapPriority optional interface
+#### 3.2 — Amendment A3: module.go wiring
 
-- [ ] Define `type SitemapPrioritiser interface { SitemapPriority() float64 }`
-- [ ] Godoc: "SitemapPrioritiser may be implemented by content types to provide a per-item priority override in the sitemap. If not implemented, SitemapConfig.Priority is used."
+- [x] Add fields to `Module[T]` struct: `sitemapCfg *SitemapConfig`, `sitemapStore *SitemapStore`, `baseURL string`
+- [x] Add `func (m *Module[T]) setSitemap(store *SitemapStore, baseURL string)` method
+- [x] Add `case SitemapConfig` to `NewModule` option loop: store pointer copy in `m.sitemapCfg`
+- [x] In `Register`: when `m.sitemapCfg != nil && m.sitemapStore != nil`, register `"GET " + m.prefix + "/sitemap.xml"` → `m.sitemapStore.Handler()`
+- [x] Replace debouncer no-op fn with `m.regenerateSitemap()`; implement `regenerateSitemap()` as private method: list repo, call `SitemapEntries`, write to `bytes.Buffer`, call `m.sitemapStore.Set`; skip when repo or store is nil
+- [x] `go build ./...` clean after change
 
-#### 3.3 — SitemapEntry and XML types
+#### 3.3 — Amendment A4: forge.go wiring
 
-- [ ] Define `type SitemapEntry struct { Loc string; LastMod time.Time; ChangeFreq ChangeFreq; Priority float64 }`
-- [ ] Define internal XML envelope structs for fragment sitemap (`<urlset>`) and index (`<sitemapindex>`) using `encoding/xml`
-- [ ] Zero LastMod (time.IsZero) omits `<lastmod>` tag — use `xml:",omitempty"` with a formatted string field
+- [x] Add `sitemapStore *SitemapStore` field to `App` struct
+- [x] In `App.Content`: after `r.Register`, type-assert `r` against `interface{ setSitemap(*SitemapStore, string) }`; lazily init store; call `setSitemap`
+- [x] In `App.Handler`: if `a.sitemapStore != nil`, register `"GET /sitemap.xml"` → `a.sitemapStore.IndexHandler(a.cfg.BaseURL)` before returning
+- [x] `go build ./...` clean after change
 
-#### 3.4 — Fragment sitemap generation
+**Implementation note:** Added `sitemapIndexRegistered bool` guard to `App` to prevent panic on duplicate route registration when `Handler()` is called multiple times (e.g. in tests).
 
-- [ ] Define `func WriteSitemapFragment(w io.Writer, entries []SitemapEntry) error`
-  - Writes `<?xml ...>` + `<urlset xmlns="...">` + `<url>` blocks
-  - Uses `xml.NewEncoder(w)` — no full document buffering
-  - Returns any write error
-- [ ] Define `func SitemapEntries[T any](items []T, baseURL string, cfg SitemapConfig) []SitemapEntry`
-  - `T` must implement `Headable` and embed `Node` (use type constraint `interface{ Headable; GetSlug() string; GetPublishedAt() time.Time; GetStatus() Status }`)
-  - Filters to `Published` only
-  - Calls `item.Head().Canonical` for `Loc`; falls back to `baseURL + "/" + item.GetSlug()` if Canonical empty
-  - Uses `item.GetPublishedAt()` for `LastMod`
-  - Checks `SitemapPrioritiser` via type assertion for per-item override
+#### 3.4 — ChangeFreq and SitemapConfig (sitemap.go)
 
-#### 3.5 — Sitemap index generation
+- [x] Define `type ChangeFreq string`
+- [x] Define constants: `Always`, `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly`, `Never` with godoc
+- [x] Define `type SitemapConfig struct { ChangeFreq ChangeFreq; Priority float64 }`
+- [x] Implement `isOption()` on value receiver `SitemapConfig`
+- [x] Godoc: "SitemapConfig configures the per-module sitemap fragment. ChangeFreq defaults to Weekly; Priority defaults to 0.5."
 
-- [ ] Define `func WriteSitemapIndex(w io.Writer, fragmentURLs []string, lastMod time.Time) error`
-  - Writes `<sitemapindex>` with one `<sitemap>` per fragment URL
-  - Uses `xml.NewEncoder(w)`
+#### 3.5 — SitemapPrioritiser and SitemapNode (sitemap.go)
 
-#### 3.6 — In-memory sitemap store
+- [x] Define `type SitemapPrioritiser interface { SitemapPriority() float64 }` with godoc
+- [x] Define `type SitemapNode interface { Headable; GetSlug() string; GetPublishedAt() time.Time; GetStatus() Status }` with godoc
 
-- [ ] Define `type SitemapStore struct` with `mu sync.RWMutex` and `fragments map[string][]byte` (keyed by path, e.g. `/posts/sitemap.xml`)
-- [ ] Define `func NewSitemapStore() *SitemapStore`
-- [ ] Define `func (s *SitemapStore) Set(path string, data []byte)`
-- [ ] Define `func (s *SitemapStore) Get(path string) ([]byte, bool)`
-- [ ] Define `func (s *SitemapStore) Handler() http.Handler` — serves stored sitemap bytes as `application/xml`; 404 if not found
-- [ ] Define `func (s *SitemapStore) IndexHandler(baseURL string) http.Handler` — generates the index on-the-fly from stored fragment paths
+#### 3.6 — SitemapEntry and internal XML structs (sitemap.go)
 
-#### 3.7 — Wire sitemap handler in Module.Register (amendment to module.go)
+- [x] Define `type SitemapEntry struct { Loc string; LastMod time.Time; ChangeFreq ChangeFreq; Priority float64 }` with godoc
+- [x] Define internal `xmlURLSet`, `xmlURL`, `xmlSitemapIndex`, `xmlSitemapRef` with `encoding/xml` tags
+- [x] `LastMod` in XML structs stored as `string` (date-only, `omitempty`); zero `time.Time` → empty string → tag omitted
 
-- [ ] In `Module[T].Register(*http.ServeMux)`: if `cfg.sitemapConfig != nil`, register `GET /{prefix}/sitemap.xml` using `SitemapStore.Handler()`
-- [ ] Register `GET /sitemap.xml` on the root mux using `SitemapStore.IndexHandler(baseURL)` — only once, when first module with SitemapConfig registers
-- [ ] This wiring requires `Module[T]` to hold a `*SitemapStore` reference and the app's BaseURL — add these to `module.go` moduleConfig (amendment)
+#### 3.7 — WriteSitemapFragment and SitemapEntries (sitemap.go)
 
-#### 3.8 — Tests
+- [x] Define `func WriteSitemapFragment(w io.Writer, entries []SitemapEntry) error` — manual XML header + `xml.NewEncoder`; streaming
+- [x] Define `func SitemapEntries[T SitemapNode](items []T, baseURL string, cfg SitemapConfig) []SitemapEntry`
+  - Skip non-`Published` items
+  - `Loc`: `item.Head().Canonical`; fallback `strings.TrimRight(baseURL, "/") + "/" + item.GetSlug()`
+  - `ChangeFreq`: `cfg.ChangeFreq` if non-zero, else `Weekly`
+  - `Priority`: `SitemapPrioritiser` override → `cfg.Priority` if > 0 → `0.5`
 
-- [ ] `TestWriteSitemapFragment` — valid XML, correct namespace, entries filtered to Published, lastmod present
-- [ ] `TestWriteSitemapIndex` — valid XML, correct number of sitemaps
-- [ ] `TestSitemapStore_SetGet` — round-trip bytes
-- [ ] `TestSitemapStore_Handler_notFound` — 404 for unknown path
-- [ ] `TestSitemapStore_Handler_found` — correct Content-Type and body
-- [ ] `BenchmarkWriteSitemapFragment` — baseline
+#### 3.8 — WriteSitemapIndex (sitemap.go)
+
+- [x] Define `func WriteSitemapIndex(w io.Writer, fragmentURLs []string, lastMod time.Time) error` — streaming `<sitemapindex>`; valid on empty slice
+
+#### 3.9 — SitemapStore (sitemap.go)
+
+- [x] `type SitemapStore struct { mu sync.RWMutex; fragments map[string][]byte }` with godoc
+- [x] `func NewSitemapStore() *SitemapStore`
+- [x] `func (s *SitemapStore) Set(path string, data []byte)` — stores copy
+- [x] `func (s *SitemapStore) Get(path string) ([]byte, bool)`
+- [x] `func (s *SitemapStore) Paths() []string` — sorted keys
+- [x] `func (s *SitemapStore) Handler() http.Handler` — serves by `r.URL.Path`; 404 if absent; `application/xml; charset=utf-8`
+- [x] `func (s *SitemapStore) IndexHandler(baseURL string) http.Handler` — on each request calls `Paths()`, builds full URLs, calls `WriteSitemapIndex`
+
+#### 3.10 — Tests (sitemap_test.go)
+
+- [x] `TestWriteSitemapFragment` — valid XML, namespace, `<loc>`, date-only `<lastmod>`
+- [x] `TestWriteSitemapFragment_empty` — valid `<urlset/>`, no error
+- [x] `TestWriteSitemapFragment_zeroLastMod` — `<lastmod>` absent when zero
+- [x] `TestSitemapEntries_filtersUnpublished` — only Published items returned
+- [x] `TestSitemapEntries_canonicalLoc` — non-empty `Canonical` used as `Loc`
+- [x] `TestSitemapEntries_slugFallback` — empty `Canonical` → `baseURL + "/" + slug`
+- [x] `TestSitemapEntries_customPriority` — `SitemapPrioritiser` value wins
+- [x] `TestWriteSitemapIndex` — valid XML, correct `<sitemap>` count
+- [x] `TestSitemapStore_SetGet` — byte round-trip
+- [x] `TestSitemapStore_Handler_notFound` — 404
+- [x] `TestSitemapStore_Handler_found` — 200, `application/xml`, correct body
+- [x] `TestSitemapStore_IndexHandler` — two fragments → valid index with both URLs
+- [x] `BenchmarkWriteSitemapFragment` — 100-entry baseline (5919 ns/op, 224 allocs/op)
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestWriteSitemap|TestSitemapStore ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestWriteSitemap|TestSitemapStore|TestSitemapEntries ./...` — all green (12/12)
+- [x] `go test -bench BenchmarkWriteSitemap -benchmem ./...` — recorded (5919 ns/op)
+- [x] `go test -count=1 ./...` — full suite green
+- [x] `BACKLOG.md` — step table row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] `ARCHITECTURE.md` — `sitemap.go` moved from Planned to Implemented; `SitemapPrioritiser` name corrected
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required
 
 ---
 

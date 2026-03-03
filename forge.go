@@ -97,9 +97,11 @@ type Registrator interface {
 
 // App is the top-level application. Obtain one with [New].
 type App struct {
-	cfg        Config
-	mux        *http.ServeMux
-	middleware []func(http.Handler) http.Handler
+	cfg                    Config
+	mux                    *http.ServeMux
+	middleware             []func(http.Handler) http.Handler
+	sitemapStore           *SitemapStore // non-nil when at least one module has SitemapConfig
+	sitemapIndexRegistered bool          // true once GET /sitemap.xml is registered
 }
 
 // New creates a new [App] from cfg.
@@ -165,6 +167,12 @@ func (a *App) Handle(pattern string, handler http.Handler) {
 func (a *App) Content(v any, opts ...Option) {
 	if r, ok := v.(Registrator); ok {
 		r.Register(a.mux)
+		if sm, ok := r.(interface{ setSitemap(*SitemapStore, string) }); ok {
+			if a.sitemapStore == nil {
+				a.sitemapStore = NewSitemapStore()
+			}
+			sm.setSitemap(a.sitemapStore, a.cfg.BaseURL)
+		}
 		return
 	}
 	m := NewModule[any](v, opts...)
@@ -200,6 +208,10 @@ func httpsRedirect() func(http.Handler) http.Handler {
 //
 //	srv := &http.Server{Handler: app.Handler()}
 func (a *App) Handler() http.Handler {
+	if a.sitemapStore != nil && !a.sitemapIndexRegistered {
+		a.sitemapIndexRegistered = true
+		a.mux.Handle("GET /sitemap.xml", a.sitemapStore.IndexHandler(a.cfg.BaseURL))
+	}
 	mws := a.middleware
 	if a.cfg.HTTPS {
 		mws = append([]func(http.Handler) http.Handler{httpsRedirect()}, mws...)
