@@ -19,6 +19,8 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-02 | Milestone 2 Step P1: `forge-pgx` module implemented — `Wrap(pool)` native pgx adapter satisfying `forge.DB` |
 | 2026-03-03 | Milestone 3 Step 1: `head.go` implemented — `Head`, `Image`, `Breadcrumb`, `Alternate`, `Headable`, `HeadFunc`, `Excerpt`, `URL`, `Crumbs`; `Module[T].headFunc` field added (Amendment A1) |
 | 2026-03-03 | Milestone 3 Step 2: `schema.go` implemented — `SchemaFor`, 8 JSON-LD rich result types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization), BreadcrumbList, 6 provider interfaces (FAQProvider, HowToProvider, EventProvider, RecipeProvider, ReviewProvider, OrganizationProvider) |
+| 2026-03-03 | Milestone 3 Step 3: `sitemap.go` implemented — `SitemapConfig`, `ChangeFreq`, `SitemapNode`, `SitemapPrioritiser`, `SitemapEntry`, `SitemapStore`, `WriteSitemapFragment`, `SitemapEntries`, `WriteSitemapIndex`; Amendments A2 (node.go getters), A3 (Module sitemap wiring), A4 (App sitemap store + Handler guard) |
+| 2026-03-03 | Milestone 3 Step 4: `robots.go` implemented — `CrawlerPolicy`, `Allow`/`Disallow`/`AskFirst`, `RobotsConfig`, `RobotsTxt`, `RobotsTxtHandler`; Amendment A5: `SEOOption`, `seoState`, `App.SEO()`, `robotsTxtRegistered` guard in `forge.go` |
 
 ---
 
@@ -47,9 +49,11 @@ github.com/forge-cms/forge/
 ├── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
 │                     Middleware, Repo, On, SitemapConfig options;
 │                     setSitemap, regenerateSitemap (Amendment A3)
-├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler),
-│                     Registrator, httpsRedirect, graceful shutdown via SIGINT/SIGTERM;
-│                     SitemapStore wiring in Content+Handler (Amendment A4)
+├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler/SEO),
+│                     Registrator, SEOOption, seoState, httpsRedirect,
+│                     graceful shutdown via SIGINT/SIGTERM;
+│                     SitemapStore wiring in Content+Handler (Amendment A4);
+│                     SEO option loop, robotsTxtRegistered guard in Handler (Amendment A5)
 └── head.go           Head, Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
                       Excerpt, URL, Crumbs, Crumb, rich-result constants
 └── schema.go         SchemaFor, FAQProvider, HowToProvider, EventProvider,
@@ -59,6 +63,8 @@ github.com/forge-cms/forge/
 └── sitemap.go        SitemapConfig, ChangeFreq, SitemapEntry, SitemapNode,
                       SitemapPrioritiser, SitemapStore, SitemapEntries[T],
                       WriteSitemapFragment, WriteSitemapIndex
+└── robots.go         CrawlerPolicy (Allow/Disallow/AskFirst), RobotsConfig,
+                      RobotsTxt, RobotsTxtHandler
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter

@@ -95,6 +95,19 @@ type Registrator interface {
 	Register(mux *http.ServeMux)
 }
 
+// SEOOption is implemented by any value that modifies the app-level SEO
+// configuration. Pass SEOOption values to [App.SEO]:
+//
+//	app.SEO(&forge.RobotsConfig{AIScraper: forge.AskFirst, Sitemaps: true})
+type SEOOption interface {
+	applySEO(*seoState)
+}
+
+// seoState holds the app-level SEO configuration applied via [App.SEO].
+type seoState struct {
+	robots *RobotsConfig
+}
+
 // App is the top-level application. Obtain one with [New].
 type App struct {
 	cfg                    Config
@@ -102,6 +115,8 @@ type App struct {
 	middleware             []func(http.Handler) http.Handler
 	sitemapStore           *SitemapStore // non-nil when at least one module has SitemapConfig
 	sitemapIndexRegistered bool          // true once GET /sitemap.xml is registered
+	seo                    seoState      // app-level SEO configuration set via SEO()
+	robotsTxtRegistered    bool          // true once GET /robots.txt is registered
 }
 
 // New creates a new [App] from cfg.
@@ -212,11 +227,28 @@ func (a *App) Handler() http.Handler {
 		a.sitemapIndexRegistered = true
 		a.mux.Handle("GET /sitemap.xml", a.sitemapStore.IndexHandler(a.cfg.BaseURL))
 	}
+	if a.seo.robots != nil && !a.robotsTxtRegistered {
+		a.robotsTxtRegistered = true
+		a.mux.Handle("GET /robots.txt", RobotsTxtHandler(*a.seo.robots, a.cfg.BaseURL))
+	}
 	mws := a.middleware
 	if a.cfg.HTTPS {
 		mws = append([]func(http.Handler) http.Handler{httpsRedirect()}, mws...)
 	}
 	return Chain(a.mux, mws...)
+}
+
+// SEO applies one or more app-level SEO options.
+//
+// Call SEO before [App.Handler] or [App.Run] so the configuration is applied
+// before routes are registered. SEO may be called multiple times; later calls
+// override earlier values for the same option type.
+//
+//	app.SEO(&forge.RobotsConfig{AIScraper: forge.AskFirst, Sitemaps: true})
+func (a *App) SEO(opts ...SEOOption) {
+	for _, opt := range opts {
+		opt.applySEO(&a.seo)
+	}
 }
 
 // Run starts the HTTP server on addr (e.g. ":8080") and blocks until

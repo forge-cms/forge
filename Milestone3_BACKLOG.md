@@ -12,7 +12,7 @@ and robots.txt — defined once on the content type, rendered correctly everywhe
 | 1 | head.go | ✅ Done | 2026-03-03 |
 | 2 | schema.go | ✅ Done | 2026-03-03 |
 | 3 | sitemap.go | ✅ Done | 2026-03-03 |
-| 4 | robots.go | 🔲 Not started | — |
+| 4 | robots.go | ✅ Done | 2026-03-03 |
 
 ---
 
@@ -358,65 +358,68 @@ the `App.SEO` method will be added to `forge.go` as part of this step.
 
 #### 4.1 — CrawlerPolicy type
 
-- [ ] Define `type CrawlerPolicy string` and constants:
+- [x] Define `type CrawlerPolicy string` and constants:
   - `Allow    CrawlerPolicy = "allow"`   — allow all crawlers (default)
   - `Disallow CrawlerPolicy = "disallow"` — disallow all AI crawlers
   - `AskFirst CrawlerPolicy = "ask-first"` — respectful policy: disallow GPTBot, CCBot, anthropic-ai, Claude-Web, PerplexityBot; allow all others
-- [ ] Godoc on `AskFirst`: "AskFirst blocks known AI training crawlers while permitting AI assistants that respect the robots.txt contract. Recommended for sites that wish to be indexed by AI search but not scraped for training."
+- [x] Godoc on `AskFirst`: "AskFirst blocks known AI training crawlers while permitting AI assistants that respect the robots.txt contract. Recommended for sites that wish to be indexed by AI search but not scraped for training."
 
 #### 4.2 — RobotsConfig
 
-- [ ] Define `type RobotsConfig struct`:
+- [x] Define `type RobotsConfig struct`:
   - `Disallow   []string`       — paths to disallow (e.g. `"/admin"`)
   - `Sitemaps   bool`           — if true, appends `Sitemap: <baseURL>/sitemap.xml` at end of robots.txt
   - `AIScraper  CrawlerPolicy`  — crawler policy; zero value is `Allow`
-- [ ] Implement `SEOOption` interface on `RobotsConfig` (see 4.5 below)
+- [x] Implement `SEOOption` interface on `RobotsConfig` (see 4.5 below)
 
 #### 4.3 — SEOOption interface and App.SEO (amendment to forge.go)
 
-- [ ] Define `type SEOOption interface { applySEO(*seoState) }` in `robots.go` (or `forge.go` — decide at amendment time; prefer `forge.go` for discoverability)
-- [ ] Define internal `seoState struct { robots *RobotsConfig; sitemap *SitemapConfig }` — holds app-level SEO config
-- [ ] Add `seo seoState` field to `App` struct in `forge.go` (amendment)
-- [ ] Add `func (a *App) SEO(opts ...SEOOption)` to `forge.go` (amendment)
-- [ ] Implement `SEOOption` on `*RobotsConfig`: `func (c *RobotsConfig) applySEO(s *seoState) { s.robots = c }`
-- [ ] Implement `SEOOption` on `*SitemapConfig`: `func (c *SitemapConfig) applySEO(s *seoState) { s.sitemap = c }` — enables `app.SEO(forge.SitemapConfig{...})` syntax
+- [x] Define `type SEOOption interface { applySEO(*seoState) }` in `forge.go` (discoverability — lives with `App`)
+- [x] Define internal `seoState struct { robots *RobotsConfig }` — `sitemap` field omitted: sitemaps are already wired per-module via `Content()`; no second path needed
+- [x] Add `seo seoState` field to `App` struct in `forge.go` (amendment)
+- [x] Add `func (a *App) SEO(opts ...SEOOption)` to `forge.go` (amendment)
+- [x] Implement `SEOOption` on `*RobotsConfig`: `func (c *RobotsConfig) applySEO(s *seoState) { s.robots = c }`
+- [ ] ~~Implement `SEOOption` on `*SitemapConfig`~~ — omitted: `seoState` has no `sitemap` field; sitemap wiring is already handled per-module in `Content()`
 
 #### 4.4 — Robots.txt generation
 
-- [ ] Define `func RobotsTxt(cfg RobotsConfig, baseURL string) string`
+- [x] Define `func RobotsTxt(cfg RobotsConfig, baseURL string) string`
   - Writes a well-formed robots.txt string
   - `User-agent: *` block with Disallow entries
   - If `AIScraper == AskFirst`: add separate disallow blocks for GPTBot, CCBot, anthropic-ai, Claude-Web, PerplexityBot
-  - If `AIScraper == Disallow`: add `User-agent: *` / `Disallow: /` (applied only to AI-identified crawlers — research current list)
+  - If `AIScraper == Disallow`: add individual blocks for extended crawler list (adds Bytespider, ImagesiftBot, omgili, omgilibot, FacebookBot)
   - If `cfg.Sitemaps && baseURL != ""`: append `Sitemap: <baseURL>/sitemap.xml`
   - Returns the full robots.txt content as a string
 
 #### 4.5 — RobotsTxt HTTP handler
 
-- [ ] Define `func RobotsTxtHandler(cfg RobotsConfig, baseURL string) http.HandlerFunc`
+- [x] Define `func RobotsTxtHandler(cfg RobotsConfig, baseURL string) http.HandlerFunc`
   - Pre-generates the robots.txt string at construction time (not per-request)
   - Serves with `Content-Type: text/plain; charset=utf-8`
   - Cache-Control: `max-age=86400` (1 day)
-- [ ] Wire in `App.Run` / `App.Handler` (via amendment to forge.go): if `app.seo.robots != nil`, register `GET /robots.txt` with `RobotsTxtHandler(*app.seo.robots, app.cfg.BaseURL)`
+- [x] Wire in `App.Handler` (amendment to forge.go): if `app.seo.robots != nil && !robotsTxtRegistered`, register `GET /robots.txt`
 
 #### 4.6 — Tests
 
-- [ ] `TestRobotsTxt_default` — no disallow, no AI policy: only `User-agent: *\nDisallow:\n`
-- [ ] `TestRobotsTxt_disallowPaths` — correct disallow entries
-- [ ] `TestRobotsTxt_askFirst` — GPTBot, CCBot, anthropic-ai, Claude-Web, PerplexityBot disallowed; `User-agent: *` allows all
-- [ ] `TestRobotsTxt_sitemapAppended` — `Sitemap:` line present when Sitemaps=true
-- [ ] `TestRobotsTxtHandler_contentType` — response is `text/plain; charset=utf-8`
-- [ ] `TestApp_SEO_implementsOption` — compile check: `RobotsConfig{}` and `SitemapConfig{}` satisfy `SEOOption`
+- [x] `TestRobotsTxt_default` — no disallow, no AI policy: only `User-agent: *\nDisallow:\n`
+- [x] `TestRobotsTxt_disallowPaths` — correct disallow entries
+- [x] `TestRobotsTxt_askFirst` — GPTBot, CCBot, anthropic-ai, Claude-Web, PerplexityBot disallowed; `User-agent: *` allows all
+- [x] `TestRobotsTxt_disallowAI` — extended crawler list all blocked (8/8 pass)
+- [x] `TestRobotsTxt_sitemapAppended` — `Sitemap:` line present when Sitemaps=true
+- [x] `TestRobotsTxt_sitemapOmittedWithoutBaseURL` — `Sitemap:` absent when baseURL empty
+- [x] `TestRobotsTxtHandler_contentType` — response is `text/plain; charset=utf-8`, Cache-Control correct
+- [x] `TestApp_SEO_implementsOption` — compile check: `*RobotsConfig` satisfies `SEOOption`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestRobots|TestApp_SEO ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step (check `app.SEO(forge.RobotsConfig{...})` example)
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestRobots|TestApp_SEO ./...` — all green (8/8)
+- [x] `go test -count=1 ./...` — full suite green
+- [x] `BACKLOG.md` — step table row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required
 
 ---
 
