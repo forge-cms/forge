@@ -21,6 +21,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-03 | Milestone 3 Step 2: `schema.go` implemented — `SchemaFor`, 8 JSON-LD rich result types (Article, Product, FAQPage, HowTo, Event, Recipe, Review, Organization), BreadcrumbList, 6 provider interfaces (FAQProvider, HowToProvider, EventProvider, RecipeProvider, ReviewProvider, OrganizationProvider) |
 | 2026-03-03 | Milestone 3 Step 3: `sitemap.go` implemented — `SitemapConfig`, `ChangeFreq`, `SitemapNode`, `SitemapPrioritiser`, `SitemapEntry`, `SitemapStore`, `WriteSitemapFragment`, `SitemapEntries`, `WriteSitemapIndex`; Amendments A2 (node.go getters), A3 (Module sitemap wiring), A4 (App sitemap store + Handler guard) |
 | 2026-03-03 | Milestone 3 Step 4: `robots.go` implemented — `CrawlerPolicy`, `Allow`/`Disallow`/`AskFirst`, `RobotsConfig`, `RobotsTxt`, `RobotsTxtHandler`; Amendment A5: `SEOOption`, `seoState`, `App.SEO()`, `robotsTxtRegistered` guard in `forge.go` |
+| 2026-03-05 | Milestone 4 Step 1: `templatedata.go` implemented — `TemplateData[T]`, `NewTemplateData` constructor; `SiteName` sourced from `Config.BaseURL` hostname |
 
 ---
 
@@ -65,6 +66,7 @@ github.com/forge-cms/forge/
                       WriteSitemapFragment, WriteSitemapIndex
 └── robots.go         CrawlerPolicy (Allow/Disallow/AskFirst), RobotsConfig,
                       RobotsTxt, RobotsTxtHandler
+└── templatedata.go   TemplateData[T], NewTemplateData
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
@@ -73,7 +75,8 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ### Planned (future milestones)
 
 ```
-├── templates.go      TemplateData[T], template helpers, forge:head partial (Milestone 4)
+├── templates.go      Templates, TemplatesOptional, forge:head partial, HTML render path (Milestone 4)
+├── templatehelpers.go forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token (Milestone 4)
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
 ├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 5)

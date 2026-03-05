@@ -97,17 +97,19 @@ Metadata, structured data, sitemaps, and robots.txt.
 ## Milestone 4 — Templates & Rendering (v0.4.0)
 
 HTML rendering, template helpers, content negotiation.
-**Detail:** Milestone4_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone4_BACKLOG.md](Milestone4_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | templates.go | 🔲 Not started | — |
-| 2 | templatehelpers.go | 🔲 Not started | — |
-| 3 | templatedata.go | 🔲 Not started | — |
+| 1 | templatedata.go | ✅ Done | 2026-03-05 |
+| 2 | templates.go | 🔲 Not started | — |
+| 3 | templatehelpers.go | 🔲 Not started | — |
+| 4 | integration_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `templates.go`: Templates/TemplatesWatch/TemplatesOptional, list+show convention, startup parse, error pages; wire HTML error page path in WriteError
-- [ ] Step 2 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries
-- [ ] Step 3 — `templatedata.go`: TemplateData[T] struct wiring Content, Head, User, Request
+- [x] Step 1 — `templatedata.go`: TemplateData[T] struct, NewTemplateData constructor — Content, Head, User, Request, SiteName
+- [ ] Step 2 — `templates.go`: Templates/TemplatesOptional options, forge:head partial, startup parse, HTML render path, error pages (Amendments A6/A7/A8)
+- [ ] Step 3 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries (stub)
+- [ ] Step 4 — `integration_test.go`: full HTML render cycle, forge:head, error pages, CSRF, App-level SEO/sitemap gaps
 
 ---
 

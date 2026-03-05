@@ -37,32 +37,6 @@ app.Run(":8080")
 One block. A complete, production-ready content module with authentication,
 role-based access, SEO, social sharing, AI indexing, caching, and HTML templates.
 
-> **Development status — v0.2.0 (Milestone 2 Step 1 complete)**
-> `forge.New`, `app.Use`, `app.Content`, `app.Handle`, `app.Run`, and `app.Handler` are
-> implemented and production-ready. Pass a pre-built `*Module[T]` to `app.Content`:
->
-> ```go
-> repo := forge.NewMemoryRepo[*Post]()
-> posts := forge.NewModule[*Post]((*Post)(nil),
->     forge.Repo(repo),
->     forge.Auth(forge.Read(forge.Guest), forge.Write(forge.Author)),
->     forge.Cache(5*time.Minute),
-> )
-> app := forge.New(forge.MustConfig(forge.Config{
->     BaseURL: os.Getenv("BASE_URL"),
->     Secret:  []byte(os.Getenv("SECRET")),
-> }))
-> app.Use(forge.RequestLogger(), forge.Recoverer(), forge.SecurityHeaders())
-> app.Content(posts)
-> if err := app.Run(":8080"); err != nil {
->     log.Fatal(err)
-> }
-> ```
->
-> SEO, Social, AI indexing, and Templates arrive in Milestones 3–5.
-
----
-
 ## Why Forge?
 
 Most frameworks make you learn the framework.  
