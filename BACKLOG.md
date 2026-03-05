@@ -105,11 +105,13 @@ HTML rendering, template helpers, content negotiation.
 | 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | ✅ Done | 2026-03-05 |
 | 4 | integration_test.go | ✅ Done | 2026-03-05 |
+| 5 | integration_full_test.go | ✅ Done | 2026-03-05 |
 
 - [x] Step 1 — `templatedata.go`: TemplateData[T] struct, NewTemplateData constructor — Content, Head, User, Request, SiteName
 - [x] Step 2 — `templates.go`: Templates/TemplatesOptional options, forge:head partial, startup parse, HTML render path, error pages (Amendments A6/A7/A8)
 - [x] Step 3 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries (stub)
 - [x] Step 4 — `integration_test.go`: full HTML render cycle, forge:head, error pages, CSRF, App-level SEO/sitemap gaps
+- [x] Step 5 — `integration_full_test.go`: cross-milestone suite (M1–M4) — multi-module routing, roles, signals, content negotiation, schema, SEO, error pages, TemplateData
 
 ---
 

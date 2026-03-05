@@ -25,6 +25,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-05 | Milestone 4 Step 2: `templates.go` implemented — `templateParser` interface, `Templates`/`TemplatesOptional` options, `forgeHeadTmpl` const, `parseTemplates()`/`renderListHTML`/`renderShowHTML` on `Module[T]`, `bindErrorTemplates`; Amendments A6 (`module.go` template fields + HTML render path), A7 (`errors.go` `errorTemplateLookup`), A8 (`forge.go` `templateModules` + startup parse wiring) |
 | 2026-03-05 | Milestone 4 Step 3: `templatehelpers.go` implemented — `forgeMeta`, `forgeDate`, `forgeMarkdown` (stdlib-only), `forgeExcerpt`, `forgeCSRFToken`, `forgeLLMSEntries` (stub), `TemplateFuncMap()`; Amendment A9 (`templates.go` `parseOneTemplate` now calls `.Funcs(TemplateFuncMap())`) |
 | 2026-03-05 | Milestone 4 Step 4: `integration_test.go` implemented — 15 cross-component integration tests covering HTML render cycle, forge:head correctness, error pages (custom + fallback), CSRF token round-trip, App-level SEO/sitemap routing, and TemplateData field propagation |
+| 2026-03-05 | Milestone 4 Step 5: `integration_full_test.go` implemented — 19 cross-milestone integration tests (M1–M4): multi-module routing, global middleware order, role-gated access (HasRole + inline middleware), AfterCreate/AfterDelete/cross-module signal isolation, content negotiation across two module types, forge_meta/forge_markdown/BreadcrumbList through render, sitemap URL in robots.txt, error template first-match and fallthrough, TemplateData siteName and request URL |
 
 ---
 
@@ -80,6 +81,11 @@ github.com/forge-cms/forge/
                       Amendment A9 (parseOneTemplate uses .Funcs(TemplateFuncMap()))
 └── integration_test.go 15 integration tests: HTML render cycle, forge:head, error pages,
                       CSRF round-trip, App-level SEO/sitemap, TemplateData correctness
+└── integration_full_test.go 19 cross-milestone tests (M1–M4): multi-module routing,
+                      global middleware order, role guards, AfterCreate/AfterDelete/isolation,
+                      content negotiation, forge_meta/forge_markdown/BreadcrumbList,
+                      sitemap in robots.txt, error template first-match + fallthrough,
+                      TemplateData siteName + request URL
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter

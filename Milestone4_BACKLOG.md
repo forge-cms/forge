@@ -14,6 +14,7 @@ integration test suite covering the largest gaps in existing coverage.
 | 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | ✅ Done | 2026-03-05 |
 | 4 | integration_test.go | ✅ Done | 2026-03-05 |
+| 5 | integration_full_test.go | ✅ Done | 2026-03-05 |
 
 ---
 
@@ -59,6 +60,16 @@ integration test suite covering the largest gaps in existing coverage.
 
 ### Step 4 — integration_test.go ✅ 2026-03-05
 <!-- collapsed — see git log for detail -->
+
+---
+
+## Layer 5 — Cross-milestone integration suite (depends on M1–M4)
+
+### Step 5 — integration_full_test.go ✅ 2026-03-05
+<!-- collapsed — see git log for detail -->
+<!-- Implementation note: TestFull_signalDrivenSitemapEntry replaced by
+     TestFull_signalCrossModuleIsolation (signal isolation across modules);
+     debounce-dependent sitemap regeneration tests deferred to M5. -->
 
 ---
 
