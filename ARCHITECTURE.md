@@ -22,6 +22,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-03 | Milestone 3 Step 3: `sitemap.go` implemented — `SitemapConfig`, `ChangeFreq`, `SitemapNode`, `SitemapPrioritiser`, `SitemapEntry`, `SitemapStore`, `WriteSitemapFragment`, `SitemapEntries`, `WriteSitemapIndex`; Amendments A2 (node.go getters), A3 (Module sitemap wiring), A4 (App sitemap store + Handler guard) |
 | 2026-03-03 | Milestone 3 Step 4: `robots.go` implemented — `CrawlerPolicy`, `Allow`/`Disallow`/`AskFirst`, `RobotsConfig`, `RobotsTxt`, `RobotsTxtHandler`; Amendment A5: `SEOOption`, `seoState`, `App.SEO()`, `robotsTxtRegistered` guard in `forge.go` |
 | 2026-03-05 | Milestone 4 Step 1: `templatedata.go` implemented — `TemplateData[T]`, `NewTemplateData` constructor; `SiteName` sourced from `Config.BaseURL` hostname |
+| 2026-03-05 | Milestone 4 Step 2: `templates.go` implemented — `templateParser` interface, `Templates`/`TemplatesOptional` options, `forgeHeadTmpl` const, `parseTemplates()`/`renderListHTML`/`renderShowHTML` on `Module[T]`, `bindErrorTemplates`; Amendments A6 (`module.go` template fields + HTML render path), A7 (`errors.go` `errorTemplateLookup`), A8 (`forge.go` `templateModules` + startup parse wiring) |
 
 ---
 
@@ -67,6 +68,11 @@ github.com/forge-cms/forge/
 └── robots.go         CrawlerPolicy (Allow/Disallow/AskFirst), RobotsConfig,
                       RobotsTxt, RobotsTxtHandler
 └── templatedata.go   TemplateData[T], NewTemplateData
+└── templates.go      templateParser, Templates, TemplatesOptional, forgeHeadTmpl, parseTemplates,
+                      renderListHTML, renderShowHTML, errorTemplate, bindErrorTemplates;
+                      Amendment A6 (Module[T] template fields + HTML render path),
+                      Amendment A7 (errorTemplateLookup in errors.go),
+                      Amendment A8 (templateModules + startup wiring in forge.go)
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
@@ -75,7 +81,6 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ### Planned (future milestones)
 
 ```
-├── templates.go      Templates, TemplatesOptional, forge:head partial, HTML render path (Milestone 4)
 ├── templatehelpers.go forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token (Milestone 4)
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)

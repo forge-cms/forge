@@ -3,6 +3,7 @@ package forge
 import (
 	"bytes"
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"reflect"
 	"strings"
@@ -292,6 +293,13 @@ type Module[T any] struct {
 	proto       reflect.Type
 	headFunc    any // nil, or func(Context, T) Head set via HeadFunc option
 
+	templateDir      string             // set by Templates or TemplatesOptional option
+	templateRequired bool               // true when Templates (not TemplatesOptional) was used
+	tplList          *template.Template // nil until parseTemplates succeeds
+	tplShow          *template.Template // nil until parseTemplates succeeds
+	tplMu            sync.RWMutex       // guards tplList, tplShow reads and swaps
+	siteName         string             // set by App.Content via setSiteName
+
 	sitemapCfg   *SitemapConfig // nil when no SitemapConfig option given
 	sitemapStore *SitemapStore  // set by App.Content via setSitemap
 	baseURL      string         // set by App.Content via setSitemap
@@ -367,6 +375,9 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		case SitemapConfig:
 			cfg := v
 			m.sitemapCfg = &cfg
+		case templatesOption:
+			m.templateDir = v.dir
+			m.templateRequired = v.required
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {
@@ -677,6 +688,10 @@ func (m *Module[T]) listHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ct := m.neg.negotiate(r)
+	if ct == "text/html" {
+		m.renderListHTML(w, r, ctx, items)
+		return
+	}
 	m.writeContentCached(w, r, ct, items)
 }
 
@@ -703,6 +718,10 @@ func (m *Module[T]) showHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ct := m.neg.negotiate(r)
+	if ct == "text/html" {
+		m.renderShowHTML(w, r, ctx, item)
+		return
+	}
 	m.writeContentCached(w, r, ct, item)
 }
 

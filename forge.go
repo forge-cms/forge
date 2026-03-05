@@ -113,10 +113,11 @@ type App struct {
 	cfg                    Config
 	mux                    *http.ServeMux
 	middleware             []func(http.Handler) http.Handler
-	sitemapStore           *SitemapStore // non-nil when at least one module has SitemapConfig
-	sitemapIndexRegistered bool          // true once GET /sitemap.xml is registered
-	seo                    seoState      // app-level SEO configuration set via SEO()
-	robotsTxtRegistered    bool          // true once GET /robots.txt is registered
+	sitemapStore           *SitemapStore    // non-nil when at least one module has SitemapConfig
+	sitemapIndexRegistered bool             // true once GET /sitemap.xml is registered
+	seo                    seoState         // app-level SEO configuration set via SEO()
+	robotsTxtRegistered    bool             // true once GET /robots.txt is registered
+	templateModules        []templateParser // modules with HTML templates; parsed at Run() time
 }
 
 // New creates a new [App] from cfg.
@@ -188,6 +189,13 @@ func (a *App) Content(v any, opts ...Option) {
 			}
 			sm.setSitemap(a.sitemapStore, a.cfg.BaseURL)
 		}
+		if tp, ok := r.(templateParser); ok {
+			a.templateModules = append(a.templateModules, tp)
+		}
+		if sn, ok := r.(interface{ setSiteName(string) }); ok {
+			u, _ := url.Parse(a.cfg.BaseURL)
+			sn.setSiteName(u.Hostname())
+		}
 		return
 	}
 	m := NewModule[any](v, opts...)
@@ -231,6 +239,9 @@ func (a *App) Handler() http.Handler {
 		a.robotsTxtRegistered = true
 		a.mux.Handle("GET /robots.txt", RobotsTxtHandler(*a.seo.robots, a.cfg.BaseURL))
 	}
+	if len(a.templateModules) > 0 {
+		bindErrorTemplates(a.templateModules)
+	}
 	mws := a.middleware
 	if a.cfg.HTTPS {
 		mws = append([]func(http.Handler) http.Handler{httpsRedirect()}, mws...)
@@ -262,6 +273,14 @@ func (a *App) SEO(opts ...SEOOption) {
 //	    log.Fatal(err)
 //	}
 func (a *App) Run(addr string) error {
+	// Parse HTML templates before starting the server. Fail fast so startup
+	// errors are obvious rather than surfacing as 406 responses at request time.
+	for _, tp := range a.templateModules {
+		if err := tp.parseTemplates(); err != nil {
+			return err
+		}
+	}
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      a.Handler(),

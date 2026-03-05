@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -179,14 +180,27 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
+// errorTemplateLookup is set by [App.Handler] when modules with template
+// directories are registered. It searches for errors/{status}.html in each
+// registered module's template directory and returns the first match.
+// When nil or returning nil, respond falls back to [htmlErrorPage].
+var errorTemplateLookup func(status int) *template.Template
+
 // respond writes a JSON or minimal HTML error response.
 func respond(w http.ResponseWriter, r *http.Request, status int, requestID string, err Error, wantsHTML bool) {
-	// TODO(templates): render templates/errors/{status}.html when template
-	// support is available (Milestone 3 — templates.go). For now, fall back
-	// to a minimal inline HTML page.
 	if wantsHTML {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(status)
+		if errorTemplateLookup != nil {
+			if tpl := errorTemplateLookup(status); tpl != nil {
+				_ = tpl.Execute(w, struct {
+					Status    int
+					Message   string
+					RequestID string
+				}{status, err.Public(), requestID})
+				return
+			}
+		}
 		fmt.Fprintf(w, htmlErrorPage, status, err.Public(), requestID)
 		return
 	}

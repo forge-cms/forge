@@ -102,12 +102,12 @@ HTML rendering, template helpers, content negotiation.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | templatedata.go | ✅ Done | 2026-03-05 |
-| 2 | templates.go | 🔲 Not started | — |
+| 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | 🔲 Not started | — |
 | 4 | integration_test.go | 🔲 Not started | — |
 
 - [x] Step 1 — `templatedata.go`: TemplateData[T] struct, NewTemplateData constructor — Content, Head, User, Request, SiteName
-- [ ] Step 2 — `templates.go`: Templates/TemplatesOptional options, forge:head partial, startup parse, HTML render path, error pages (Amendments A6/A7/A8)
+- [x] Step 2 — `templates.go`: Templates/TemplatesOptional options, forge:head partial, startup parse, HTML render path, error pages (Amendments A6/A7/A8)
 - [ ] Step 3 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries (stub)
 - [ ] Step 4 — `integration_test.go`: full HTML render cycle, forge:head, error pages, CSRF, App-level SEO/sitemap gaps
 

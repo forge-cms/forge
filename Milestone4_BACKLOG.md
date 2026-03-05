@@ -11,7 +11,7 @@ integration test suite covering the largest gaps in existing coverage.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | templatedata.go | ✅ Done | 2026-03-05 |
-| 2 | templates.go | 🔲 Not started | — |
+| 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | 🔲 Not started | — |
 | 4 | integration_test.go | 🔲 Not started | — |
 
@@ -43,84 +43,8 @@ integration test suite covering the largest gaps in existing coverage.
 
 ## Layer 2 — Template loading and HTML render path (Amendments A6, A7, A8)
 
-### Step 2 — templates.go
-
-**Depends on:** templatedata.go, head.go, schema.go, module.go (A6), errors.go (A7), forge.go (A8)
-**Decisions:** Amendment P3 (parse at startup), Decision 10 (error pages), Decision 14 (NoIndex meta), Decision 16 (error handling)
-**Files:** `templates.go`, `templates_test.go`
-
-#### 2.1 — Option types
-
-- [ ] Define `type templatesOption struct { dir string; required bool }` implementing `isOption()`
-- [ ] Define `func Templates(dir string) Option` — required; `list.html` + `show.html` must exist
-- [ ] Define `func TemplatesOptional(dir string) Option` — silent no-op when dir/files absent
-- [ ] Add `// TemplatesWatch is deferred to Milestone 5.` godoc stub (no implementation)
-
-#### 2.2 — forge:head named template
-
-- [ ] Define `const forgeHeadTmpl string` — complete `<head>` fragment:
-  - `<title>{{.Title}}</title>`
-  - `<meta name="description">` (omit when `.Description` empty)
-  - `<link rel="canonical">` (omit when `.Canonical` empty)
-  - Open Graph tags: `og:title`, `og:description`, `og:image` (when `.Image.URL` non-empty), `og:type`
-  - `<meta name="robots" content="noindex, nofollow">` when `.NoIndex` (Decision 14)
-  - `{{forge_meta . .}}` placeholder — requires TemplateFuncMap registered (Step 3 wires the func; safe because parse happens after func map registration)
-- [ ] Usage documented in godoc: `{{template "forge:head" .Head}}`
-
-#### 2.3 — parseTemplates() on Module[T] (Amendment A6 core)
-
-- [ ] Add to `Module[T]` struct: `templateDir string`, `templateRequired bool`, `tplList *template.Template`, `tplShow *template.Template`, `tplMu sync.RWMutex`, `siteName string`
-- [ ] Add `case templatesOption` in `NewModule` option loop: set `templateDir`, `templateRequired`
-- [ ] Add `siteName string` — extracted from `baseURL` hostname via `net/url.Parse` in `setSitemap` equivalent; set during `App.Content()` wiring via a new `setSiteName(string)` method
-- [ ] Implement `parseTemplates() error` on `*Module[T]`:
-  - Skip if `templateDir == ""`
-  - Parse `{dir}/list.html` with `template.New("list").Funcs(TemplateFuncMap()).ParseFiles(...)`
-  - Register `forge:head` via `tplList.New("forge:head").Parse(forgeHeadTmpl)`
-  - Repeat for `{dir}/show.html`
-  - Required mode: return wrapped error if file absent
-  - Optional mode: return `nil` if file absent; set `tplList`/`tplShow` only when found
-  - Acquire `tplMu.Lock()` before swapping pointers
-
-#### 2.4 — HTML render in show/list handlers (Amendment A6 render path)
-
-- [ ] In `contentNegotiator`: set `html = true` when `m.tplShow != nil || m.tplList != nil`
-- [ ] In `showHandler` HTML branch: `tplMu.RLock()`, execute `tplShow` with `NewTemplateData(ctx, item, head, m.siteName)`, `Content-Type: text/html; charset=utf-8`
-- [ ] In `listHandler` HTML branch: same pattern with `tplList` and `[]T` content
-- [ ] Template execution error → `WriteError(w, r, ErrInternal)` (500)
-
-#### 2.5 — Error page wiring (Amendment A7)
-
-- [ ] Add `var errorTemplateLookup func(status int) *template.Template` to `errors.go`
-- [ ] In `respond()` HTML path: if `errorTemplateLookup != nil`, call it; if template non-nil, execute with `struct{ Status int; Message string; RequestID string }{}` and return
-- [ ] Fall through to inline `htmlErrorPage` constant when lookup nil or template nil
-
-#### 2.6 — Startup parse wiring (Amendment A8)
-
-- [ ] Define `type templateParser interface { parseTemplates() error }` in `templates.go`
-- [ ] Add `templateModules []templateParser` to `App` struct in `forge.go`
-- [ ] In `App.Content()`: after `Register()`, if module implements `templateParser`, append
-- [ ] In `App.Content()`: if module implements `interface{ setSiteName(string) }`, call with hostname from `cfg.BaseURL`
-- [ ] In `App.Run()`: iterate `templateModules`, call `parseTemplates()`; return error on first failure (fail-fast, Amendment P3)
-- [ ] In `App.Handler()`: set `errorTemplateLookup` to a closure over `templateModules` that searches for `errors/{status}.html` in each module's `templateDir`
-
-#### 2.7 — Tests
-
-- [ ] `TestTemplates_missingList` — required mode, list.html absent → error from parseTemplates
-- [ ] `TestTemplates_missingShow` — required mode, show.html absent → error from parseTemplates
-- [ ] `TestTemplatesOptional_missingDir` — optional mode, no dir → nil error, tplList/tplShow nil
-- [ ] `TestTemplates_forgeHeadRegistered` — parsed template set contains "forge:head" template
-- [ ] `TestTemplates_noIndexMeta` — execute show template with `Head{NoIndex: true}` → `noindex` in output
-- [ ] `TestTemplates_errorPage_custom` — `errors/404.html` present → executed by `errorTemplateLookup`
-- [ ] `TestTemplates_errorPage_fallback` — no template dir → inline HTML fallback
-
-#### Verification
-
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestTemplates ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken
+### Step 2 — templates.go ✅ 2026-03-05
+<!-- collapsed — see git log for detail -->
 
 ---
 
