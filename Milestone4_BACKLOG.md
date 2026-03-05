@@ -78,5 +78,5 @@ integration test suite covering the largest gaps in existing coverage.
 - [x] CSRF middleware + `forge_csrf_token` helper → token round-trip tested
 - [x] `TemplatesWatch` deferred and documented with reason + target milestone
 - [x] `forge_llms_entries` ships as documented no-op stub
-- [ ] Post-milestone DRY/performance/security review completed
-- [ ] Retrospective completed
+- [x] Post-milestone DRY/performance/security review completed
+- [x] Retrospective completed
