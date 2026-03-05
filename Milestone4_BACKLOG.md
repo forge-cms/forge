@@ -12,7 +12,7 @@ integration test suite covering the largest gaps in existing coverage.
 |------|------|--------|-----------|
 | 1 | templatedata.go | ✅ Done | 2026-03-05 |
 | 2 | templates.go | ✅ Done | 2026-03-05 |
-| 3 | templatehelpers.go | 🔲 Not started | — |
+| 3 | templatehelpers.go | ✅ Done | 2026-03-05 |
 | 4 | integration_test.go | 🔲 Not started | — |
 
 ---
@@ -50,86 +50,8 @@ integration test suite covering the largest gaps in existing coverage.
 
 ## Layer 3 — Template helpers (depends on templates.go)
 
-### Step 3 — templatehelpers.go
-
-**Depends on:** templates.go, head.go (SchemaFor, Excerpt), auth.go (CSRFCookieName), schema.go
-**Decisions:** Decision 8 (llms.txt — stub only)
-**Files:** `templatehelpers.go`, `templatehelpers_test.go`
-
-#### 3.1 — forge_meta
-
-- [ ] `func forgeMeta(head Head, content any) template.HTML` — calls `SchemaFor(head, content)`, returns `template.HTML`
-- [ ] Godoc: `{{forge_meta .Head .Content}}`
-
-#### 3.2 — forge_date
-
-- [ ] `func forgeDate(t time.Time) string` — format `"2 January 2006"`; zero time returns `""`
-- [ ] Godoc: `{{.Content.PublishedAt | forge_date}}`
-
-#### 3.3 — forge_markdown
-
-- [ ] `func forgeMarkdown(s string) template.HTML` — stdlib-only Markdown converter:
-  - `#`–`######` headings → `<h1>`–`<h6>`
-  - `**text**` → `<strong>`
-  - `*text*` → `<em>`
-  - `` `code` `` → `<code>`
-  - `[text](url)` → `<a href="url">text</a>`
-  - `- ` / `* ` list items → `<ul><li>` blocks
-  - Blank-line paragraph separation → `<p>` wrapping
-  - Process in correct order: links before bold/italic (avoids partial matches)
-- [ ] Returns `template.HTML` (not double-escaped)
-- [ ] Godoc: `{{.Content.Body | forge_markdown}}`
-
-#### 3.4 — forge_excerpt
-
-- [ ] `func forgeExcerpt(maxLen int, s string) template.HTML` — wraps `Excerpt(s, maxLen)`
-- [ ] Pipeline order: `maxLen` is first arg (partial application), `s` comes from pipe
-- [ ] Returns `template.HTML`
-- [ ] Godoc: `{{.Content.Body | forge_excerpt 120}}`
-
-#### 3.5 — forge_csrf_token
-
-- [ ] `func forgeCSRFToken(r *http.Request) template.HTML` — reads `r.Cookie(CSRFCookieName)`
-- [ ] When present: returns `template.HTML` of `<input type="hidden" name="csrf_token" value="{token}">`
-- [ ] When absent: returns `template.HTML("")`
-- [ ] Godoc: `{{forge_csrf_token .Request}}`
-
-#### 3.6 — forge_llms_entries (deferred stub)
-
-- [ ] `func forgeLLMSEntries() template.HTML { return "" }`
-- [ ] Godoc comment: `// TODO(ai): implement in Milestone 5 — requires ai.go for AIDoc URL generation. Returns empty string until then.`
-
-#### 3.7 — TemplateFuncMap
-
-- [ ] `func TemplateFuncMap() template.FuncMap` — returns map with all six helpers
-- [ ] Keys: `"forge_meta"`, `"forge_date"`, `"forge_markdown"`, `"forge_excerpt"`, `"forge_csrf_token"`, `"forge_llms_entries"`
-- [ ] Godoc the function
-
-#### 3.8 — Tests
-
-- [ ] `TestForgeDate_formatted` — non-zero time formats correctly
-- [ ] `TestForgeDate_zero` — zero time returns `""`
-- [ ] `TestForgeMeta_withSchema` — Article type → `<script type="application/ld+json">` present
-- [ ] `TestForgeMeta_noSchema` — empty Type → empty string
-- [ ] `TestForgeMarkdown_heading` — `# Title` → `<h1>Title</h1>`
-- [ ] `TestForgeMarkdown_bold` — `**text**` → `<strong>text</strong>`
-- [ ] `TestForgeMarkdown_link` — `[text](url)` → `<a href="url">text</a>`
-- [ ] `TestForgeMarkdown_list` — `- item` → `<ul><li>item</li></ul>`
-- [ ] `TestForgeMarkdown_paragraph` — blank-line separation → `<p>` blocks
-- [ ] `TestForgeExcerpt_pipeline` — truncates at word boundary
-- [ ] `TestForgeCSRFToken_present` — cookie present → `<input>` tag returned
-- [ ] `TestForgeCSRFToken_absent` — no cookie → empty string
-- [ ] `TestTemplateFuncMap_keys` — all six keys present in map
-- [ ] `BenchmarkForgeMarkdown` — 500-word body baseline
-
-#### Verification
-
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestForge|TestTemplate|BenchmarkForge ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken
+### Step 3 — templatehelpers.go ✅ 2026-03-05
+<!-- collapsed — see git log for detail -->
 
 ---
 

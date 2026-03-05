@@ -141,7 +141,7 @@ func parseOneTemplate(path string, required bool) (*template.Template, error) {
 		return nil, nil
 	}
 
-	tpl, err := template.New(filepath.Base(path)).ParseFiles(path)
+	tpl, err := template.New(filepath.Base(path)).Funcs(TemplateFuncMap()).ParseFiles(path)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", filepath.Base(path), err)
 	}

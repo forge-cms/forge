@@ -1,0 +1,152 @@
+package forge
+
+import (
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestForgeDate_formatted(t *testing.T) {
+	ts := time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC)
+	got := forgeDate(ts)
+	want := "5 March 2026"
+	if got != want {
+		t.Errorf("forgeDate = %q, want %q", got, want)
+	}
+}
+
+func TestForgeDate_zero(t *testing.T) {
+	got := forgeDate(time.Time{})
+	if got != "" {
+		t.Errorf("forgeDate(zero) = %q, want empty string", got)
+	}
+}
+
+func TestForgeMeta_withSchema(t *testing.T) {
+	h := Head{Title: "Test Article", Type: Article}
+	got := string(forgeMeta(h, nil))
+	if !strings.Contains(got, `<script type="application/ld+json">`) {
+		t.Errorf("forgeMeta(Article) should contain JSON-LD script tag, got: %s", got)
+	}
+	if !strings.Contains(got, "Article") {
+		t.Errorf("forgeMeta(Article) should contain schema type, got: %s", got)
+	}
+}
+
+func TestForgeMeta_noSchema(t *testing.T) {
+	got := string(forgeMeta(Head{}, nil))
+	if got != "" {
+		t.Errorf("forgeMeta(empty Head) = %q, want empty string", got)
+	}
+}
+
+func TestForgeMarkdown_heading(t *testing.T) {
+	got := string(forgeMarkdown("# Title"))
+	if got != "<h1>Title</h1>" {
+		t.Errorf("heading: got %q, want %q", got, "<h1>Title</h1>")
+	}
+}
+
+func TestForgeMarkdown_bold(t *testing.T) {
+	got := string(forgeMarkdown("**important**"))
+	want := "<p><strong>important</strong></p>"
+	if got != want {
+		t.Errorf("bold: got %q, want %q", got, want)
+	}
+}
+
+func TestForgeMarkdown_link(t *testing.T) {
+	got := string(forgeMarkdown("[click here](https://example.com)"))
+	want := `<p><a href="https://example.com">click here</a></p>`
+	if got != want {
+		t.Errorf("link: got %q, want %q", got, want)
+	}
+}
+
+func TestForgeMarkdown_list(t *testing.T) {
+	got := string(forgeMarkdown("- alpha\n- beta"))
+	want := "<ul><li>alpha</li><li>beta</li></ul>"
+	if got != want {
+		t.Errorf("list: got %q, want %q", got, want)
+	}
+}
+
+func TestForgeMarkdown_paragraph(t *testing.T) {
+	input := "first paragraph\n\nsecond paragraph"
+	got := string(forgeMarkdown(input))
+	if !strings.Contains(got, "<p>first paragraph</p>") {
+		t.Errorf("paragraph: missing first <p>, got: %s", got)
+	}
+	if !strings.Contains(got, "<p>second paragraph</p>") {
+		t.Errorf("paragraph: missing second <p>, got: %s", got)
+	}
+}
+
+func TestForgeExcerpt_pipeline(t *testing.T) {
+	body := "The quick brown fox jumps over the lazy dog and then some more words follow here"
+	got := string(forgeExcerpt(20, body))
+	if len([]rune(got)) > 25 { // 20 + "…" + some tolerance
+		t.Errorf("excerpt too long: %q", got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("excerpt should end with ellipsis, got: %q", got)
+	}
+}
+
+func TestForgeCSRFToken_present(t *testing.T) {
+	r2 := httptest.NewRequest("GET", "/", nil)
+	r2.Header.Set("Cookie", CSRFCookieName+"=test-token-abc")
+
+	got := string(forgeCSRFToken(r2))
+	if !strings.Contains(got, `<input type="hidden"`) {
+		t.Errorf("expected hidden input, got: %s", got)
+	}
+	if !strings.Contains(got, "test-token-abc") {
+		t.Errorf("expected token value in input, got: %s", got)
+	}
+	if !strings.Contains(got, `name="csrf_token"`) {
+		t.Errorf("expected name=csrf_token, got: %s", got)
+	}
+}
+
+func TestForgeCSRFToken_absent(t *testing.T) {
+	r := httptest.NewRequest("GET", "/", nil)
+	got := forgeCSRFToken(r)
+	if got != "" {
+		t.Errorf("absent cookie: expected empty string, got: %q", got)
+	}
+}
+
+func TestTemplateFuncMap_keys(t *testing.T) {
+	fm := TemplateFuncMap()
+	required := []string{
+		"forge_meta",
+		"forge_date",
+		"forge_markdown",
+		"forge_excerpt",
+		"forge_csrf_token",
+		"forge_llms_entries",
+	}
+	for _, key := range required {
+		if _, ok := fm[key]; !ok {
+			t.Errorf("TemplateFuncMap missing key %q", key)
+		}
+	}
+	if len(fm) != len(required) {
+		t.Errorf("TemplateFuncMap has %d keys, want %d", len(fm), len(required))
+	}
+}
+
+var benchMarkdownBody = strings.Repeat(
+	"# Section Title\n\nThis is a paragraph with **bold** and *italic* text and a "+
+		"[link](https://example.com). It also has `code` inline.\n\n"+
+		"- Item one\n- Item two\n- Item three\n\n",
+	20) // ~500 words
+
+func BenchmarkForgeMarkdown(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = forgeMarkdown(benchMarkdownBody)
+	}
+}
