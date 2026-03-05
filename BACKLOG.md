@@ -15,7 +15,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M1 | Core (v0.1.0) | ✅ Done |
 | M2 | App Bootstrap (v0.2.0) | ✅ Done |
 | M3 | SEO & Head (v0.3.0) | ✅ Done |
-| M4 | Templates & Rendering (v0.4.0) | 🔲 Not started |
+| M4 | Templates & Rendering (v0.4.0) | ✅ Done |
 | M5 | Social & AI (v0.5.0) | 🔲 Not started |
 | M6 | Cookies & Compliance (v0.6.0) | 🔲 Not started |
 | M7 | Redirects (v0.7.0) | 🔲 Not started |
@@ -104,12 +104,12 @@ HTML rendering, template helpers, content negotiation.
 | 1 | templatedata.go | ✅ Done | 2026-03-05 |
 | 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | ✅ Done | 2026-03-05 |
-| 4 | integration_test.go | 🔲 Not started | — |
+| 4 | integration_test.go | ✅ Done | 2026-03-05 |
 
 - [x] Step 1 — `templatedata.go`: TemplateData[T] struct, NewTemplateData constructor — Content, Head, User, Request, SiteName
 - [x] Step 2 — `templates.go`: Templates/TemplatesOptional options, forge:head partial, startup parse, HTML render path, error pages (Amendments A6/A7/A8)
 - [x] Step 3 — `templatehelpers.go`: forge_meta, forge_date, forge_markdown, forge_excerpt, forge_csrf_token, forge_llms_entries (stub)
-- [ ] Step 4 — `integration_test.go`: full HTML render cycle, forge:head, error pages, CSRF, App-level SEO/sitemap gaps
+- [x] Step 4 — `integration_test.go`: full HTML render cycle, forge:head, error pages, CSRF, App-level SEO/sitemap gaps
 
 ---
 

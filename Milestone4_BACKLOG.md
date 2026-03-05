@@ -13,7 +13,7 @@ integration test suite covering the largest gaps in existing coverage.
 | 1 | templatedata.go | ✅ Done | 2026-03-05 |
 | 2 | templates.go | ✅ Done | 2026-03-05 |
 | 3 | templatehelpers.go | ✅ Done | 2026-03-05 |
-| 4 | integration_test.go | 🔲 Not started | — |
+| 4 | integration_test.go | ✅ Done | 2026-03-05 |
 
 ---
 
@@ -57,73 +57,26 @@ integration test suite covering the largest gaps in existing coverage.
 
 ## Layer 4 — Integration tests (depends on all M4 files)
 
-### Step 4 — integration_test.go
-
-**Depends on:** templatedata.go, templates.go, templatehelpers.go, module.go, forge.go, errors.go, middleware.go
-**Decisions:** All M4 decisions
-**Files:** `integration_test.go` only
-
-#### 4.1 — HTML render cycle
-
-- [ ] `TestIntegration_showHTML` — full App request → `<title>` in body, `text/html` content-type
-- [ ] `TestIntegration_listHTML` — list route, Accept text/html → 200
-- [ ] `TestIntegration_json_unaffected` — JSON still works on same route after Templates registered
-- [ ] `TestIntegration_htmlFallback_noTemplates` — no Templates option → Accept text/html → 406
-
-#### 4.2 — forge:head correctness
-
-- [ ] `TestIntegration_forgeHead_noIndex` — `Head.NoIndex = true` → `noindex` in rendered output
-- [ ] `TestIntegration_forgeHead_canonical` — `Head.Canonical` non-empty → `<link rel="canonical">` present
-- [ ] `TestIntegration_forgeHead_jsonLD` — `Head.Type = "Article"` → JSON-LD `<script>` in output
-
-#### 4.3 — Error pages
-
-- [ ] `TestIntegration_errorPage_custom` — `errors/404.html` in tmpdir → rendered on 404
-- [ ] `TestIntegration_errorPage_fallback` — no template → inline fallback HTML contains status code
-
-#### 4.4 — CSRF (existing gap in middleware_test.go)
-
-- [ ] `TestIntegration_csrf_tokenInForm` — CSRF middleware + forge_csrf_token helper → token in `<input>`
-- [ ] `TestIntegration_csrf_rejectMissing` — POST without X-CSRF-Token header → 403
-
-#### 4.5 — Existing App-level gaps
-
-- [ ] `TestIntegration_seo_robotsTxt` — `App.SEO(&RobotsConfig{})` + `App.Handler()` → GET /robots.txt → 200
-- [ ] `TestIntegration_sitemap_index` — module with `SitemapConfig{}` → GET /sitemap.xml → 200 after Handler()
-
-#### 4.6 — TemplateData correctness
-
-- [ ] `TestIntegration_templateData_user` — authenticated request → `TemplateData.User.ID` non-empty in template
-- [ ] `TestIntegration_templateData_head` — `HeadFunc` return value reflected in rendered `<title>`
-
-#### Verification
-
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestIntegration ./...` — all green
-- [ ] `go test -count=1 ./...` — full suite green
-- [ ] `BACKLOG.md` + `Milestone4_BACKLOG.md` updated — M4 row ✅
-- [ ] `ARCHITECTURE.md` updated — M4 files in Implemented, removed from Planned
-- [ ] `README.md` — no examples broken
+### Step 4 — integration_test.go ✅ 2026-03-05
+<!-- collapsed — see git log for detail -->
 
 ---
 
 ## Completion criteria for Milestone 4
 
-- [ ] `go build ./...` — clean
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — nothing
-- [ ] `go test ./...` — all green
-- [ ] All exported symbols have godoc
-- [ ] `Accept: text/html` on a module with `Templates` registered → full HTML with `<title>` and `forge:head`
-- [ ] `Accept: application/json` on same route still returns JSON
-- [ ] `Accept: text/html` on module without `Templates` → 406
-- [ ] Missing template at startup → `App.Run()` returns error immediately
-- [ ] `forge:head` partial renders `noindex` meta for non-Published content (Decision 14)
-- [ ] `WriteError` renders custom `templates/errors/{status}.html` when present
-- [ ] CSRF middleware + `forge_csrf_token` helper → token round-trip tested
-- [ ] `TemplatesWatch` deferred and documented with reason + target milestone
-- [ ] `forge_llms_entries` ships as documented no-op stub
+- [x] `go build ./...` — clean
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — nothing
+- [x] `go test ./...` — all green
+- [x] All exported symbols have godoc
+- [x] `Accept: text/html` on a module with `Templates` registered → full HTML with `<title>` and `forge:head`
+- [x] `Accept: application/json` on same route still returns JSON
+- [x] `Accept: text/html` on module without `Templates` → 406
+- [x] Missing template at startup → `App.Run()` returns error immediately
+- [x] `forge:head` partial renders `noindex` meta for non-Published content (Decision 14)
+- [x] `WriteError` renders custom `templates/errors/{status}.html` when present
+- [x] CSRF middleware + `forge_csrf_token` helper → token round-trip tested
+- [x] `TemplatesWatch` deferred and documented with reason + target milestone
+- [x] `forge_llms_entries` ships as documented no-op stub
 - [ ] Post-milestone DRY/performance/security review completed
 - [ ] Retrospective completed
