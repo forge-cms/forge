@@ -161,38 +161,11 @@ func nodeStatusOf(v any) Status {
 	return rv.FieldByIndex(f.status).Interface().(Status)
 }
 
-// nodeSlugOf returns the Slug field of v.
-func nodeSlugOf(v any) string {
-	rv := elemValue(v)
-	f := getNodeFields(rv.Type())
-	return rv.FieldByIndex(f.slug).String()
-}
-
 // nodeIDOf returns the ID field of v.
 func nodeIDOf(v any) string {
 	rv := elemValue(v)
 	f := getNodeFields(rv.Type())
 	return rv.FieldByIndex(f.id).String()
-}
-
-// setNodeID sets the ID field on the pointed-to struct. v must be a pointer.
-func setNodeID(v any, id string) {
-	rv := reflect.ValueOf(v)
-	for rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
-	}
-	f := getNodeFields(rv.Type())
-	rv.FieldByIndex(f.id).SetString(id)
-}
-
-// setNodeSlug sets the Slug field on the pointed-to struct. v must be a pointer.
-func setNodeSlug(v any, slug string) {
-	rv := reflect.ValueOf(v)
-	for rv.Kind() == reflect.Ptr {
-		rv = rv.Elem()
-	}
-	f := getNodeFields(rv.Type())
-	rv.FieldByIndex(f.slug).SetString(slug)
 }
 
 // autoSlugCache stores the index path of the slug-source field per struct type.
@@ -654,7 +627,7 @@ func (m *Module[T]) newItemPtr() (reflect.Value, reflect.Type) {
 }
 
 // ptrToT converts a *struct reflect.Value back into T.
-func ptrToT[T any](pv reflect.Value, proto reflect.Type) T {
+func ptrToT[T any](pv reflect.Value, _ reflect.Type) T {
 	var item T
 	rv := reflect.ValueOf(&item).Elem()
 	if rv.Kind() == reflect.Ptr {

@@ -56,7 +56,7 @@ func seedPost(t *testing.T, repo Repository[*testPost], title string, status Sta
 
 // newTestModule creates a Module[*testPost] backed by the given repo.
 func newTestModule(repo Repository[*testPost], opts ...Option) *Module[*testPost] {
-	all := append([]Option{Repo[*testPost](repo)}, opts...)
+	all := append([]Option{Repo(repo)}, opts...)
 	return NewModule((*testPost)(nil), all...)
 }
 
@@ -306,7 +306,7 @@ func TestModuleContentNegotiationMarkdown(t *testing.T) {
 	title := "Markdown Post"
 	p := seedMDPost(t, repo, title, Published)
 
-	m := NewModule((*testMDPost)(nil), Repo[*testMDPost](repo))
+	m := NewModule((*testMDPost)(nil), Repo(repo))
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/testmdposts/"+p.Slug, nil)
 	r.Header.Set("Accept", "text/markdown")
@@ -528,7 +528,7 @@ func BenchmarkModuleRequest(b *testing.B) {
 	_ = repo.Save(context.Background(), p)
 
 	m := NewModule((*testPost)(nil),
-		Repo[*testPost](repo),
+		Repo(repo),
 		Cache(5*time.Minute),
 	)
 

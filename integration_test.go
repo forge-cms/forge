@@ -36,7 +36,7 @@ func intTmpDir(t *testing.T, listTpl, showTpl string) string {
 func intSetup(t *testing.T, moduleOpts ...Option) (*App, http.Handler, *MemoryRepo[*testPost]) {
 	t.Helper()
 	repo := NewMemoryRepo[*testPost]()
-	opts := append([]Option{Repo[*testPost](repo), At("/posts")}, moduleOpts...)
+	opts := append([]Option{Repo(repo), At("/posts")}, moduleOpts...)
 	m := NewModule((*testPost)(nil), opts...)
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
@@ -71,7 +71,7 @@ func TestIntegration_showHTML(t *testing.T) {
 	)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{Title: "Show: " + p.Title}
 		}),
 	)
@@ -162,7 +162,7 @@ func TestIntegration_forgeHead_noIndex(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, headTpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, _ *testPost) Head {
+		HeadFunc(func(_ Context, _ *testPost) Head {
 			return Head{Title: "Hidden", NoIndex: true}
 		}),
 	)
@@ -185,7 +185,7 @@ func TestIntegration_forgeHead_canonical(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, headTpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{Title: p.Title, Canonical: "https://example.com/posts/" + p.Slug}
 		}),
 	)
@@ -213,7 +213,7 @@ func TestIntegration_forgeHead_jsonLD(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, jsonLDTpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{Title: p.Title, Type: Article}
 		}),
 	)
@@ -349,7 +349,7 @@ func TestIntegration_seo_robotsTxt(t *testing.T) {
 		Secret:  []byte("16bytessecretkey"),
 	}))
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"))
 	appForSEO.Content(m)
 	appForSEO.SEO(&RobotsConfig{})
 	h := appForSEO.Handler()
@@ -370,7 +370,7 @@ func TestIntegration_sitemap_index(t *testing.T) {
 		Secret:  []byte("16bytessecretkey"),
 	}))
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"), SitemapConfig{})
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"), SitemapConfig{})
 	app.Content(m)
 	h := app.Handler()
 
@@ -410,7 +410,7 @@ func TestIntegration_templateData_head(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, headTitleTpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{Title: "HeadFunc: " + p.Title}
 		}),
 	)

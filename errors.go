@@ -187,7 +187,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 var errorTemplateLookup func(status int) *template.Template
 
 // respond writes a JSON or minimal HTML error response.
-func respond(w http.ResponseWriter, r *http.Request, status int, requestID string, err Error, wantsHTML bool) {
+func respond(w http.ResponseWriter, _ *http.Request, status int, requestID string, err Error, wantsHTML bool) {
 	if wantsHTML {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(status)

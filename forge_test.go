@@ -200,7 +200,7 @@ func TestApp_Handle(t *testing.T) {
 
 func TestApp_Content_list(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule[*testPost]((*testPost)(nil), Repo[*testPost](repo))
+	m := NewModule((*testPost)(nil), Repo(repo))
 
 	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
 	app.Content(m)
@@ -219,7 +219,7 @@ func TestApp_Content_list(t *testing.T) {
 
 func TestApp_Content_create(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule[*testPost]((*testPost)(nil), Repo[*testPost](repo))
+	m := NewModule((*testPost)(nil), Repo(repo))
 
 	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
 	app.Content(m)
@@ -426,7 +426,7 @@ func BenchmarkApp_Handler(b *testing.B) {
 		}
 	}
 
-	m := NewModule[*testPost]((*testPost)(nil), Repo[*testPost](repo))
+	m := NewModule((*testPost)(nil), Repo(repo))
 	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
 	app.Content(m)
 	h := app.Handler()

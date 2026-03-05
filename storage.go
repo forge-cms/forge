@@ -53,26 +53,6 @@ func dbFields(t reflect.Type) []dbField {
 	return fields
 }
 
-// goFieldCache stores map[string]int (Go field name → index) keyed by reflect.Type.
-// Used by MemoryRepo to locate fields such as ID and Slug by their Go names.
-var goFieldCache sync.Map
-
-// goFields returns a cached Go-name → field-index map for struct type t.
-// Only maps direct (non-embedded) exported fields.
-func goFields(t reflect.Type) map[string]int {
-	if v, ok := goFieldCache.Load(t); ok {
-		return v.(map[string]int)
-	}
-	m := make(map[string]int, t.NumField())
-	for i := 0; i < t.NumField(); i++ {
-		if f := t.Field(i); f.IsExported() {
-			m[f.Name] = i
-		}
-	}
-	goFieldCache.Store(t, m)
-	return m
-}
-
 // goFieldPathKey is the cache key for [goFieldPath].
 type goFieldPathKey struct {
 	t    reflect.Type

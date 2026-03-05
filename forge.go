@@ -198,7 +198,7 @@ func (a *App) Content(v any, opts ...Option) {
 		}
 		return
 	}
-	m := NewModule[any](v, opts...)
+	m := NewModule(v, opts...)
 	m.Register(a.mux)
 }
 

@@ -54,8 +54,8 @@ func newFullTestApp(t *testing.T, postOpts []Option, pageOpts []Option) *fullTes
 	postRepo := NewMemoryRepo[*testPost]()
 	pageRepo := NewMemoryRepo[*testMDPost]()
 
-	pOpts := append([]Option{Repo[*testPost](postRepo), At("/posts")}, postOpts...)
-	gOpts := append([]Option{Repo[*testMDPost](pageRepo), At("/pages")}, pageOpts...)
+	pOpts := append([]Option{Repo(postRepo), At("/posts")}, postOpts...)
+	gOpts := append([]Option{Repo(pageRepo), At("/pages")}, pageOpts...)
 
 	m1 := NewModule((*testPost)(nil), pOpts...)
 	m2 := NewModule((*testMDPost)(nil), gOpts...)
@@ -177,7 +177,7 @@ func TestFull_multiModuleRouting(t *testing.T) {
 // coexists with module routes.
 func TestFull_customHandleRoute(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -226,7 +226,7 @@ func TestFull_globalMiddlewareOrder(t *testing.T) {
 	}
 
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -257,7 +257,7 @@ func TestFull_globalMiddlewareOrder(t *testing.T) {
 // rejects unauthenticated requests with 403.
 func TestFull_roleCheck_denies(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -291,7 +291,7 @@ func TestFull_roleCheck_denies(t *testing.T) {
 // passes the inline middleware guard.
 func TestFull_roleCheck_allows(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -329,7 +329,7 @@ func TestFull_signalOnCreate(t *testing.T) {
 	var fired atomic.Int32
 	repo := NewMemoryRepo[*testPost]()
 	m := NewModule((*testPost)(nil),
-		Repo[*testPost](repo),
+		Repo(repo),
 		At("/posts"),
 		On(AfterCreate, func(_ Context, _ *testPost) error {
 			fired.Add(1)
@@ -369,7 +369,7 @@ func TestFull_signalOnDelete(t *testing.T) {
 	p := fullSeedPost(t, repo, "delete-me", "Delete Me")
 
 	m := NewModule((*testPost)(nil),
-		Repo[*testPost](repo),
+		Repo(repo),
 		At("/posts"),
 		On(AfterDelete, func(_ Context, _ *testPost) error {
 			fired.Add(1)
@@ -410,7 +410,7 @@ func TestFull_signalCrossModuleIsolation(t *testing.T) {
 	pageRepo := NewMemoryRepo[*testMDPost]()
 
 	postsMod := NewModule((*testPost)(nil),
-		Repo[*testPost](postRepo),
+		Repo(postRepo),
 		At("/posts"),
 		On(AfterCreate, func(_ Context, _ *testPost) error {
 			postsFired.Add(1)
@@ -418,7 +418,7 @@ func TestFull_signalCrossModuleIsolation(t *testing.T) {
 		}),
 	)
 	pagesMod := NewModule((*testMDPost)(nil),
-		Repo[*testMDPost](pageRepo),
+		Repo(pageRepo),
 		At("/pages"),
 		On(AfterCreate, func(_ Context, _ *testMDPost) error {
 			pagesFired.Add(1)
@@ -505,7 +505,7 @@ func TestFull_htmlModule_templateFallback(t *testing.T) {
 	dir := intTmpDir(t, `<p>list: {{len .Content}} items</p>`, "")
 
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"), TemplatesOptional(dir))
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"), TemplatesOptional(dir))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -548,7 +548,7 @@ func TestFull_schemaForThroughTemplate(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, tpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{Title: p.Title, Type: Article}
 		}),
 	)
@@ -578,7 +578,7 @@ func TestFull_forgeMarkdownInTemplate(t *testing.T) {
 	pageDir := intTmpDir(t, `<p>list</p>`, tpl)
 
 	pageRepo := NewMemoryRepo[*testMDPost]()
-	m := NewModule((*testMDPost)(nil), Repo[*testMDPost](pageRepo), At("/pages"), Templates(pageDir))
+	m := NewModule((*testMDPost)(nil), Repo(pageRepo), At("/pages"), Templates(pageDir))
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
@@ -622,7 +622,7 @@ func TestFull_breadcrumbs(t *testing.T) {
 	dir := intTmpDir(t, `<p>list</p>`, tpl)
 	_, handler, repo := intSetup(t,
 		Templates(dir),
-		HeadFunc[*testPost](func(_ Context, p *testPost) Head {
+		HeadFunc(func(_ Context, p *testPost) Head {
 			return Head{
 				Title: p.Title,
 				Type:  Article,
@@ -660,7 +660,7 @@ func TestFull_breadcrumbs(t *testing.T) {
 // produces a robots.txt containing a Sitemap directive.
 func TestFull_sitemapAppendsInRobots(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
-	m := NewModule((*testPost)(nil), Repo[*testPost](repo), At("/posts"), SitemapConfig{})
+	m := NewModule((*testPost)(nil), Repo(repo), At("/posts"), SitemapConfig{})
 	app := New(MustConfig(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("16bytessecretkey"),
