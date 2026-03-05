@@ -25,9 +25,8 @@ app.Content(&BlogPost{},
         forge.Delete(forge.Editor),
     ),
     forge.Cache(5*time.Minute),
-    forge.SEO(forge.RichArticle),
-    forge.Social(forge.OpenGraph, forge.TwitterCard),
-    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
+    forge.Social(forge.OpenGraph, forge.TwitterCard), // — Milestone 5
+    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),        // — Milestone 5
     forge.Templates("templates/posts"),
 )
 
@@ -142,7 +141,6 @@ app.Run(":8080")
 - `PUT /posts/{slug}` — update (Author+)
 - `DELETE /posts/{slug}` — delete (Author+)
 - `GET /posts/sitemap.xml` — auto-generated, always fresh
-- `GET /llms.txt` — AI crawler index
 - Draft posts never visible to unauthenticated requests
 
 No boilerplate. No route registration. No sitemap library.
@@ -272,6 +270,8 @@ forge.Archived   // hidden from public, preserved in storage
 
 ### Scheduled publishing
 
+> 🔲 **Coming in Milestone 8** — the adaptive ticker and automatic `Scheduled → Published` transition are not yet implemented.
+
 Forge runs an internal ticker. No external cron needed.
 
 ```go
@@ -306,9 +306,14 @@ Higher roles inherit all permissions below them.
 ### Custom roles
 
 ```go
-app.Roles(
-    forge.Role("moderator").Below(forge.Editor).Above(forge.Author),
-    forge.Role("subscriber").Below(forge.Author).Above(forge.Guest),
+// Create custom roles inline with the hierarchy builder
+moderator := forge.NewRole("moderator", forge.RoleBelow(forge.Editor), forge.RoleAbove(forge.Author))
+subscriber := forge.NewRole("subscriber", forge.RoleBelow(forge.Author), forge.RoleAbove(forge.Guest))
+
+// Use anywhere a Role is accepted
+app.Content(&BlogPost{},
+    forge.At("/posts"),
+    forge.Auth(forge.Read(subscriber), forge.Write(moderator)),
 )
 ```
 
@@ -316,14 +321,14 @@ app.Roles(
 
 ```go
 // Accept bearer tokens (APIs, mobile clients)
-app.Auth(forge.BearerHMAC(secret))
+app.Use(forge.BearerHMAC(secret))
 
 // Accept cookie sessions (browser apps) — CSRF protection enabled automatically
-app.Auth(forge.CookieSession("forge_session", secret))
+app.Use(forge.CookieSession("forge_session", secret))
 
 // Accept both — first match wins
 // Use this for apps that serve both a browser UI and an API
-app.Auth(
+app.Use(
     forge.BearerHMAC(secret),
     forge.CookieSession("forge_session", secret),
 )
@@ -409,7 +414,6 @@ forge.Organization  // company / about pages
 
 ```go
 app.SEO(forge.SitemapConfig{
-    BaseURL:    "https://mysite.com",
     ChangeFreq: forge.Weekly,
     Priority:   0.8,
 })
@@ -432,6 +436,8 @@ app.SEO(forge.RobotsConfig{
 ---
 
 ## AI indexing
+
+> 🔲 **Coming in Milestone 5** — `/llms.txt`, AIDoc endpoints, and content negotiation for AI agents are not yet implemented.
 
 Forge is the first Go framework to treat AI indexing as a first-class feature.
 
@@ -509,6 +515,8 @@ No configuration. Forge handles negotiation automatically.
 
 ## Social sharing
 
+> 🔲 **Coming in Milestone 5** — `forge.Social()`, Open Graph, and Twitter Card rendering are not yet implemented.
+
 ```go
 func (p *BlogPost) Head() forge.Head {
     return forge.Head{
@@ -555,6 +563,8 @@ Forge renders in `<head>`:
 ---
 
 ## Cookies & compliance
+
+> 🔲 **Coming in Milestone 6** — typed cookie declarations, consent enforcement, and `/.well-known/cookies.json` are not yet implemented.
 
 Forge treats cookies as typed, declared, compliance-aware values.
 The category determines which API you can use — enforced at compile time.
@@ -822,7 +832,6 @@ Accept: text/plain        →  clean text (always available)
 app.Content(&BlogPost{},
     forge.At("/posts"),
     forge.Templates("templates/posts"),        // parsed at startup, fails fast if missing
-    // forge.TemplatesWatch("templates/posts"), // re-parses on file change (development)
     // forge.TemplatesOptional("templates/posts"), // no startup failure if missing
     // Forge looks for:
     //   templates/posts/list.html  →  GET /posts
@@ -934,6 +943,8 @@ id := ctx.RequestID()
 
 ## Redirects & content mobility
 
+> 🔲 **Coming in Milestone 7** — automatic redirect tracking, 410 Gone, and `/.well-known/redirects.json` are not yet implemented.
+
 Forge automatically tracks every URL a piece of content has ever had.
 Rename a slug, change a prefix, archive a post — inbound links and SEO
 rankings are preserved without any developer effort.
@@ -1017,7 +1028,6 @@ package main
 
 import (
     "os"
-    "net/http"
     "time"
 
     "github.com/forge-cms/forge"
@@ -1051,16 +1061,6 @@ func (a *Article) Head() forge.Head {
 
 func (a *Article) Markdown() string { return a.Body }
 
-var SessionCookie = forge.Cookie{
-    Name:     "session",
-    Category: forge.Necessary,
-    Duration: 24 * time.Hour,
-    HTTPOnly: true,
-    Secure:   true,
-    SameSite: http.SameSiteLaxMode,
-    Purpose:  "Authenticates the current user session.",
-}
-
 func main() {
     secret := []byte(os.Getenv("SECRET"))
 
@@ -1074,11 +1074,11 @@ func main() {
         forge.Recoverer(),
         forge.SecurityHeaders(),
         forge.MaxBodySize(1 << 20),
+        forge.BearerHMAC(secret),
+        forge.CookieSession("session", secret),
     )
 
-    app.Cookies(SessionCookie)
-    app.Auth(forge.BearerHMAC(secret), forge.CookieSession("session", secret))
-    app.SEO(forge.SitemapConfig{BaseURL: "https://mysite.com"})
+    app.SEO(forge.SitemapConfig{ChangeFreq: forge.Weekly, Priority: 0.8})
     app.SEO(forge.RobotsConfig{AIScraper: forge.AskFirst})
 
     app.Content(&Article{},
@@ -1089,9 +1089,8 @@ func main() {
             forge.Delete(forge.Editor),
         ),
         forge.Cache(10*time.Minute),
-        forge.SEO(forge.RichArticle),
-        forge.Social(forge.OpenGraph, forge.TwitterCard),
-        forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
+        forge.Social(forge.OpenGraph, forge.TwitterCard), // — Milestone 5
+        forge.AIIndex(forge.LLMsTxt, forge.AIDoc),        // — Milestone 5
         forge.Templates("templates/articles"),
         forge.On(forge.BeforeCreate, func(ctx forge.Context, a *Article) error {
             a.Author = ctx.User().Name
@@ -1103,12 +1102,15 @@ func main() {
 }
 ```
 
-**~80 lines. What you get:**
+**~70 lines. What you get:**
 
-Full CRUD · Role-based auth · Draft-safe lifecycle · Scheduled publishing  
-Structured data (JSON-LD) · Open Graph · Twitter Cards · AI indexing  
-Cookie compliance manifest · Event-driven sitemap · RSS feed  
-Content negotiation · Security headers · Graceful shutdown
+Full CRUD · Role-based auth · Draft-safe lifecycle  
+Structured data (JSON-LD) · Event-driven sitemap · Content negotiation  
+Security headers · Graceful shutdown
+
+*(Open Graph · Twitter Cards · AI indexing · RSS feed — Milestone 5)*  
+*(Cookie compliance manifest — Milestone 6)*  
+*(Scheduled publishing — Milestone 8)*
 
 ---
 

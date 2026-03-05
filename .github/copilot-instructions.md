@@ -122,6 +122,21 @@ Every step — without exception — follows this exact sequence:
 - Tick checkboxes in the backlog as each task is completed.
 - Run verification after implementation: `go build`, `go vet`, `gofmt`, `go test`.
 
+**Cross-milestone integration test rule:**
+Every milestone must include a final step that extends `integration_full_test.go`
+with new cross-milestone groups (G-numbered sequentially after the previous
+milestone's last group). Each new group must exercise the milestone's features
+in combination with at least one feature from a prior milestone. New groups are
+appended only — never replace or renumber existing groups.
+
+**README status badge rule:**
+Every milestone must include a step (or sub-task within the final integration step)
+that updates `README.md` section badges. Each README section that documents a
+feature has a milestone badge (`🔲 **Coming in Milestone N**` or `✅ **Available**`).
+When a milestone ships a feature, update its badge from `🔲 Coming in Milestone N`
+to `✅ **Available**` in the same commit. Never leave a badge pointing to a shipped
+milestone — it becomes a lie the moment the code merges.
+
 ### 4. Architecture and decision review
 - After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
 - Ask: does this implementation reveal a gap, ambiguity, or conflict?
@@ -245,12 +260,16 @@ One-line description of the milestone goal.
 - [ ] `go test -v -run Test{Name} ./...` — all green
 - [ ] `BACKLOG.md` — step table row and summary checkbox updated
 - [ ] `README.md` — no examples broken by this step
+- [ ] `README.md` — section status badges updated if this step ships a documented feature
+- [ ] `integration_full_test.go` — new cross-milestone groups added (final step of each milestone only)
 
 ---
 
 ## Completion criteria for Milestone {N}
 
 - [ ] Criterion 1
+- [ ] `integration_full_test.go` — new cross-milestone groups (G{N}+) added and all passing
+- [ ] `README.md` — all section badges updated to reflect features shipped in this milestone
 ...
 ```
 

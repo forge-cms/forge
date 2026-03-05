@@ -118,17 +118,19 @@ HTML rendering, template helpers, content negotiation.
 ## Milestone 5 — Social & AI (v0.5.0)
 
 Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
-**Detail:** Milestone5_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone5_BACKLOG.md](Milestone5_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | social.go | 🔲 Not started | — |
 | 2 | ai.go | 🔲 Not started | — |
 | 3 | feed.go | 🔲 Not started | — |
+| 4 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides
-- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, llms-full.txt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option — **Note:** `Markdownable` migrates here from `module.go` (planned move, not a breaking change in v0.x)
-- [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, Feed(Disabled) opt-out, signal-driven regeneration
+- [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides, forge:head OG/Twitter rendering
+- [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option, /llms.txt and /{slug}.aidoc endpoints — **Note:** `Markdownable` migrates here from `module.go` (Amendment A11)
+- [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, FeedDisabled opt-out, signal-driven regeneration
+- [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G9–G12 (Social+SEO, AI+content negotiation, RSS+signals, full M5 stack) + README badge updates
 
 ---
 
