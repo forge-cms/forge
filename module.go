@@ -3,6 +3,7 @@ package forge
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"reflect"
@@ -10,13 +11,6 @@ import (
 	"sync"
 	"time"
 )
-
-// — Markdownable ——————————————————————————————————————————————————————————
-
-// Markdownable is implemented by content types that render directly to Markdown.
-// When T implements Markdownable, [Module] serves text/markdown responses without
-// requiring forge.Templates to be configured.
-type Markdownable interface{ Markdown() string }
 
 // — contentNegotiator —————————————————————————————————————————————————————
 
@@ -275,8 +269,12 @@ type Module[T any] struct {
 
 	sitemapCfg   *SitemapConfig  // nil when no SitemapConfig option given
 	sitemapStore *SitemapStore   // set by App.Content via setSitemap
-	baseURL      string          // set by App.Content via setSitemap
+	baseURL      string          // set by App.Content via setSitemap or setAIRegistry
 	social       []SocialFeature // nil when no Social option given
+
+	aiFeatures []AIFeature // nil when no AIIndex option given
+	llmsStore  *LLMsStore  // set by App.Content via setAIRegistry
+	withoutID  bool        // true when WithoutID() option was given
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -354,6 +352,10 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 			m.templateRequired = v.required
 		case socialOption:
 			m.social = v.features
+		case aiIndexOption:
+			m.aiFeatures = v.features
+		case withoutIDOption:
+			m.withoutID = true
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {
@@ -391,6 +393,7 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		}
 		dispatchAfter(ctx, m.signals[SitemapRegenerate], nil)
 		m.regenerateSitemap(ctx)
+		m.regenerateAI(ctx)
 	})
 
 	return m
@@ -427,6 +430,13 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 	if m.sitemapCfg != nil && m.sitemapStore != nil {
 		mux.Handle("GET "+m.prefix+"/sitemap.xml", m.sitemapStore.Handler())
 	}
+	if hasAIFeature(m.aiFeatures, AIDoc) {
+		aidoc := http.HandlerFunc(m.aiDocHandler)
+		if len(m.middlewares) > 0 {
+			aidoc = http.HandlerFunc(Chain(aidoc, m.middlewares...).ServeHTTP)
+		}
+		mux.Handle("GET "+m.prefix+"/{slug}/aidoc", aidoc)
+	}
 }
 
 // setSitemap is called by [App.Content] to inject the shared [SitemapStore]
@@ -434,6 +444,126 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 func (m *Module[T]) setSitemap(store *SitemapStore, baseURL string) {
 	m.sitemapStore = store
 	m.baseURL = baseURL
+}
+
+// setAIRegistry is called by [App.Content] to inject the shared [LLMsStore]
+// and application BaseURL into this module. Registers compact and/or full
+// feature flags on the store so [App.Handler] knows which endpoints to mount.
+func (m *Module[T]) setAIRegistry(store *LLMsStore, baseURL string) {
+	m.llmsStore = store
+	if m.baseURL == "" {
+		m.baseURL = baseURL
+	}
+	if hasAIFeature(m.aiFeatures, LLMsTxt) {
+		store.registerCompact()
+	}
+	if hasAIFeature(m.aiFeatures, LLMsTxtFull) {
+		store.registerFull()
+	}
+}
+
+// regenerateAI rebuilds compact and/or full AI fragments for this module and
+// stores them in the shared [LLMsStore]. Called by the debouncer after every
+// write event. Skips silently when prerequisites are absent.
+func (m *Module[T]) regenerateAI(ctx Context) {
+	if m.llmsStore == nil || m.repo == nil {
+		return
+	}
+	if !hasAIFeature(m.aiFeatures, LLMsTxt) && !hasAIFeature(m.aiFeatures, LLMsTxtFull) {
+		return
+	}
+	items, err := m.repo.FindAll(ctx, ListOptions{Status: []Status{Published}})
+	if err != nil {
+		return
+	}
+
+	type resolved struct {
+		item T
+		head Head
+		node Node
+	}
+	rs := make([]resolved, 0, len(items))
+	for _, item := range items {
+		var head Head
+		if m.headFunc != nil {
+			if fn, ok := m.headFunc.(func(Context, T) Head); ok {
+				head = fn(ctx, item)
+			}
+		}
+		rs = append(rs, resolved{item: item, head: head, node: extractNode(item)})
+	}
+
+	if hasAIFeature(m.aiFeatures, LLMsTxt) {
+		entries := make([]LLMsEntry, 0, len(rs))
+		for _, r := range rs {
+			if r.head.Title == "" {
+				continue
+			}
+			canonical := r.head.Canonical
+			if canonical == "" && r.node.Slug != "" {
+				canonical = strings.TrimRight(m.baseURL, "/") + m.prefix + "/" + r.node.Slug
+			}
+			var summary string
+			if as, ok := any(r.item).(AIDocSummary); ok {
+				summary = as.AISummary()
+			} else {
+				summary = Excerpt(r.head.Description, 120)
+			}
+			entries = append(entries, LLMsEntry{Title: r.head.Title, URL: canonical, Summary: summary})
+		}
+		m.llmsStore.SetCompact(m.prefix, entries)
+	}
+
+	if hasAIFeature(m.aiFeatures, LLMsTxtFull) {
+		var buf strings.Builder
+		for _, r := range rs {
+			if r.head.Title != "" {
+				fmt.Fprintf(&buf, "## %s\n", r.head.Title)
+			}
+			canonical := r.head.Canonical
+			if canonical == "" && r.node.Slug != "" {
+				canonical = strings.TrimRight(m.baseURL, "/") + m.prefix + "/" + r.node.Slug
+			}
+			if canonical != "" {
+				fmt.Fprintf(&buf, "URL: %s\n", canonical)
+			}
+			if !r.node.PublishedAt.IsZero() {
+				fmt.Fprintf(&buf, "Published: %s\n", r.node.PublishedAt.Format("2006-01-02"))
+			}
+			buf.WriteString("\n")
+			if md, ok := any(r.item).(Markdownable); ok {
+				buf.WriteString(md.Markdown())
+			} else if r.head.Description != "" {
+				buf.WriteString(r.head.Description)
+			}
+			buf.WriteString("\n---\n\n")
+		}
+		m.llmsStore.SetFull(m.prefix, buf.String())
+	}
+}
+
+// aiDocHandler serves GET /{prefix}/{slug}.aidoc.
+// Returns the AIDoc format for Published content; 404 for all other statuses.
+func (m *Module[T]) aiDocHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := ContextFrom(w, r)
+	slug := r.PathValue("slug")
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	if !isVisible(item, ctx.User()) {
+		WriteError(w, r, ErrNotFound)
+		return
+	}
+	var head Head
+	if m.headFunc != nil {
+		if fn, ok := m.headFunc.(func(Context, T) Head); ok {
+			head = fn(ctx, item)
+		}
+	}
+	n := extractNode(item)
+	renderAIDoc(w, head, n, item, m.withoutID)
 }
 
 // regenerateSitemap rebuilds the fragment sitemap for this module and stores

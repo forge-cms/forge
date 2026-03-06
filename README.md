@@ -453,6 +453,15 @@ app.Content(&BlogPost{},
 )
 ```
 
+Enable all three AI endpoints in one call:
+
+```go
+app.Content(&BlogPost{},
+    forge.At("/posts"),
+    forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull, forge.AIDoc),
+)
+```
+
 Override with a custom template by creating `templates/llms.txt`:
 
 ```
@@ -466,7 +475,7 @@ Override with a custom template by creating `templates/llms.txt`:
 
 ### AIDoc format
 
-Every Published content item gets a `/{slug}.aidoc` endpoint.
+Every Published content item gets a `/{prefix}/{slug}/aidoc` endpoint.
 Designed to be token-efficient and unambiguous for LLMs.
 
 ```
@@ -482,7 +491,6 @@ tags:     [intro, welcome]
 summary:  A short introduction to this blog.
 +++
 Full body content here — clean, stripped of HTML.
-No navigation. No ads. No noise. Just content.
 ```
 
 The format is designed for token efficiency:

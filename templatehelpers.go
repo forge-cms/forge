@@ -181,11 +181,40 @@ func forgeCSRFToken(r *http.Request) template.HTML {
 	))
 }
 
-// forgeLLMSEntries returns AI-doc entry links for use in llms.txt templates.
+// forgeLLMSEntries formats the entries from data for use in custom llms.txt
+// templates. data must be a [LLMsTemplateData] value or pointer; returns an
+// empty string for any other type.
 //
-// TODO(ai): implement in Milestone 5 — requires ai.go for AIDoc URL generation.
-// Returns empty string until then.
-func forgeLLMSEntries() template.HTML { return "" }
+// Each entry is formatted using the llmstxt.org compact convention:
+//
+//   - [Title](URL): Summary
+//
+// Template usage:
+//
+//	{{forge_llms_entries .}}
+func forgeLLMSEntries(data any) template.HTML {
+	var td LLMsTemplateData
+	switch v := data.(type) {
+	case LLMsTemplateData:
+		td = v
+	case *LLMsTemplateData:
+		if v == nil {
+			return ""
+		}
+		td = *v
+	default:
+		return ""
+	}
+	var buf strings.Builder
+	for _, e := range td.Entries {
+		if e.Summary != "" {
+			fmt.Fprintf(&buf, "- [%s](%s): %s\n", e.Title, e.URL, e.Summary)
+		} else {
+			fmt.Fprintf(&buf, "- [%s](%s)\n", e.Title, e.URL)
+		}
+	}
+	return template.HTML(buf.String())
+}
 
 // — TemplateFuncMap ————————————————————————————————————————————————————————
 
@@ -202,7 +231,7 @@ func forgeLLMSEntries() template.HTML { return "" }
 //	forge_excerpt      — truncated excerpt: {{.Body | forge_excerpt 160}}
 //	forge_csrf_token   — hidden CSRF input: {{forge_csrf_token .Request}}
 //	forge_rfc3339      — RFC 3339 timestamp: {{forge_rfc3339 .Head.Published}}
-//	forge_llms_entries — AI doc links (stub, Milestone 5): {{forge_llms_entries}}
+//	forge_llms_entries — AI doc entry links (LLMsTemplateData): {{forge_llms_entries .}}
 func TemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"forge_meta":         forgeMeta,

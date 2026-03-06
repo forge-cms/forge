@@ -302,13 +302,28 @@ while remaining unique and machine-identifiable.
 - *`---forge-aidoc-v1---`:* Longer delimiter, no functional advantage.
 
 **Consequences:**
-- Every Published content item gets `GET /{prefix}/{slug}.aidoc` automatically
-- Draft/Scheduled/Archived content returns 404 on `.aidoc` endpoints
+- Every Published content item gets `GET /{prefix}/{slug}/aidoc` automatically
+- Draft/Scheduled/Archived content returns 404 on `/aidoc` endpoints
 - `forge.RenderAIDoc(w, node)` is the internal rendering function
 - Required fields: `type`, `id`, `slug`, `title`, `created`, `modified`
 - Optional fields: `author`, `tags`, `summary` (populated if available on content type)
 - Content types can implement `AIDocSummary() string` for a custom summary field
 - The spec will live in `/spec/aidoc-v1.md` (created in Milestone 4 alongside the AIDoc implementation)
+
+### Amendment B — AIDoc URL uses path segment (A15)
+
+**Date:** 2026-03-06
+
+The URL pattern changed from `/{prefix}/{slug}.aidoc` to `/{prefix}/{slug}/aidoc`.
+
+Go’s `net/http.ServeMux` (Go 1.22+) requires that wildcard segments are complete
+path components separated by `/`. A pattern like `{slug}.aidoc` contains a
+wildcard followed by a literal suffix within the same segment — this is invalid
+and causes a panic at route registration time.
+
+`/{prefix}/{slug}/aidoc` is the Go-idiomatic equivalent: the slug is a full
+segment and `aidoc` is a separate literal segment. It is unambiguous, parses
+correctly, and does not conflict with any other module routes.
 
 ### Amendment A — Token optimisation (supersedes field list above)
 

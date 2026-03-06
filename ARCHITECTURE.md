@@ -27,6 +27,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-05 | Milestone 4 Step 4: `integration_test.go` implemented — 15 cross-component integration tests covering HTML render cycle, forge:head correctness, error pages (custom + fallback), CSRF token round-trip, App-level SEO/sitemap routing, and TemplateData field propagation |
 | 2026-03-05 | Milestone 4 Step 5: `integration_full_test.go` implemented — 19 cross-milestone integration tests (M1–M4): multi-module routing, global middleware order, role-gated access (HasRole + inline middleware), AfterCreate/AfterDelete/cross-module signal isolation, content negotiation across two module types, forge_meta/forge_markdown/BreadcrumbList through render, sitemap URL in robots.txt, error template first-match and fallthrough, TemplateData siteName and request URL |
 | 2026-03-06 | Milestone 5 Step 1: `social.go` implemented — `SocialFeature`, `OpenGraph`, `TwitterCard`, `Social()` option; Amendment A9 (`head.go`: `Tags []string`, `TwitterCardType`, `TwitterMeta`, `SocialOverrides`, `Head.Social` field); Amendment A10 (`templates.go` `forgeHeadTmpl` extended — full OG + Twitter block, `forge_rfc3339` added to `templatehelpers.go` and `TemplateFuncMap()`, Module[T].social field + case in `module.go`) |
+| 2026-03-06 | Milestone 5 Step 2: `ai.go` implemented — `Markdownable` (A11: migrated from `module.go`), `AIDocSummary`, `AIFeature`, `LLMsTxt`/`LLMsTxtFull`/`AIDoc` constants, `AIIndex()` option, `WithoutID()` option, `LLMsEntry`, `LLMsTemplateData`, `LLMsStore`, `NewLLMsStore`, `extractNode`, `renderAIDoc`; `forgeLLMSEntries(data any)` wired in `templatehelpers.go` (A12); `LLMsStore` wiring in `forge.go` Content+Handler (A13); README one-liner added (A14); AIDoc URL uses `/{prefix}/{slug}/aidoc` — Go’s net/http.ServeMux does not support partial wildcard segments, so `/{slug}.aidoc` is not a valid pattern (A15: DECISIONS.md updated) |
 
 ---
 
@@ -52,14 +53,18 @@ github.com/forge-cms/forge/
 ├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
-├── module.go         Module[T], NewModule, Register, Markdownable, At, Cache, Auth,
-│                     Middleware, Repo, On, SitemapConfig options;
-│                     setSitemap, regenerateSitemap (Amendment A3)
+├── module.go         Module[T], NewModule, Register, At, Cache, Auth,
+│                     Middleware, Repo, On, SitemapConfig, AIIndex, WithoutID options;
+│                     setSitemap, regenerateSitemap, setAIRegistry, regenerateAI, aiDocHandler;
+│                     aiFeatures, llmsStore, withoutID fields (Amendment A11, A13 sub-items)
+│                     (Markdownable migrated to ai.go — Amendment A11)
 ├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler/SEO),
 │                     Registrator, SEOOption, seoState, httpsRedirect,
 │                     graceful shutdown via SIGINT/SIGTERM;
 │                     SitemapStore wiring in Content+Handler (Amendment A4);
-│                     SEO option loop, robotsTxtRegistered guard in Handler (Amendment A5)
+│                     SEO option loop, robotsTxtRegistered guard in Handler (Amendment A5);
+│                     LLMsStore wiring in Content+Handler, llmsTxtRegistered +
+│                     llmsFullTxtRegistered guards (Amendment A13)
 └── head.go           Head (Title, Description, Author, Published, Modified, Image, Type,
                       Canonical, Tags, Breadcrumbs, Alternates, Social, NoIndex),
                       Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
@@ -82,10 +87,16 @@ github.com/forge-cms/forge/
                       Amendment A7 (errorTemplateLookup in errors.go),
                       Amendment A8 (templateModules + startup wiring in forge.go)
 └── templatehelpers.go forgeMeta, forgeDate, forgeRFC3339, forgeMarkdown, forgeExcerpt, forgeCSRFToken,
-                      forgeLLMSEntries (stub), TemplateFuncMap();
+                      forgeLLMSEntries(data any), TemplateFuncMap();
                       Amendment A9 (parseOneTemplate uses .Funcs(TemplateFuncMap()));
-                      forge_rfc3339 added (M5 Step 1) for article:published_time in forge:head
+                      forge_rfc3339 added (M5 Step 1) for article:published_time in forge:head;
+                      forgeLLMSEntries wired to real implementation (Amendment A12)
 └── social.go         SocialFeature, OpenGraph, TwitterCard, Social() option
+└── ai.go             Markdownable (migrated from module.go, A11), AIDocSummary,
+                      AIFeature, LLMsTxt, LLMsTxtFull, AIDoc constants,
+                      AIIndex() option, WithoutID() option,
+                      LLMsEntry, LLMsTemplateData, LLMsStore, NewLLMsStore,
+                      extractNode, renderAIDoc, hasAIFeature
 └── integration_test.go 15 integration tests: HTML render cycle, forge:head, error pages,
                       CSRF round-trip, App-level SEO/sitemap, TemplateData correctness
 └── integration_full_test.go 19 cross-milestone tests (M1–M4): multi-module routing,
@@ -103,8 +114,7 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ```
 ├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
-├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 5)
-├── ai.go             AIDoc, LLMsTxt, content negotiation helpers           (Milestone 5)
+├── feed.go           FeedConfig, RSS 2.0 generation                         (Milestone 5)
 └── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
 

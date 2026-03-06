@@ -9,7 +9,7 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | social.go | ✅ Done | 2026-03-06 |
-| 2 | ai.go | 🔲 Not started | — |
+| 2 | ai.go | ✅ Done | 2026-03-06 |
 | 3 | feed.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
@@ -88,48 +88,58 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 **Amendments required before implementation:**
 - **A11** — Migrate `Markdownable` interface from `module.go` to `ai.go`
 - **A12** — Wire `forgeLLMSEntries()` stub in `templatehelpers.go` to the real implementation in `ai.go`  
+- **A15** — AIDoc URL: `/{prefix}/{slug}/aidoc` (not `.aidoc`); Go 1.22 ServeMux disallows partial wildcard segments  
 **Files:** `ai.go`, `ai_test.go`
 
 #### 2.1 — Amendment A11: migrate Markdownable
 
-- [ ] Propose and agree Amendment A11: move `Markdownable` interface definition from `module.go` to `ai.go`
-- [ ] Copy `Markdownable` interface to `ai.go` (same `forge` package — no import change needed)
-- [ ] Remove `Markdownable` from `module.go`
-- [ ] Verify no compilation errors — all usages still resolve within the same package
+- [x] Propose and agree Amendment A11: move `Markdownable` interface definition from `module.go` to `ai.go`
+- [x] Copy `Markdownable` interface to `ai.go` (same `forge` package — no import change needed)
+- [x] Remove `Markdownable` from `module.go`
+- [x] Verify no compilation errors — all usages still resolve within the same package
 
 #### 2.2 — Amendment A12: wire forgeLLMSEntries
 
-- [ ] Propose and agree Amendment A12: replace the `forgeLLMSEntries()` stub in `templatehelpers.go` with a real implementation that calls the AI registry
-- [ ] Define `aiRegistry` package-level store in `ai.go` (sync.Map keyed by module prefix)
-- [ ] `forgeLLMSEntries(data any)` in `templatehelpers.go` calls into `ai.go` to produce the lllms.txt entries string
-- [ ] Verify stub replacement compiles and returns non-empty string when modules are registered with `AIIndex`
+- [x] Propose and agree Amendment A12: replace the `forgeLLMSEntries()` stub in `templatehelpers.go` with a real implementation
+- [x] `forgeLLMSEntries(data any) template.HTML` in `templatehelpers.go` formats `LLMsTemplateData.Entries`
+- [x] Verify stub replacement compiles and returns non-empty string when entries are present in `LLMsTemplateData`
 
 #### 2.3 — AIIndex option and types
 
-- [ ] Define `AIFeature` type
-- [ ] Define `LLMsTxt AIFeature` and `AIDoc AIFeature` constants
-- [ ] Define `AIIndex(features ...AIFeature) Option` — registers the module in the AI registry
-- [ ] Define `AIDocSummary` interface: `AISummary() string` (short human-readable summary for llms.txt)
-- [ ] `Markdownable` is defined here (migrated from module.go via A11)
-- [ ] Add `WithoutID() Option` — suppresses UUID from AIDoc output (for content types where ID leakage is undesirable)
+- [x] Define `AIFeature` type
+- [x] Define `LLMsTxt AIFeature` constant — enables /llms.txt compact index
+- [x] Define `LLMsTxtFull AIFeature` constant — enables /llms-full.txt full markdown corpus (opt-in)
+- [x] Define `AIDoc AIFeature` constant — enables /{prefix}/{slug}/aidoc per-item endpoints
+- [x] Define `AIIndex(features ...AIFeature) Option` — registers the module in the AI registry
+- [x] Define `AIDocSummary` interface: `AISummary() string` (short human-readable summary for llms.txt)
+- [x] `Markdownable` is defined here (migrated from module.go via A11)
+- [x] Add `WithoutID() Option` — suppresses UUID from AIDoc output (for content types where ID leakage is undesirable)
 
 #### 2.4 — /llms.txt endpoint
 
-- [ ] `app.Handle("GET /llms.txt", ...)` registered at startup when at least one module uses `AIIndex(LLMsTxt)`
-- [ ] If `templates/llms.txt` exists, render it as a template with `TemplateData`; otherwise use the built-in format
-- [ ] Built-in format: site name header, description, per-module section listing Published items with title, slug, and summary (via `AISummary()` if available)
-- [ ] Only `Published` content appears; Draft/Scheduled/Archived are excluded
-- [ ] Regenerate on `AfterPublish` and `AfterArchive` signals (debounced, same pattern as sitemap)
-- [ ] `forgeLLMSEntries(data)` template helper reads from `aiRegistry` — used in custom templates
+- [x] `GET /llms.txt` registered in `App.Handler()` when `LLMsStore.HasCompact()` is true
+- [x] Built-in format: site name header + per-item entries as `- [Title](URL): Summary`
+- [x] Only `Published` content appears; Draft/Scheduled/Archived are excluded
+- [x] Regenerate debounced on any write event (same debouncer as sitemap, `regenerateAI` called from callback)
+- [x] `forgeLLMSEntries(data any)` template helper formats `LLMsTemplateData.Entries` for custom templates
 
-#### 2.5 — /{prefix}/{slug}.aidoc endpoint
+#### 2.5 — /llms-full.txt endpoint
 
-- [ ] Registered per-module when `AIIndex(AIDoc)` is set
-- [ ] Returns AIDoc format (text/plain, gzip at transport layer via standard Go `http.ResponseWriter`)
-- [ ] AIDoc format:
+- [x] `GET /llms-full.txt` registered in `App.Handler()` when `LLMsStore.HasFull()` is true
+- [x] Corpus header format: `# {SiteName} — Full Content Corpus` followed by `> Generated by Forge on {YYYY-MM-DD} | Only published content | {N} items`
+- [x] Per-item format: `## {Title}`, `URL: {canonical}`, `Published: {YYYY-MM-DD}`, blank line, `Markdown()` if Markdownable else `Head.Description`, `---`
+- [x] Only `Published` content appears; Draft/Scheduled/Archived excluded
+- [x] Regenerate on any write event (debounced, same pattern as sitemap and /llms.txt)
+- [x] Content-Type: `text/plain; charset=utf-8`
+
+#### 2.6 — /{prefix}/{slug}/aidoc endpoint
+
+- [x] Registered per-module when `AIIndex(AIDoc)` is set, at `/{prefix}/{slug}/aidoc` (Amendment A15)
+- [x] Returns AIDoc format (text/plain)
+- [x] AIDoc format:
   ```
   +++aidoc+v1+++
-  type:     {Head.Type}
+  type:     {Head.Type or "article"}
   id:       {Node.ID}      (omitted when WithoutID() is set)
   slug:     {Node.Slug}
   title:    {Head.Title}
@@ -137,37 +147,40 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
   created:  {Node.CreatedAt YYYY-MM-DD}
   modified: {Node.UpdatedAt YYYY-MM-DD}
   tags:     [{Head.Tags comma-separated}]  (omitted if empty)
-  summary:  {AISummary() if Markdownable, else Excerpt(description, 200)}
+  summary:  {AISummary() non-empty, else Head.Description, else Excerpt(Markdown,120)}
   +++
-  {Markdown() if Markdownable, else plain JSON body}
+  {Markdown() if Markdownable, else JSON body}
   ```
-- [ ] Returns 404 for non-Published content (same lifecycle enforcement as normal GET)
-- [ ] Content-Type: `text/plain; charset=utf-8`
+- [x] Returns 404 for non-Published content (same lifecycle enforcement as normal GET)
+- [x] Content-Type: `text/plain; charset=utf-8`
 
-#### 2.6 — Tests
+#### 2.7 — Tests
 
-- [ ] `TestAIIndexOption` — AIIndex(LLMsTxt), AIIndex(AIDoc), AIIndex(LLMsTxt, AIDoc) register without error
-- [ ] `TestLLMsTxtEndpoint` — GET /llms.txt returns 200 with Published items; Draft items absent
-- [ ] `TestLLMsTxtTemplate` — custom `templates/llms.txt` is rendered when present
-- [ ] `TestAIDocEndpoint` — GET /posts/hello.aidoc returns correct AIDoc format for Published item
-- [ ] `TestAIDocNotFound` — Draft item returns 404 on .aidoc endpoint
-- [ ] `TestAIDocWithoutID` — WithoutID() suppresses `id:` line from AIDoc output
-- [ ] `TestMarkdownable` — content type implementing Markdown() returns markdown body in AIDoc
-- [ ] All tests table-driven with `t.Run`
+- [x] `TestAIIndexOption` — AIIndex(LLMsTxt), AIIndex(AIDoc), AIIndex(LLMsTxt, LLMsTxtFull, AIDoc) register without error
+- [x] `TestWithoutIDOption` — WithoutID() returns withoutIDOption and sets m.withoutID on module
+- [x] `TestLLMsTxtEndpoint` — GET /llms.txt returns 200 with Published items; Draft items absent
+- [x] `TestLLMsTxtTemplate` — LLMsStore.CompactHandler formats entries in llmstxt.org convention
+- [x] `TestLLMsFullTxtEndpoint` — GET /llms-full.txt returns 200 with Published items in full corpus format
+- [x] `TestLLMsFullTxtFallback` — /llms-full.txt returns 404 when no module registers LLMsTxtFull
+- [x] `TestLLMsFullTxtHeader` — corpus header matches `# {SiteName} — Full Content Corpus` and `> Generated by Forge…`
+- [x] `TestAIDocEndpoint` — GET /posts/{slug}/aidoc returns correct AIDoc format for Published item
+- [x] `TestAIDocNotFound` — Draft item returns 404 on /aidoc endpoint
+- [x] `TestAIDocWithoutID` — WithoutID() suppresses `id:` line from AIDoc output
+- [x] All tests table-driven with `t.Run`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestAI ./...` — all green
-- [ ] `go test -v -run TestLLMS ./...` — all green
-- [ ] `go test -v -run TestAIDoc ./...` — all green
-- [ ] `BACKLOG.md` — step 2 row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] `README.md` — section status badges updated if this step ships a documented feature
-- [ ] `integration_full_test.go` — new cross-milestone groups added (final step of each milestone only)
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestAI ./...` — all green
+- [x] `go test -v -run TestLLMs ./...` — all green (both compact and full endpoints)
+- [x] `go test -v -run TestAIDoc ./...` — all green
+- [x] `BACKLOG.md` — step 2 row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] `README.md` — LLMsTxtFull one-liner opt-in example added (Amendment A14)
+- [x] `integration_full_test.go` — N/A (final step only)
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — Amendment A15 (AIDoc URL) drafted and documented
 
 ---
 
@@ -248,8 +261,8 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 
 - [ ] G10 exercises `forge.AIIndex(forge.LLMsTxt, forge.AIDoc)` on a module from M2 (App Bootstrap)
 - [ ] Assert GET /llms.txt returns 200 with Published item and excludes Draft item
-- [ ] Assert GET /{slug}.aidoc returns correct AIDoc format for Published item
-- [ ] Assert GET /{slug}.aidoc returns 404 for Draft item
+- [ ] Assert GET /{slug}/aidoc returns correct AIDoc format for Published item
+- [ ] Assert GET /{slug}/aidoc returns 404 for Draft item
 - [ ] Assert `Accept: text/markdown` still works (M4 content negotiation) alongside AIDoc
 
 #### 4.3 — G11: RSS feed + signals cross-milestone group

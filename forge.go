@@ -118,6 +118,9 @@ type App struct {
 	seo                    seoState         // app-level SEO configuration set via SEO()
 	robotsTxtRegistered    bool             // true once GET /robots.txt is registered
 	templateModules        []templateParser // modules with HTML templates; parsed at Run() time
+	llmsStore              *LLMsStore       // non-nil when at least one module uses AIIndex
+	llmsTxtRegistered      bool             // true once GET /llms.txt is registered
+	llmsFullTxtRegistered  bool             // true once GET /llms-full.txt is registered
 }
 
 // New creates a new [App] from cfg.
@@ -196,6 +199,13 @@ func (a *App) Content(v any, opts ...Option) {
 			u, _ := url.Parse(a.cfg.BaseURL)
 			sn.setSiteName(u.Hostname())
 		}
+		if ai, ok := r.(interface{ setAIRegistry(*LLMsStore, string) }); ok {
+			if a.llmsStore == nil {
+				u, _ := url.Parse(a.cfg.BaseURL)
+				a.llmsStore = NewLLMsStore(u.Hostname())
+			}
+			ai.setAIRegistry(a.llmsStore, a.cfg.BaseURL)
+		}
 		return
 	}
 	m := NewModule(v, opts...)
@@ -238,6 +248,14 @@ func (a *App) Handler() http.Handler {
 	if a.seo.robots != nil && !a.robotsTxtRegistered {
 		a.robotsTxtRegistered = true
 		a.mux.Handle("GET /robots.txt", RobotsTxtHandler(*a.seo.robots, a.cfg.BaseURL))
+	}
+	if a.llmsStore != nil && a.llmsStore.HasCompact() && !a.llmsTxtRegistered {
+		a.llmsTxtRegistered = true
+		a.mux.Handle("GET /llms.txt", a.llmsStore.CompactHandler())
+	}
+	if a.llmsStore != nil && a.llmsStore.HasFull() && !a.llmsFullTxtRegistered {
+		a.llmsFullTxtRegistered = true
+		a.mux.Handle("GET /llms-full.txt", a.llmsStore.FullHandler())
 	}
 	if len(a.templateModules) > 0 {
 		bindErrorTemplates(a.templateModules)
