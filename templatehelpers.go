@@ -44,6 +44,20 @@ func forgeMeta(head Head, content any) template.HTML {
 	return template.HTML(SchemaFor(head, content))
 }
 
+// forgeRFC3339 formats t as an RFC 3339 / ISO 8601 timestamp
+// ("2006-01-02T15:04:05Z07:00"). Returns an empty string when t is the zero
+// value. Used by forge:head for article:published_time and feed item pubDate.
+//
+// Template usage:
+//
+//	{{forge_rfc3339 .Head.Published}}
+func forgeRFC3339(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
 // forgeDate formats t using the "2 January 2006" layout. Returns an empty
 // string when t is the zero value.
 //
@@ -187,11 +201,13 @@ func forgeLLMSEntries() template.HTML { return "" }
 //	forge_markdown     — Markdown → HTML: {{.Body | forge_markdown}}
 //	forge_excerpt      — truncated excerpt: {{.Body | forge_excerpt 160}}
 //	forge_csrf_token   — hidden CSRF input: {{forge_csrf_token .Request}}
+//	forge_rfc3339      — RFC 3339 timestamp: {{forge_rfc3339 .Head.Published}}
 //	forge_llms_entries — AI doc links (stub, Milestone 5): {{forge_llms_entries}}
 func TemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"forge_meta":         forgeMeta,
 		"forge_date":         forgeDate,
+		"forge_rfc3339":      forgeRFC3339,
 		"forge_markdown":     forgeMarkdown,
 		"forge_excerpt":      forgeExcerpt,
 		"forge_csrf_token":   forgeCSRFToken,

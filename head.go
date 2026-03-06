@@ -66,6 +66,30 @@ const (
 
 // — Head ——————————————————————————————————————————————————————————————————
 
+// TwitterCardType is the value of the twitter:card meta property.
+// Use the predefined constants [Summary], [SummaryLargeImage], [AppCard], [PlayerCard].
+type TwitterCardType string
+
+const (
+	Summary           TwitterCardType = "summary"             // small card with title and description
+	SummaryLargeImage TwitterCardType = "summary_large_image" // large image above the title
+	AppCard           TwitterCardType = "app"                 // deep-link to a mobile app
+	PlayerCard        TwitterCardType = "player"              // inline video or audio player
+)
+
+// TwitterMeta carries per-item Twitter Card overrides.
+// Set on [Head.Social] to customise Twitter Card output for a specific content item.
+type TwitterMeta struct {
+	Card    TwitterCardType // overrides the default card type; empty uses a sensible default
+	Creator string          // @handle of the content author; populates twitter:creator
+}
+
+// SocialOverrides carries per-item social sharing overrides.
+// Set on [Head.Social] to customise Open Graph and Twitter Card output.
+type SocialOverrides struct {
+	Twitter TwitterMeta // Twitter Card overrides for this item
+}
+
 // Head carries all SEO and social metadata for a content page.
 // Define it on your content type via the Headable interface.
 // Forge uses the Head to populate HTML <head> tags, JSON-LD structured data,
@@ -73,17 +97,19 @@ const (
 //
 // All fields are optional: the zero value is safe and produces a minimal page header.
 type Head struct {
-	Title       string       // page title; used in <title>, og:title, and JSON-LD
-	Description string       // meta description; recommended max 160 characters
-	Author      string       // author name; used in <meta name="author"> and JSON-LD
-	Published   time.Time    // publication date; zero value omits date tags
-	Modified    time.Time    // last-modified date; zero value omits date tags
-	Image       Image        // primary image; zero URL omits all image tags
-	Type        string       // rich result type (Article, Product, etc.); empty omits JSON-LD
-	Canonical   string       // canonical URL; empty omits the canonical tag
-	Breadcrumbs []Breadcrumb // breadcrumb trail; empty omits BreadcrumbList JSON-LD
-	Alternates  []Alternate  // hreflang entries; always empty in v1
-	NoIndex     bool         // true renders <meta name="robots" content="noindex">
+	Title       string          // page title; used in <title>, og:title, and JSON-LD
+	Description string          // meta description; recommended max 160 characters
+	Author      string          // author name; used in <meta name="author"> and JSON-LD
+	Published   time.Time       // publication date; zero value omits date tags
+	Modified    time.Time       // last-modified date; zero value omits date tags
+	Image       Image           // primary image; zero URL omits all image tags
+	Type        string          // rich result type (Article, Product, etc.); empty omits JSON-LD
+	Canonical   string          // canonical URL; empty omits the canonical tag
+	Tags        []string        // content tags; used for article:tag meta and RSS categories
+	Breadcrumbs []Breadcrumb    // breadcrumb trail; empty omits BreadcrumbList JSON-LD
+	Alternates  []Alternate     // hreflang entries; always empty in v1
+	Social      SocialOverrides // per-item social sharing overrides; zero value uses defaults
+	NoIndex     bool            // true renders <meta name="robots" content="noindex">
 }
 
 // — Headable ——————————————————————————————————————————————————————————————

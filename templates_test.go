@@ -107,8 +107,9 @@ func TestTemplates_forgeHeadRegistered(t *testing.T) {
 }
 
 func TestTemplates_noIndexMeta(t *testing.T) {
-	// Execute forgeHeadTmpl directly — no module needed.
-	tpl := template.Must(template.New("test").Parse(forgeHeadTmpl))
+	// Execute forgeHeadTmpl directly — no module needed. FuncMap required
+	// because forge:head uses forge_rfc3339 for article:published_time.
+	tpl := template.Must(template.New("test").Funcs(TemplateFuncMap()).Parse(forgeHeadTmpl))
 	var buf bytes.Buffer
 	h := Head{Title: "Test Page", NoIndex: true}
 	if err := tpl.ExecuteTemplate(&buf, "forge:head", h); err != nil {

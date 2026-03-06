@@ -122,12 +122,12 @@ Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | social.go | 🔲 Not started | — |
+| 1 | social.go | ✅ Done | 2026-03-06 |
 | 2 | ai.go | 🔲 Not started | — |
 | 3 | feed.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides, forge:head OG/Twitter rendering
+- [x] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides, forge:head OG/Twitter rendering
 - [ ] Step 2 — `ai.go`: AIIndex option, LLMsTxt, AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option, /llms.txt and /{slug}.aidoc endpoints — **Note:** `Markdownable` migrates here from `module.go` (Amendment A11)
 - [ ] Step 3 — `feed.go`: auto-generated RSS per module, FeedConfig, FeedDisabled opt-out, signal-driven regeneration
 - [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G9–G12 (Social+SEO, AI+content negotiation, RSS+signals, full M5 stack) + README badge updates

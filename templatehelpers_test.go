@@ -123,6 +123,7 @@ func TestTemplateFuncMap_keys(t *testing.T) {
 	required := []string{
 		"forge_meta",
 		"forge_date",
+		"forge_rfc3339",
 		"forge_markdown",
 		"forge_excerpt",
 		"forge_csrf_token",

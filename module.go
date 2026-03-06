@@ -273,9 +273,10 @@ type Module[T any] struct {
 	tplMu            sync.RWMutex       // guards tplList, tplShow reads and swaps
 	siteName         string             // set by App.Content via setSiteName
 
-	sitemapCfg   *SitemapConfig // nil when no SitemapConfig option given
-	sitemapStore *SitemapStore  // set by App.Content via setSitemap
-	baseURL      string         // set by App.Content via setSitemap
+	sitemapCfg   *SitemapConfig  // nil when no SitemapConfig option given
+	sitemapStore *SitemapStore   // set by App.Content via setSitemap
+	baseURL      string          // set by App.Content via setSitemap
+	social       []SocialFeature // nil when no Social option given
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -351,6 +352,8 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		case templatesOption:
 			m.templateDir = v.dir
 			m.templateRequired = v.required
+		case socialOption:
+			m.social = v.features
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {

@@ -8,7 +8,7 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | social.go | 🔲 Not started | — |
+| 1 | social.go | ✅ Done | 2026-03-06 |
 | 2 | ai.go | 🔲 Not started | — |
 | 3 | feed.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |
@@ -28,49 +28,56 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 
 #### 1.1 — Amendment A9: extend Head struct
 
-- [ ] Propose and agree Amendment A9: add `Social SocialOverrides` to `Head` in `head.go`
-- [ ] Add `SocialOverrides` struct with `Twitter TwitterMeta` field to `head.go`
-- [ ] Add `TwitterMeta` struct with `Card TwitterCardType`, `Creator string` fields to `head.go`
-- [ ] Add `TwitterCardType` type and constants: `Summary`, `SummaryLargeImage`, `App`, `Player`
-- [ ] Add godoc to all new exported types in `head.go`
-- [ ] Verify `head.go` compiles clean after A9
+- [x] Propose and agree Amendment A9: add `Social SocialOverrides` to `Head` in `head.go`
+- [x] Add `SocialOverrides` struct with `Twitter TwitterMeta` field to `head.go`
+- [x] Add `TwitterMeta` struct with `Card TwitterCardType`, `Creator string` fields to `head.go`
+- [x] Add `TwitterCardType` type and constants: `Summary`, `SummaryLargeImage`, `AppCard`, `PlayerCard`
+- [x] Add `Tags []string` to `Head` struct (implementation prerequisite for `article:tag` OG rendering and RSS categories)
+- [x] Add godoc to all new exported types in `head.go`
+- [x] Verify `head.go` compiles clean after A9
 
 #### 1.2 — Amendment A10: extend forge:head partial
 
-- [ ] Propose and agree Amendment A10: extend `forge:head` template in `templates.go`
-- [ ] Add OG block to `forge:head`: `og:title`, `og:description`, `og:url`, `og:type`, `og:image`, `og:image:width`, `og:image:height`, `article:published_time`, `article:author`, `article:tag` (range over Tags)
-- [ ] Add Twitter block to `forge:head`: `twitter:card`, `twitter:title`, `twitter:description`, `twitter:image`, `twitter:creator` (from `Social.Twitter.Creator` if set)
-- [ ] Tags are rendered only when `Head.Image.URL != ""`; OG block rendered whenever `Head.Title != ""`
-- [ ] Verify `templates.go` compiles clean after A10
+- [x] Propose and agree Amendment A10: extend `forge:head` template in `templates.go`
+- [x] Add OG block to `forge:head`: `og:title`, `og:description`, `og:url`, `og:type`, `og:image`, `og:image:width`, `og:image:height`, `article:published_time`, `article:author`, `article:tag` (range over Tags)
+- [x] Add Twitter block to `forge:head`: `twitter:card`, `twitter:title`, `twitter:description`, `twitter:image`, `twitter:creator` (from `Social.Twitter.Creator` if set)
+- [x] OG/Twitter block guarded by `{{if .Title}}`; article:published_time guarded by `{{if gt .Published.Year 1}}`
+- [x] Add `forgeRFC3339` helper to `templatehelpers.go` and `TemplateFuncMap()` (avoids backtick/quote escaping in the template constant; used for article:published_time)
+- [x] Update `templatehelpers_test.go` `TestTemplateFuncMap_keys` to expect 7 keys
+- [x] Update `templates_test.go` `TestTemplates_noIndexMeta` to use `TemplateFuncMap()` (forge:head now requires FuncMap)
+- [x] Verify `templates.go` compiles clean after A10
 
 #### 1.3 — Social option types
 
-- [ ] Define `SocialFeature` type (e.g. `type SocialFeature int`)
-- [ ] Define `OpenGraph SocialFeature` and `TwitterCard SocialFeature` constants
-- [ ] Define `Social(features ...SocialFeature) Option` — stores requested features on the module
-- [ ] `Social()` sets module-level defaults only; `forge:head` always renders when Head has data — no per-request opt-in required
-- [ ] Add godoc to all exported symbols
+- [x] Define `SocialFeature` type (`type SocialFeature int`)
+- [x] Define `OpenGraph SocialFeature` and `TwitterCard SocialFeature` constants
+- [x] Define `Social(features ...SocialFeature) Option` — stores requested features on the module
+- [x] `Social()` is declarative; `forge:head` always renders OG/Twitter when `Head.Title` is set — no per-request opt-in required
+- [x] Add `social []SocialFeature` field to `Module[T]` struct and `case socialOption` to option switch in `module.go`
+- [x] Add godoc to all exported symbols
 
 #### 1.4 — Tests
 
-- [ ] `TestSocialOption` — Social(OpenGraph) and Social(TwitterCard) and Social(OpenGraph, TwitterCard) register without error
-- [ ] `TestForgeHeadOGRendering` — when template data has Head with Title+Image, rendered HTML contains `og:title` and `og:image`
-- [ ] `TestForgeHeadTwitterRendering` — rendered HTML contains `twitter:card` when Social.Twitter.Card is set
-- [ ] `TestForgeHeadNoOGWithoutTitle` — OG block absent when Head.Title is empty
-- [ ] All tests table-driven with `t.Run`
+- [x] `TestSocialOption` — all four combinations (OpenGraph, TwitterCard, both, empty) return `socialOption`
+- [x] `TestForgeHeadOGRendering` — Head with Title+Image produces `og:title`, `og:image`, `og:image:width`, `og:url`, `twitter:title`, `twitter:image`, default `twitter:card`
+- [x] `TestForgeHeadTwitterRendering` — explicit `Social.Twitter.Card` and Creator propagate; no-image fallback produces `summary`
+- [x] `TestForgeHeadArticleMeta` — `Type: Article` produces `article:author`, `article:tag` ×2, `article:published_time`, correct `og:type`
+- [x] `TestForgeHeadNoOGWithoutTitle` — OG and Twitter blocks absent when `Head.Title` is empty
+- [x] All tests table-driven with `t.Run`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestSocial ./...` — all green
-- [ ] `go test -v -run TestForgeHead ./...` — all green
-- [ ] `BACKLOG.md` — step 1 row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] `README.md` — section status badges updated if this step ships a documented feature
-- [ ] `integration_full_test.go` — new cross-milestone groups added (final step of each milestone only)
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestSocial ./...` — all green
+- [x] `go test -v -run TestForgeHead ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 1 row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] `README.md` — no section badges update needed (Social badge updated in Pre-M5 commit; remains 🔲 until Step 4 finalises the feature)
+- [x] `integration_full_test.go` — N/A (final step only)
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — ARCHITECTURE.md updated; no new Decisions required
 
 ---
 

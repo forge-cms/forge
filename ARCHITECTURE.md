@@ -26,6 +26,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-05 | Milestone 4 Step 3: `templatehelpers.go` implemented — `forgeMeta`, `forgeDate`, `forgeMarkdown` (stdlib-only), `forgeExcerpt`, `forgeCSRFToken`, `forgeLLMSEntries` (stub), `TemplateFuncMap()`; Amendment A9 (`templates.go` `parseOneTemplate` now calls `.Funcs(TemplateFuncMap())`) |
 | 2026-03-05 | Milestone 4 Step 4: `integration_test.go` implemented — 15 cross-component integration tests covering HTML render cycle, forge:head correctness, error pages (custom + fallback), CSRF token round-trip, App-level SEO/sitemap routing, and TemplateData field propagation |
 | 2026-03-05 | Milestone 4 Step 5: `integration_full_test.go` implemented — 19 cross-milestone integration tests (M1–M4): multi-module routing, global middleware order, role-gated access (HasRole + inline middleware), AfterCreate/AfterDelete/cross-module signal isolation, content negotiation across two module types, forge_meta/forge_markdown/BreadcrumbList through render, sitemap URL in robots.txt, error template first-match and fallthrough, TemplateData siteName and request URL |
+| 2026-03-06 | Milestone 5 Step 1: `social.go` implemented — `SocialFeature`, `OpenGraph`, `TwitterCard`, `Social()` option; Amendment A9 (`head.go`: `Tags []string`, `TwitterCardType`, `TwitterMeta`, `SocialOverrides`, `Head.Social` field); Amendment A10 (`templates.go` `forgeHeadTmpl` extended — full OG + Twitter block, `forge_rfc3339` added to `templatehelpers.go` and `TemplateFuncMap()`, Module[T].social field + case in `module.go`) |
 
 ---
 
@@ -59,8 +60,12 @@ github.com/forge-cms/forge/
 │                     graceful shutdown via SIGINT/SIGTERM;
 │                     SitemapStore wiring in Content+Handler (Amendment A4);
 │                     SEO option loop, robotsTxtRegistered guard in Handler (Amendment A5)
-└── head.go           Head, Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
-                      Excerpt, URL, Crumbs, Crumb, rich-result constants
+└── head.go           Head (Title, Description, Author, Published, Modified, Image, Type,
+                      Canonical, Tags, Breadcrumbs, Alternates, Social, NoIndex),
+                      Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
+                      Excerpt, URL, Crumbs, Crumb, rich-result constants,
+                      TwitterCardType (Summary/SummaryLargeImage/AppCard/PlayerCard),
+                      TwitterMeta, SocialOverrides
 └── schema.go         SchemaFor, FAQProvider, HowToProvider, EventProvider,
                       RecipeProvider, ReviewProvider, OrganizationProvider,
                       FAQEntry, HowToStep, EventDetails, RecipeDetails,
@@ -76,9 +81,11 @@ github.com/forge-cms/forge/
                       Amendment A6 (Module[T] template fields + HTML render path),
                       Amendment A7 (errorTemplateLookup in errors.go),
                       Amendment A8 (templateModules + startup wiring in forge.go)
-└── templatehelpers.go forgeMeta, forgeDate, forgeMarkdown, forgeExcerpt, forgeCSRFToken,
+└── templatehelpers.go forgeMeta, forgeDate, forgeRFC3339, forgeMarkdown, forgeExcerpt, forgeCSRFToken,
                       forgeLLMSEntries (stub), TemplateFuncMap();
-                      Amendment A9 (parseOneTemplate uses .Funcs(TemplateFuncMap()))
+                      Amendment A9 (parseOneTemplate uses .Funcs(TemplateFuncMap()));
+                      forge_rfc3339 added (M5 Step 1) for article:published_time in forge:head
+└── social.go         SocialFeature, OpenGraph, TwitterCard, Social() option
 └── integration_test.go 15 integration tests: HTML render cycle, forge:head, error pages,
                       CSRF round-trip, App-level SEO/sitemap, TemplateData correctness
 └── integration_full_test.go 19 cross-milestone tests (M1–M4): multi-module routing,
@@ -98,7 +105,6 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
 ├── rss.go            FeedConfig, Atom/RSS generation                       (Milestone 5)
 ├── ai.go             AIDoc, LLMsTxt, content negotiation helpers           (Milestone 5)
-├── social.go         OpenGraph, TwitterCard, LinkedIn meta rendering       (Milestone 5)
 └── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
 

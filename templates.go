@@ -70,14 +70,51 @@ const forgeHeadTmpl = `{{define "forge:head"}}<title>{{.Title}}</title>
 {{- if .Canonical}}
 <link rel="canonical" href="{{.Canonical}}">
 {{- end}}
+{{- if .Title}}
 <meta property="og:title" content="{{.Title}}">
 {{- if .Description}}
 <meta property="og:description" content="{{.Description}}">
 {{- end}}
+{{- if .Canonical}}
+<meta property="og:url" content="{{.Canonical}}">
+{{- end}}
 {{- if .Image.URL}}
 <meta property="og:image" content="{{.Image.URL}}">
+{{- if gt .Image.Width 0}}
+<meta property="og:image:width" content="{{.Image.Width}}">
+<meta property="og:image:height" content="{{.Image.Height}}">
+{{- end}}
 {{- end}}
 <meta property="og:type" content="{{if .Type}}{{.Type}}{{else}}website{{end}}">
+{{- if eq .Type "Article"}}
+{{- if gt .Published.Year 1}}
+<meta property="article:published_time" content="{{forge_rfc3339 .Published}}">
+{{- end}}
+{{- if .Author}}
+<meta property="article:author" content="{{.Author}}">
+{{- end}}
+{{- range .Tags}}
+<meta property="article:tag" content="{{.}}">
+{{- end}}
+{{- end}}
+{{- if .Social.Twitter.Card}}
+<meta name="twitter:card" content="{{.Social.Twitter.Card}}">
+{{- else if .Image.URL}}
+<meta name="twitter:card" content="summary_large_image">
+{{- else}}
+<meta name="twitter:card" content="summary">
+{{- end}}
+<meta name="twitter:title" content="{{.Title}}">
+{{- if .Description}}
+<meta name="twitter:description" content="{{.Description}}">
+{{- end}}
+{{- if .Image.URL}}
+<meta name="twitter:image" content="{{.Image.URL}}">
+{{- end}}
+{{- if .Social.Twitter.Creator}}
+<meta name="twitter:creator" content="{{.Social.Twitter.Creator}}">
+{{- end}}
+{{- end}}
 {{- if .NoIndex}}
 <meta name="robots" content="noindex, nofollow">
 {{- end}}
