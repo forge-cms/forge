@@ -121,6 +121,8 @@ type App struct {
 	llmsStore              *LLMsStore       // non-nil when at least one module uses AIIndex
 	llmsTxtRegistered      bool             // true once GET /llms.txt is registered
 	llmsFullTxtRegistered  bool             // true once GET /llms-full.txt is registered
+	feedStore              *FeedStore       // non-nil when at least one module uses Feed(...)
+	feedIndexRegistered    bool             // true once GET /feed.xml is registered
 }
 
 // New creates a new [App] from cfg.
@@ -206,6 +208,13 @@ func (a *App) Content(v any, opts ...Option) {
 			}
 			ai.setAIRegistry(a.llmsStore, a.cfg.BaseURL)
 		}
+		if fd, ok := r.(interface{ setFeedStore(*FeedStore, string) }); ok {
+			if a.feedStore == nil {
+				u, _ := url.Parse(a.cfg.BaseURL)
+				a.feedStore = NewFeedStore(u.Hostname(), a.cfg.BaseURL)
+			}
+			fd.setFeedStore(a.feedStore, a.cfg.BaseURL)
+		}
 		return
 	}
 	m := NewModule(v, opts...)
@@ -256,6 +265,10 @@ func (a *App) Handler() http.Handler {
 	if a.llmsStore != nil && a.llmsStore.HasFull() && !a.llmsFullTxtRegistered {
 		a.llmsFullTxtRegistered = true
 		a.mux.Handle("GET /llms-full.txt", a.llmsStore.FullHandler())
+	}
+	if a.feedStore != nil && a.feedStore.HasFeeds() && !a.feedIndexRegistered {
+		a.feedIndexRegistered = true
+		a.mux.Handle("GET /feed.xml", a.feedStore.IndexHandler())
 	}
 	if len(a.templateModules) > 0 {
 		bindErrorTemplates(a.templateModules)

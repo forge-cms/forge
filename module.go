@@ -275,6 +275,9 @@ type Module[T any] struct {
 	aiFeatures []AIFeature // nil when no AIIndex option given
 	llmsStore  *LLMsStore  // set by App.Content via setAIRegistry
 	withoutID  bool        // true when WithoutID() option was given
+
+	feedCfg   *FeedConfig // nil when no Feed option, or when FeedDisabled was called
+	feedStore *FeedStore  // set by App.Content via setFeedStore
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -356,6 +359,11 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 			m.aiFeatures = v.features
 		case withoutIDOption:
 			m.withoutID = true
+		case feedOption:
+			cfg := v.cfg
+			m.feedCfg = &cfg
+		case feedDisabledOption:
+			m.feedCfg = nil
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {
@@ -394,6 +402,7 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		dispatchAfter(ctx, m.signals[SitemapRegenerate], nil)
 		m.regenerateSitemap(ctx)
 		m.regenerateAI(ctx)
+		m.regenerateFeed(ctx)
 	})
 
 	return m
@@ -437,6 +446,9 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 		}
 		mux.Handle("GET "+m.prefix+"/{slug}/aidoc", aidoc)
 	}
+	if m.feedCfg != nil && m.feedStore != nil {
+		mux.Handle("GET "+m.prefix+"/feed.xml", m.feedStore.ModuleHandler(m.prefix))
+	}
 }
 
 // setSitemap is called by [App.Content] to inject the shared [SitemapStore]
@@ -460,6 +472,49 @@ func (m *Module[T]) setAIRegistry(store *LLMsStore, baseURL string) {
 	if hasAIFeature(m.aiFeatures, LLMsTxtFull) {
 		store.registerFull()
 	}
+}
+
+// setFeedStore is called by [App.Content] to inject the shared [FeedStore]
+// and application BaseURL into this module. Registers the prefix so
+// [App.Handler] knows to mount GET /feed.xml when at least one feed exists.
+func (m *Module[T]) setFeedStore(store *FeedStore, baseURL string) {
+	m.feedStore = store
+	if m.baseURL == "" {
+		m.baseURL = baseURL
+	}
+	if m.feedCfg != nil {
+		// Register the prefix now (items populated by first regenerateFeed call).
+		store.Set(m.prefix, *m.feedCfg, nil)
+	}
+}
+
+// regenerateFeed rebuilds the RSS 2.0 item list for this module and stores it
+// in the shared [FeedStore]. Called by the debouncer after every write event.
+// Skips silently when the store, repo, or FeedConfig is absent.
+func (m *Module[T]) regenerateFeed(ctx Context) {
+	if m.feedStore == nil || m.feedCfg == nil || m.repo == nil {
+		return
+	}
+	items, err := m.repo.FindAll(ctx, ListOptions{Status: []Status{Published}})
+	if err != nil {
+		return
+	}
+	rssItems := make([]rssItem, 0, len(items))
+	for _, item := range items {
+		var head Head
+		if m.headFunc != nil {
+			if fn, ok := m.headFunc.(func(Context, T) Head); ok {
+				head = fn(ctx, item)
+			}
+		}
+		n := extractNode(item)
+		canonical := head.Canonical
+		if canonical == "" && n.Slug != "" {
+			canonical = strings.TrimRight(m.baseURL, "/") + m.prefix + "/" + n.Slug
+		}
+		rssItems = append(rssItems, buildRSSItem(head, n, canonical))
+	}
+	m.feedStore.Set(m.prefix, *m.feedCfg, rssItems)
 }
 
 // regenerateAI rebuilds compact and/or full AI fragments for this module and

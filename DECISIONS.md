@@ -597,6 +597,39 @@ system (Decision 14). No additional interface is needed.
 
 ---
 
+### Amendment A16 — RSS opt-in (not auto-generated)
+
+**Date:** 2026-03-06  
+**Status:** Agreed  
+**Amends:** Decision 13
+
+**Change:** Decision 13 stated RSS feeds are auto-generated for every content module (opt-out with `forge.FeedDisabled()`). The agreed implementation is **opt-in**: a module must explicitly call `forge.Feed(forge.FeedConfig{...})` to get a feed.
+
+**Rationale:**
+- Explicit over implicit: admin modules, API-only modules, and single-record config modules should not silently sprout public `/feed.xml` endpoints.
+- Consistent with `AIIndex` and `SitemapConfig` — both require explicit opt-in.
+- `FeedDisabled()` is retained as a defensive explicit opt-out marker, useful when default behaviour changes in future or when subclassing patterns require it.
+
+**Call-site impact:**
+```go
+// Before (Decision 13 intent — never implemented):
+// Every module auto-gets /{prefix}/feed.xml
+
+// After (implemented):
+app.Content(&Post{},
+    forge.At("/posts"),
+    forge.Feed(forge.FeedConfig{Title: "Blog", Description: "Latest posts"}),
+)
+```
+
+**Consequences of amendment:**
+- Decision 13 "auto-generate" sentence is superseded by this amendment
+- `FeedDisabled()` option exists but is a no-op when `Feed(...)` was never called
+- `/feed.xml` (aggregate index) is only registered when at least one module calls `Feed(...)`
+- No README examples are broken (feed was not yet documented as implemented)
+
+---
+
 ## Decision 14 — Content lifecycle
 
 **Status:** Locked  

@@ -10,7 +10,7 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 |------|------|--------|-----------|
 | 1 | social.go | ✅ Done | 2026-03-06 |
 | 2 | ai.go | ✅ Done | 2026-03-06 |
-| 3 | feed.go | 🔲 Not started | — |
+| 3 | feed.go | ✅ Done | 2026-03-06 |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
 ---
@@ -187,61 +187,76 @@ Open Graph, Twitter Cards, `/llms.txt`, AIDoc endpoints, and RSS feeds.
 ### Step 3 — feed.go
 
 **Depends on:** `ai.go`, `sitemap.go`, `module.go`, `signals.go`  
-**Decisions:** Decision 3 (zero-dependency), Decision 10 (event-driven regeneration)  
+**Decisions:** Decision 3 (zero-dependency), Decision 10 (event-driven regeneration), Decision 13 (RSS feeds)  
+**Amendments required before implementation:**
+- **A16** — Decision 13 updated: RSS is opt-in (`Feed(FeedConfig{...})` required), not auto-generated. `FeedDisabled()` retained as explicit marker.  
 **Files:** `feed.go`, `feed_test.go`
 
-#### 3.1 — FeedConfig types
+#### 3.1 — Amendment A16 + FeedConfig types
 
-- [ ] Define `FeedConfig` struct with fields: `Title string`, `Description string`, `Language string` (default `"en"`)
-- [ ] Define `Feed(config FeedConfig) Option` — enables RSS for the module
-- [ ] Define `FeedDisabled() Option` — explicit opt-out (for modules where RSS makes no sense)
-- [ ] RSS is opt-in per module — no feed generated unless `Feed(...)` is set
-- [ ] Add godoc to all exported symbols
+- [x] Draft and agree Amendment A16 in `DECISIONS.md` — Decision 13: change auto-generate to opt-in; document rationale (no surprise endpoints on admin/API-only modules)
+- [x] Define `FeedConfig` struct: `Title string`, `Description string`, `Language string`
+- [x] Define `feedOption struct{ cfg FeedConfig }` + `func (feedOption) isOption()` + `Feed(cfg FeedConfig) Option`
+- [x] Define `feedDisabledOption struct{}` + `func (feedDisabledOption) isOption()` + `FeedDisabled() Option`
+- [x] Add godoc to all exported symbols
 
-#### 3.2 — RSS generation
+#### 3.2 — RSS XML types (`encoding/xml`)
 
-- [ ] `feedStore` package-level store (sync.Map keyed by module prefix, same pattern as `sitemapStore`)
-- [ ] Per-module RSS at `/{prefix}/feed.xml` — generated at startup and on signals
-- [ ] App-level index at `/feed.xml` — lists all module feeds (only if at least one module has `Feed` set)
-- [ ] RSS 2.0 format: `<rss version="2.0">`, `<channel>` with title/description/link/language, `<item>` per Published node
-- [ ] `<item>` fields: `<title>`, `<link>` (canonical from Head), `<description>` (Head.Description), `<pubDate>` (RFC1123Z from PublishedAt), `<guid isPermaLink="true">` (canonical URL), `<enclosure>` for Image if present, `<category>` per tag
-- [ ] Content-Type: `application/rss+xml; charset=utf-8`
-- [ ] Use zero-dependency XML generation (format string or `encoding/xml` from stdlib)
+- [x] Define `rssGUID struct{ IsPermaLink bool \`xml:\"isPermaLink,attr\"\`; Value string \`xml:\",chardata\"\`` }`
+- [x] Define `rssEnclosure struct{ URL, Length, Type string }` with `xml` attr tags
+- [x] Define `rssItem struct` with `xml` struct tags: `Title`, `Link`, `Description`, `PubDate` (RFC1123Z), `GUID rssGUID`, `Enclosure *rssEnclosure` (omitempty), `Author` (omitempty), `Categories []string \`xml:\"category\"\``
+- [x] Define `rssChannel struct`: `Title`, `Link`, `Description`, `Language`, `LastBuildDate`, `Items []rssItem \`xml:\"item\"\``
+- [x] Define `rssRoot struct{ XMLName xml.Name \`xml:\"rss\"\`; Version string \`xml:\"version,attr\"\`; Channel rssChannel \`xml:\"channel\"\`` }`
+- [x] `buildRSSItem(head Head, n Node, baseURL string) rssItem` — maps fields; canonical URL = Head.Canonical else baseURL+prefix+"/"+slug; `<enclosure>` when Head.Image.URL non-empty; `<category>` per tag; pubDate = Node.PublishedAt.Format(time.RFC1123Z)
 
-#### 3.3 — Signal-driven regeneration
+#### 3.3 — FeedStore
 
-- [ ] Subscribe to `AfterPublish` and `AfterArchive` signals on every module where `Feed` is set
-- [ ] Debounce regeneration (same `debounce` helper used by sitemap — reuse, do not duplicate)
-- [ ] Regeneration updates both the module fragment and the app-level index
-- [ ] Startup generation: generate all feeds after all modules are registered (same pattern as sitemap)
+- [x] Define `FeedStore struct`: `sync.RWMutex`, `siteName string`, `baseURL string`, `fragments map[string][]rssItem` (keyed by prefix), `configs map[string]FeedConfig`
+- [x] `NewFeedStore(siteName, baseURL string) *FeedStore`
+- [x] `(s *FeedStore) Set(prefix string, cfg FeedConfig, items []rssItem)` — stores fragment under lock
+- [x] `(s *FeedStore) HasFeeds() bool` — returns len(s.fragments) > 0; used by `App.Handler()` guard
+- [x] `(s *FeedStore) ModuleHandler(prefix string) http.Handler` — marshals stored items for that prefix; `Content-Type: application/rss+xml; charset=utf-8`
+- [x] `(s *FeedStore) IndexHandler() http.Handler` — merges all fragments, sorts by PubDate descending, marshals into one aggregate channel; `Content-Type: application/rss+xml; charset=utf-8`
+- [x] Channel title for module handler: `FeedConfig.Title` if non-empty, else `capitalise(strings.TrimLeft(prefix, "/"))` (ASCII helper, zero-dep)
+- [x] Channel title for index: `siteName` (hostname)
 
-#### 3.4 — Lifecycle enforcement
+#### 3.4 — module.go wiring (A16)
 
-- [ ] Only `Published` content appears in feeds
-- [ ] `Draft`, `Scheduled`, and `Archived` nodes are excluded (same filter as sitemap)
-- [ ] Sitemap lifecycle table in README already covers RSS — no README update needed for this rule
+- [x] Add `feedCfg *FeedConfig` and `feedStore *FeedStore` fields to `Module[T]` struct
+- [x] Add `case feedOption: cfg := v.cfg; m.feedCfg = &cfg` and `case feedDisabledOption: m.feedCfg = nil` to the option switch in `NewModule`
+- [x] Add `m.regenerateFeed(ctx)` to the debouncer callback after `m.regenerateAI(ctx)`
+- [x] Add `GET /{prefix}/feed.xml` route in `Register()` when `m.feedCfg != nil && m.feedStore != nil`
+- [x] Add `setFeedStore(store *FeedStore, baseURL string)` method — sets `m.feedStore`, sets `m.baseURL` if not already set, calls `store.Set(m.prefix, *m.feedCfg, nil)` to register the prefix
+- [x] Add `regenerateFeed(ctx Context)` method — guards on `m.feedStore == nil || m.feedCfg == nil`; queries Published; builds `[]rssItem`; calls `m.feedStore.Set(m.prefix, *m.feedCfg, items)`
 
-#### 3.5 — Tests
+#### 3.5 — forge.go wiring (A16)
 
-- [ ] `TestFeedOption` — Feed(FeedConfig{...}) registers without error; FeedDisabled() sets opt-out flag
-- [ ] `TestFeedEndpoint` — GET /posts/feed.xml returns 200 with RSS 2.0 document
-- [ ] `TestFeedContainsPublishedOnly` — Draft item absent from feed; Published item present
-- [ ] `TestFeedSignalRegeneration` — publishing a new item triggers feed regeneration
-- [ ] `TestFeedIndexEndpoint` — GET /feed.xml lists all module feeds when multiple modules have Feed set
-- [ ] `TestFeedEnclosure` — item with Image produces `<enclosure>` element
-- [ ] All tests table-driven with `t.Run`
+- [x] Add `feedStore *FeedStore` and `feedIndexRegistered bool` to `App` struct
+- [x] In `Content()`: add interface check block `interface{ setFeedStore(*FeedStore, string) }` — lazy-inits `NewFeedStore(hostname, baseURL)` on first call; calls `setFeedStore`
+- [x] In `Handler()`: add guard — `if a.feedStore != nil && a.feedStore.HasFeeds() && !a.feedIndexRegistered { ... mount GET /feed.xml ... }`
+
+#### 3.6 — Tests
+
+- [x] `TestFeedOption` — `Feed(FeedConfig{...})` sets feedCfg on module; `FeedDisabled()` clears feedCfg
+- [x] `TestFeedEndpoint` — GET /posts/feed.xml returns 200, `Content-Type: application/rss+xml`, `<rss version="2.0">`
+- [x] `TestFeedContainsPublishedOnly` — Published item in feed body; Draft item absent
+- [x] `TestFeedFields` — title, link, description, pubDate, guid, author, category correct in `<item>`
+- [x] `TestFeedEnclosure` — item with non-empty `Head.Image.URL` produces `<enclosure>` element
+- [x] `TestFeedIndexEndpoint` — GET /feed.xml merges items from all Feed-enabled modules
+- [x] `TestFeedDefaultTitle` — empty `FeedConfig.Title` defaults to capitalised prefix (e.g. `/posts` → `"Posts"`)
+- [x] All tests table-driven with `t.Run`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestFeed ./...` — all green
-- [ ] `BACKLOG.md` — step 3 row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] `README.md` — section status badges updated if this step ships a documented feature
-- [ ] `integration_full_test.go` — new cross-milestone groups added (final step of each milestone only)
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required, or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestFeed ./...` — all green
+- [x] `BACKLOG.md` — step 3 row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] `README.md` — section status badges updated if this step ships a documented feature
+- [x] `integration_full_test.go` — N/A (final step only)
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — Amendment A16 drafted and agreed upon
 
 ---
 
