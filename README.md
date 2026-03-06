@@ -437,7 +437,7 @@ app.SEO(forge.RobotsConfig{
 
 ## AI indexing
 
-> 🔲 **Coming in Milestone 5** — `/llms.txt`, AIDoc endpoints, and content negotiation for AI agents are not yet implemented.
+> ✅ **Available** — `/llms.txt`, AIDoc endpoints, and content negotiation for AI agents.
 
 Forge is the first Go framework to treat AI indexing as a first-class feature.
 
@@ -523,7 +523,7 @@ No configuration. Forge handles negotiation automatically.
 
 ## Social sharing
 
-> 🔲 **Coming in Milestone 5** — `forge.Social()`, Open Graph, and Twitter Card rendering are not yet implemented.
+> ✅ **Available** — `forge.Social()`, Open Graph, and Twitter Card rendering.
 
 ```go
 func (p *BlogPost) Head() forge.Head {

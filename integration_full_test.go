@@ -1,6 +1,6 @@
 package forge
 
-// integration_full_test.go — cross-milestone integration suite (M1–M4).
+// integration_full_test.go — cross-milestone integration suite (M1–M5).
 //
 // Each test exercises behaviour that requires at least two milestone components
 // working together. No test in this file duplicates coverage from
@@ -15,6 +15,10 @@ package forge
 //   G6 — SEO wiring: robots.txt + sitemap registration (M2 + M3)
 //   G7 — Error template fallback across two modules (M2 + M4)
 //   G8 — TemplateData end-to-end (M3 + M4)
+//   G9 — Social + SitemapConfig (M5 + M3)
+//   G10 — AI indexing + content negotiation (M5 + M4)
+//   G11 — RSS feed + AfterPublish signal (M5 + M1)
+//   G12 — Full M5 stack (M5 + M3 + M4)
 
 import (
 	"bytes"
@@ -792,5 +796,487 @@ func TestFull_templateData_requestURL(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "path:/posts/url-post") {
 		t.Errorf("expected path:/posts/url-post in body, got: %s", w.Body.String())
+	}
+}
+
+// — G9: Social + SitemapConfig (M5 + M3) ——————————————————————————————————
+
+// TestFull_social_ogTagsInHTML verifies that a module configured with
+// Social(OpenGraph, TwitterCard) and SitemapConfig{} (M3) renders og:title and
+// twitter:card meta tags inside forge:head when HeadFunc returns a non-empty Title.
+func TestFull_social_ogTagsInHTML(t *testing.T) {
+	const show = `<!DOCTYPE html><html><head>{{template "forge:head" .Head}}</head></html>`
+	dir := intTmpDir(t, `<p>list</p>`, show)
+	_, handler, repo := intSetup(t,
+		Social(OpenGraph, TwitterCard),
+		SitemapConfig{},
+		HeadFunc(func(_ Context, p *testPost) Head {
+			return Head{Title: p.Title, Description: "A test post"}
+		}),
+		Templates(dir),
+	)
+	intSeed(t, repo, "og-post", "OG World")
+
+	r := httptest.NewRequest("GET", "/posts/og-post", nil)
+	r.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `property="og:title"`) {
+		t.Errorf("og:title missing from body:\n%s", body)
+	}
+	if !strings.Contains(body, `name="twitter:card"`) {
+		t.Errorf("twitter:card missing from body:\n%s", body)
+	}
+}
+
+// TestFull_social_draftReturns404 verifies that a Draft post returns 404
+// when Social and SitemapConfig options are active — lifecycle is enforced
+// regardless of which M5 options are present.
+func TestFull_social_draftReturns404(t *testing.T) {
+	dir := intTmpDir(t, `<p>list</p>`, `<p>{{.Content.Title}}</p>`)
+	_, handler, repo := intSetup(t,
+		Social(OpenGraph, TwitterCard),
+		SitemapConfig{},
+		Templates(dir),
+	)
+	// Seed a draft post directly (intSeed always seeds Published).
+	draft := &testPost{
+		Node:  Node{ID: NewID(), Slug: "og-draft", Status: Draft},
+		Title: "Draft OG Post",
+	}
+	if err := repo.Save(context.Background(), draft); err != nil {
+		t.Fatalf("seed draft: %v", err)
+	}
+
+	r := httptest.NewRequest("GET", "/posts/og-draft", nil)
+	r.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d (want 404); body: %s", w.Code, w.Body.String())
+	}
+}
+
+// — G10: AI indexing + content negotiation (M5 + M4) ————————————————————
+
+// TestFull_ai_llmsTxt_publishedPresent verifies that /llms.txt lists Published
+// items and excludes Draft items when AIIndex(LLMsTxt) is configured.
+func TestFull_ai_llmsTxt_publishedPresent(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	pub := seedAIPost(t, repo, "AI World", "body text", Published)
+	_ = seedAIPost(t, repo, "AI Draft", "draft body", Draft)
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(LLMsTxt),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+	m.regenerateAI(testAICtx())
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+	mux.Handle("GET /llms.txt", store.CompactHandler())
+
+	r := httptest.NewRequest("GET", "/llms.txt", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, pub.Title) {
+		t.Errorf("published title %q missing from /llms.txt:\n%s", pub.Title, body)
+	}
+	if strings.Contains(body, "AI Draft") {
+		t.Errorf("/llms.txt should not contain Draft item:\n%s", body)
+	}
+}
+
+// TestFull_ai_aiDoc_published verifies that /posts/{slug}/aidoc returns 200
+// for a Published item and contains the AIDoc v1 header.
+func TestFull_ai_aiDoc_published(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	pub := seedAIPost(t, repo, "AIDoc Published", "body text", Published)
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(AIDoc),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/"+pub.Slug+"/aidoc", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "+++aidoc+v1+++") {
+		t.Errorf("body missing AIDoc header:\n%s", w.Body.String())
+	}
+}
+
+// TestFull_ai_aiDoc_draftReturns404 verifies that /posts/{slug}/aidoc returns
+// 404 for a Draft item — lifecycle enforcement on the AIDoc endpoint.
+func TestFull_ai_aiDoc_draftReturns404(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	draft := seedAIPost(t, repo, "AIDoc Draft", "body text", Draft)
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(AIDoc),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/"+draft.Slug+"/aidoc", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d (want 404); body: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestFull_ai_markdownContentNeg verifies that Accept: text/markdown returns
+// the Markdown() body alongside the AIDoc option being active (M4 + M5).
+func TestFull_ai_markdownContentNeg(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	pub := seedAIPost(t, repo, "Markdown Negotiation", "markdown body text", Published)
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(AIDoc),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/"+pub.Slug, nil)
+	r.Header.Set("Accept", "text/markdown")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/markdown") {
+		t.Errorf("Content-Type = %q; want text/markdown", ct)
+	}
+	if !strings.Contains(w.Body.String(), pub.Title) {
+		t.Errorf("markdown body missing post title %q:\n%s", pub.Title, w.Body.String())
+	}
+}
+
+// — G11: RSS feed + AfterPublish signal (M5 + M1) ————————————————————————
+
+// TestFull_feed_publishedInFeed verifies that /posts/feed.xml returns a valid
+// RSS 2.0 document containing Published items.
+func TestFull_feed_publishedInFeed(t *testing.T) {
+	repo := NewMemoryRepo[*testFeedPost]()
+	pub := seedFeedPost(t, repo, "Feed World", Published)
+
+	store := NewFeedStore("example.com", "https://example.com")
+	m := NewModule((*testFeedPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Feed(FeedConfig{Title: "Integration Blog"}),
+		HeadFunc(feedHeadFunc),
+	)
+	m.setFeedStore(store, "https://example.com")
+	m.regenerateFeed(testFeedCtx())
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/feed.xml", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `version="2.0"`) {
+		t.Errorf("body missing RSS version attribute:\n%s", body)
+	}
+	if !strings.Contains(body, pub.Title) {
+		t.Errorf("published title %q missing from feed:\n%s", pub.Title, body)
+	}
+}
+
+// TestFull_feed_draftAbsent verifies that Draft items are excluded from the
+// RSS feed at /posts/feed.xml.
+func TestFull_feed_draftAbsent(t *testing.T) {
+	repo := NewMemoryRepo[*testFeedPost]()
+	_ = seedFeedPost(t, repo, "Feed Published", Published)
+	_ = seedFeedPost(t, repo, "Feed Draft Title", Draft)
+
+	store := NewFeedStore("example.com", "https://example.com")
+	m := NewModule((*testFeedPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Feed(FeedConfig{Title: "Blog"}),
+		HeadFunc(feedHeadFunc),
+	)
+	m.setFeedStore(store, "https://example.com")
+	m.regenerateFeed(testFeedCtx())
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/feed.xml", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if strings.Contains(w.Body.String(), "Feed Draft Title") {
+		t.Errorf("feed should not contain Draft item:\n%s", w.Body.String())
+	}
+}
+
+// TestFull_feed_afterPublishSignalFires verifies that the AfterPublish signal
+// fires when a Draft item is transitioned to Published while Feed is active
+// (M5 + M1 cross-milestone).
+func TestFull_feed_afterPublishSignalFires(t *testing.T) {
+	var fired atomic.Int32
+	repo := NewMemoryRepo[*testFeedPost]()
+
+	// Seed a Draft post that will be updated to Published.
+	draft := &testFeedPost{
+		Node:  Node{ID: NewID(), Slug: "signal-feed", Status: Draft},
+		Title: "Signal Feed Post",
+	}
+	if err := repo.Save(context.Background(), draft); err != nil {
+		t.Fatalf("seed draft: %v", err)
+	}
+
+	store := NewFeedStore("example.com", "https://example.com")
+	m := NewModule((*testFeedPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Feed(FeedConfig{Title: "Blog"}),
+		HeadFunc(feedHeadFunc),
+		On(AfterPublish, func(_ Context, _ *testFeedPost) error {
+			fired.Add(1)
+			return nil
+		}),
+	)
+	m.setFeedStore(store, "https://example.com")
+
+	body, _ := json.Marshal(map[string]any{"Title": "Signal Feed Post", "Status": "published"})
+	w := httptest.NewRecorder()
+	r := withUser(
+		httptest.NewRequest("PUT", "/posts/signal-feed", bytes.NewReader(body)),
+		editorUser(),
+	)
+	r.SetPathValue("slug", "signal-feed")
+	m.updateHandler(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("update: status = %d; body: %s", w.Code, w.Body.String())
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if fired.Load() > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if fired.Load() == 0 {
+		t.Error("AfterPublish did not fire within 500ms")
+	}
+}
+
+// — G12: Full M5 stack (M5 + M3 + M4) ———————————————————————————————————
+
+// TestFull_fullM5_htmlHasOGTags verifies that a module with all M5 options
+// (Social, AIIndex, Feed, SitemapConfig) plus M3/M4 (HeadFunc, Templates)
+// still renders og:title and twitter:card correctly in forge:head.
+func TestFull_fullM5_htmlHasOGTags(t *testing.T) {
+	const show = `<!DOCTYPE html><html><head>{{template "forge:head" .Head}}</head></html>`
+	dir := intTmpDir(t, `<p>list</p>`, show)
+
+	aiStore := NewLLMsStore("example.com")
+	feedSt := NewFeedStore("example.com", "https://example.com")
+	repo := NewMemoryRepo[*testAIPost]()
+
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Social(OpenGraph, TwitterCard),
+		AIIndex(LLMsTxt, AIDoc),
+		Feed(FeedConfig{Title: "Full M5 Blog"}),
+		SitemapConfig{},
+		HeadFunc(aiHeadFunc),
+		Templates(dir),
+	)
+	m.setAIRegistry(aiStore, "https://example.com")
+	m.setFeedStore(feedSt, "https://example.com")
+
+	pub := seedAIPost(t, repo, "Full M5 Post", "body text", Published)
+	m.regenerateAI(testAICtx())
+	m.regenerateFeed(testAICtx())
+
+	if err := m.parseTemplates(); err != nil {
+		t.Fatalf("parseTemplates: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+	mux.Handle("GET /llms.txt", aiStore.CompactHandler())
+
+	r := httptest.NewRequest("GET", "/posts/"+pub.Slug, nil)
+	r.Header.Set("Accept", "text/html")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `property="og:title"`) {
+		t.Errorf("og:title missing from full M5 HTML:\n%s", body)
+	}
+	if !strings.Contains(body, `name="twitter:card"`) {
+		t.Errorf("twitter:card missing from full M5 HTML:\n%s", body)
+	}
+}
+
+// TestFull_fullM5_llmsTxt verifies that /llms.txt is populated with Published
+// items when the full M5 option set is active.
+func TestFull_fullM5_llmsTxt(t *testing.T) {
+	aiStore := NewLLMsStore("example.com")
+	feedSt := NewFeedStore("example.com", "https://example.com")
+	repo := NewMemoryRepo[*testAIPost]()
+
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Social(OpenGraph, TwitterCard),
+		AIIndex(LLMsTxt, AIDoc),
+		Feed(FeedConfig{Title: "Full M5 Blog"}),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(aiStore, "https://example.com")
+	m.setFeedStore(feedSt, "https://example.com")
+
+	pub := seedAIPost(t, repo, "LLMs Entry", "body text", Published)
+	m.regenerateAI(testAICtx())
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+	mux.Handle("GET /llms.txt", aiStore.CompactHandler())
+
+	r := httptest.NewRequest("GET", "/llms.txt", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), pub.Title) {
+		t.Errorf("published title %q missing from /llms.txt:\n%s", pub.Title, w.Body.String())
+	}
+}
+
+// TestFull_fullM5_aiDoc verifies that /posts/{slug}/aidoc returns a valid
+// AIDoc response when the full M5 option set is active.
+func TestFull_fullM5_aiDoc(t *testing.T) {
+	aiStore := NewLLMsStore("example.com")
+	feedSt := NewFeedStore("example.com", "https://example.com")
+	repo := NewMemoryRepo[*testAIPost]()
+
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Social(OpenGraph, TwitterCard),
+		AIIndex(LLMsTxt, AIDoc),
+		Feed(FeedConfig{Title: "Full M5 Blog"}),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(aiStore, "https://example.com")
+	m.setFeedStore(feedSt, "https://example.com")
+
+	pub := seedAIPost(t, repo, "AIDoc Full M5", "body text", Published)
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/"+pub.Slug+"/aidoc", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "+++aidoc+v1+++") {
+		t.Errorf("body missing AIDoc header:\n%s", w.Body.String())
+	}
+}
+
+// TestFull_fullM5_feed verifies that /posts/feed.xml returns a valid RSS 2.0
+// document with Published items when the full M5 option set is active.
+func TestFull_fullM5_feed(t *testing.T) {
+	aiStore := NewLLMsStore("example.com")
+	feedSt := NewFeedStore("example.com", "https://example.com")
+	repo := NewMemoryRepo[*testAIPost]()
+
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Social(OpenGraph, TwitterCard),
+		AIIndex(LLMsTxt, AIDoc),
+		Feed(FeedConfig{Title: "Full M5 Blog"}),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(aiStore, "https://example.com")
+	m.setFeedStore(feedSt, "https://example.com")
+
+	pub := seedAIPost(t, repo, "Feed Full M5", "body text", Published)
+	m.regenerateFeed(testAICtx())
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest("GET", "/posts/feed.xml", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `version="2.0"`) {
+		t.Errorf("body missing RSS version:\n%s", body)
+	}
+	if !strings.Contains(body, pub.Title) {
+		t.Errorf("published title %q missing from feed:\n%s", pub.Title, body)
 	}
 }

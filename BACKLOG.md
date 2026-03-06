@@ -16,7 +16,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M2 | App Bootstrap (v0.2.0) | ✅ Done |
 | M3 | SEO & Head (v0.3.0) | ✅ Done |
 | M4 | Templates & Rendering (v0.4.0) | ✅ Done |
-| M5 | Social & AI (v0.5.0) | 🔲 Not started |
+| M5 | Social & AI (v0.5.0) | ✅ Done |
 | M6 | Cookies & Compliance (v0.6.0) | 🔲 Not started |
 | M7 | Redirects (v0.7.0) | 🔲 Not started |
 | M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
@@ -125,12 +125,12 @@ Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
 | 1 | social.go | ✅ Done | 2026-03-06 |
 | 2 | ai.go | ✅ Done | 2026-03-06 |
 | 3 | feed.go | ✅ Done | 2026-03-06 |
-| 4 | integration_full_test.go | 🔲 Not started | — |
+| 4 | integration_full_test.go | ✅ Done | 2026-03-06 |
 
 - [x] Step 1 — `social.go`: Social option, OpenGraph, TwitterCard, card types, SocialOverrides, forge:head OG/Twitter rendering
 - [x] Step 2 — `ai.go`: AIIndex option, LLMsTxt, LLMsTxtFull (full markdown corpus, opt-in), AIDoc format, AIDocSummary and Markdownable interfaces, WithoutID option, /llms.txt, /llms-full.txt and /{prefix}/{slug}/aidoc endpoints — **Note:** `Markdownable` migrates here from `module.go` (Amendment A11)
 - [x] Step 3 — `feed.go`: opt-in RSS 2.0 per module (Feed option), FeedConfig, FeedDisabled, /{prefix}/feed.xml + /feed.xml aggregate, signal-driven regeneration (Amendment A16)
-- [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G9–G12 (Social+SEO, AI+content negotiation, RSS+signals, full M5 stack) + README badge updates
+- [x] Step 4 — `integration_full_test.go`: cross-milestone groups G9–G12 (Social+SEO, AI+content negotiation, RSS+signals, full M5 stack) + README badge updates
 
 ---
 
