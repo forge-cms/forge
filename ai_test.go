@@ -1,7 +1,9 @@
 package forge
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -426,4 +428,167 @@ func TestAIDocWithoutID(t *testing.T) {
 			t.Errorf("body contains ID value %q when WithoutID() is set:\n%s", pub.ID, body)
 		}
 	})
+}
+
+// — TestCompressIfAccepted (Amendment A17) ——————————————————————————————
+
+// bigBody returns a slice of at least n bytes for threshold testing.
+func bigBody(n int) []byte { return []byte(strings.Repeat("x", n)) }
+
+// decompressGzip decompresses a gzip-encoded byte slice and returns the plain bytes.
+func decompressGzip(t *testing.T, b []byte) []byte {
+	t.Helper()
+	gr, err := gzip.NewReader(strings.NewReader(string(b)))
+	if err != nil {
+		t.Fatalf("gzip.NewReader: %v", err)
+	}
+	out, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("io.ReadAll gzip: %v", err)
+	}
+	return out
+}
+
+// TestCompressIfAccepted_gzip verifies that a body ≥ gzipMinBytes with
+// Accept-Encoding: gzip receives Content-Encoding: gzip and a valid compressed body.
+func TestCompressIfAccepted_gzip(t *testing.T) {
+	body := bigBody(gzipMinBytes)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/llms.txt", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	compressIfAccepted(w, r, body, "text/plain; charset=utf-8")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if w.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
+	}
+	if w.Header().Get("Vary") != "Accept-Encoding" {
+		t.Errorf("Vary = %q; want Accept-Encoding", w.Header().Get("Vary"))
+	}
+	decompressed := decompressGzip(t, w.Body.Bytes())
+	if string(decompressed) != string(body) {
+		t.Errorf("decompressed body mismatch: got %d bytes, want %d", len(decompressed), len(body))
+	}
+}
+
+// TestCompressIfAccepted_smallBody verifies that a body < gzipMinBytes is NOT
+// compressed even when the client accepts gzip.
+func TestCompressIfAccepted_smallBody(t *testing.T) {
+	body := bigBody(gzipMinBytes - 1)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/llms.txt", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	compressIfAccepted(w, r, body, "text/plain; charset=utf-8")
+
+	if w.Header().Get("Content-Encoding") != "" {
+		t.Errorf("expected no Content-Encoding for small body, got %q", w.Header().Get("Content-Encoding"))
+	}
+	if w.Header().Get("Vary") != "Accept-Encoding" {
+		t.Errorf("Vary = %q; want Accept-Encoding", w.Header().Get("Vary"))
+	}
+	if string(w.Body.Bytes()) != string(body) {
+		t.Errorf("plain body mismatch for small body path")
+	}
+}
+
+// TestCompressIfAccepted_noAcceptEncoding verifies that a large body is NOT
+// compressed when the client does not include Accept-Encoding: gzip.
+func TestCompressIfAccepted_noAcceptEncoding(t *testing.T) {
+	body := bigBody(gzipMinBytes)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/llms.txt", nil)
+	// No Accept-Encoding header set.
+	compressIfAccepted(w, r, body, "text/plain; charset=utf-8")
+
+	if w.Header().Get("Content-Encoding") != "" {
+		t.Errorf("expected no Content-Encoding without Accept-Encoding header, got %q", w.Header().Get("Content-Encoding"))
+	}
+	if string(w.Body.Bytes()) != string(body) {
+		t.Errorf("plain body mismatch for no-accept-encoding path")
+	}
+}
+
+// TestLLMsTxt_gzip verifies that CompactHandler returns a gzip-compressed
+// response when the client sends Accept-Encoding: gzip and the body is large
+// enough to trigger compression.
+func TestLLMsTxt_gzip(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	// Seed one entry with a very long summary so the response exceeds gzipMinBytes.
+	longSummary := strings.Repeat("word ", 300) // ~1500 chars
+	p := &testAIPost{
+		Node:    Node{ID: NewID(), Slug: "gzip-article", Status: Published},
+		Title:   "Gzip Article",
+		Summary: longSummary,
+	}
+	if err := repo.Save(context.Background(), p); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(LLMsTxt),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+	m.regenerateAI(testAICtx())
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /llms.txt", store.CompactHandler())
+
+	r := httptest.NewRequest(http.MethodGet, "/llms.txt", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
+	}
+	decompressed := string(decompressGzip(t, w.Body.Bytes()))
+	if !strings.Contains(decompressed, "Gzip Article") {
+		t.Errorf("decompressed body missing entry title:\n%s", decompressed[:min(200, len(decompressed))])
+	}
+}
+
+// TestAIDoc_gzip verifies that the /aidoc endpoint returns a gzip-compressed
+// response when Accept-Encoding: gzip is sent and the document body is large.
+func TestAIDoc_gzip(t *testing.T) {
+	repo := NewMemoryRepo[*testAIPost]()
+	// Build a post whose Markdown() body exceeds gzipMinBytes.
+	longBody := strings.Repeat("content word ", 120) // ~1560 chars
+	pub := seedAIPost(t, repo, "BigDoc Post", longBody, Published)
+
+	store := NewLLMsStore("example.com")
+	m := NewModule((*testAIPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		AIIndex(AIDoc),
+		HeadFunc(aiHeadFunc),
+	)
+	m.setAIRegistry(store, "https://example.com")
+
+	mux := http.NewServeMux()
+	m.Register(mux)
+
+	r := httptest.NewRequest(http.MethodGet, "/posts/"+pub.Slug+"/aidoc", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Content-Encoding") != "gzip" {
+		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
+	}
+	decompressed := string(decompressGzip(t, w.Body.Bytes()))
+	if !strings.Contains(decompressed, "+++aidoc+v1+++") {
+		t.Errorf("decompressed body missing AIDoc header:\n%s", decompressed[:min(200, len(decompressed))])
+	}
 }

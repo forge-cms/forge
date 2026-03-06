@@ -618,7 +618,7 @@ func (m *Module[T]) aiDocHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	n := extractNode(item)
-	renderAIDoc(w, head, n, item, m.withoutID)
+	renderAIDoc(w, r, head, n, item, m.withoutID)
 }
 
 // regenerateSitemap rebuilds the fragment sitemap for this module and stores

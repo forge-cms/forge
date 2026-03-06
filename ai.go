@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -222,6 +223,8 @@ func (s *LLMsStore) allCompactEntries() []LLMsEntry {
 // CompactHandler returns an [http.Handler] that serves the /llms.txt endpoint.
 // The built-in format follows the llmstxt.org convention: site name header
 // followed by per-item entries as "- [Title](URL): Summary".
+// Responses are gzip-compressed when the client sends Accept-Encoding: gzip
+// and the body exceeds [gzipMinBytes] (Amendment A17).
 func (s *LLMsStore) CompactHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entries := s.allCompactEntries()
@@ -234,15 +237,15 @@ func (s *LLMsStore) CompactHandler() http.Handler {
 				fmt.Fprintf(&buf, "- [%s](%s)\n", e.Title, e.URL)
 			}
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(buf.String())) //nolint:errcheck
+		compressIfAccepted(w, r, []byte(buf.String()), "text/plain; charset=utf-8")
 	})
 }
 
 // FullHandler returns an [http.Handler] that serves the /llms-full.txt endpoint.
 // The corpus header identifies the site name, generation date, and item count.
 // Each item is rendered as a full document separated by "---".
+// Responses are gzip-compressed when the client sends Accept-Encoding: gzip
+// and the body exceeds [gzipMinBytes] (Amendment A17).
 func (s *LLMsStore) FullHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.RLock()
@@ -263,9 +266,7 @@ func (s *LLMsStore) FullHandler() http.Handler {
 		for _, body := range fragments {
 			buf.WriteString(body)
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(buf.String())) //nolint:errcheck
+		compressIfAccepted(w, r, []byte(buf.String()), "text/plain; charset=utf-8")
 	})
 }
 
@@ -283,6 +284,30 @@ func extractNode(item any) Node {
 	return n
 }
 
+// — gzip compression helper (Amendment A17) ————————————————————————————
+
+// gzipMinBytes is the minimum body size below which gzip compression is skipped.
+// Compressing small responses wastes CPU — the overhead outweighs the saving.
+const gzipMinBytes = 1400
+
+// compressIfAccepted writes body to w, applying gzip compression when the
+// client sends Accept-Encoding: gzip and len(body) >= [gzipMinBytes].
+// Always sets Content-Type and Vary: Accept-Encoding.
+func compressIfAccepted(w http.ResponseWriter, r *http.Request, body []byte, contentType string) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Vary", "Accept-Encoding")
+	if len(body) >= gzipMinBytes && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+		gz := gzip.NewWriter(w)
+		gz.Write(body) //nolint:errcheck
+		gz.Close()     //nolint:errcheck
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(body) //nolint:errcheck
+}
+
 // — renderAIDoc ———————————————————————————————————————————————————————————
 
 // renderAIDoc writes an AIDoc formatted response to w.
@@ -293,8 +318,11 @@ func extractNode(item any) Node {
 //   - Dates use YYYY-MM-DD — timezone-free, compact
 //   - Body is Markdown when item implements [Markdownable], otherwise JSON
 //
+// Responses are gzip-compressed when the client sends Accept-Encoding: gzip
+// and the body exceeds [gzipMinBytes] (Amendment A17).
+//
 // Summary priority: [AIDocSummary].AISummary() (when non-empty) → [Head].Description → [Excerpt]([Markdownable].Markdown(), 120).
-func renderAIDoc(w http.ResponseWriter, head Head, n Node, item any, withoutID bool) {
+func renderAIDoc(w http.ResponseWriter, r *http.Request, head Head, n Node, item any, withoutID bool) {
 	// Compute body.
 	var body string
 	if md, ok := item.(Markdownable); ok {
@@ -347,7 +375,5 @@ func renderAIDoc(w http.ResponseWriter, head Head, n Node, item any, withoutID b
 	buf.WriteString("+++\n")
 	buf.WriteString(body)
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(buf.String())) //nolint:errcheck
+	compressIfAccepted(w, r, []byte(buf.String()), "text/plain; charset=utf-8")
 }

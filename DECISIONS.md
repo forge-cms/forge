@@ -351,6 +351,7 @@ Gzip is applied at the transport layer — not to reduce token count (the LLM
 sees decompressed text) but to reduce network overhead during bulk crawling.
 Long body content typically compresses 70–80%. Handled by middleware or
 reverse proxy, not by `forge.RenderAIDoc` itself.
+*(Superseded by Amendment A17: gzip is now applied directly by Forge’s AI endpoint handlers for compact, full, and AIDoc responses.)*
 
 **Updated format:**
 
@@ -627,6 +628,34 @@ app.Content(&Post{},
 - `FeedDisabled()` option exists but is a no-op when `Feed(...)` was never called
 - `/feed.xml` (aggregate index) is only registered when at least one module calls `Feed(...)`
 - No README examples are broken (feed was not yet documented as implemented)
+
+---
+
+### Amendment A17 — gzip applied directly in AI endpoint handlers
+
+**Date:** 2026-03-06  
+**Status:** Agreed  
+**Amends:** Decision 13 (Amendment A, clause 3)
+
+**Change:** Decision 13 Amendment A stated gzip on AIDoc responses would be “handled by middleware or reverse proxy, not by forge.RenderAIDoc itself.” That clause is superseded. Gzip compression is now applied directly by Forge’s AI endpoint handlers via the unexported `compressIfAccepted` helper in `ai.go`.
+
+**Endpoints affected:** `/llms.txt` (`CompactHandler`), `/llms-full.txt` (`FullHandler`), `/{prefix}/{slug}/aidoc` (`aiDocHandler` → `renderAIDoc`).
+
+**Behaviour:**
+- When `Accept-Encoding: gzip` is present **and** the response body is ≥ 1400 bytes, the response is gzip-compressed.
+- `Content-Encoding: gzip` and `Vary: Accept-Encoding` headers are always set on all three endpoints (regardless of whether compression is applied).
+- Below 1400 bytes the plain body is returned — compression overhead would exceed the saving on small responses.
+
+**Rationale:**
+- `llms-full.txt` is a full Markdown corpus that can reach hundreds of KB on large sites; gzip saves 70–80% on the wire, meaningfully reducing crawl bandwidth.
+- Requiring operators to wrap Forge AI handlers with a custom gzip middleware creates unnecessary friction and is inconsistent with the “production-ready by default” principle.
+- The 1400-byte threshold aligns with the typical TCP MSS so that single-packet responses are never pointlessly compressed.
+- The helper is scoped to AI endpoints only — HTML/JSON/RSS responses are not affected.
+
+**Consequences of amendment:**
+- `renderAIDoc` now takes `r *http.Request` as its second parameter (unexported function, no external API change).
+- `gzipMinBytes = 1400` is an unexported package-level constant, accessible to tests in the same package.
+- No change to the public `Option` API or any exported symbol.
 
 ---
 
