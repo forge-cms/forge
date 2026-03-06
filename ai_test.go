@@ -464,6 +464,9 @@ func TestCompressIfAccepted_gzip(t *testing.T) {
 	if w.Header().Get("Content-Encoding") != "gzip" {
 		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
 	}
+	if w.Header().Get("Content-Length") == "" {
+		t.Errorf("Content-Length must be set on compressed response")
+	}
 	if w.Header().Get("Vary") != "Accept-Encoding" {
 		t.Errorf("Vary = %q; want Accept-Encoding", w.Header().Get("Vary"))
 	}
@@ -550,6 +553,9 @@ func TestLLMsTxt_gzip(t *testing.T) {
 	if w.Header().Get("Content-Encoding") != "gzip" {
 		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
 	}
+	if w.Header().Get("Content-Length") == "" {
+		t.Errorf("Content-Length must be set on compressed response")
+	}
 	decompressed := string(decompressGzip(t, w.Body.Bytes()))
 	if !strings.Contains(decompressed, "Gzip Article") {
 		t.Errorf("decompressed body missing entry title:\n%s", decompressed[:min(200, len(decompressed))])
@@ -586,6 +592,9 @@ func TestAIDoc_gzip(t *testing.T) {
 	}
 	if w.Header().Get("Content-Encoding") != "gzip" {
 		t.Errorf("Content-Encoding = %q; want gzip", w.Header().Get("Content-Encoding"))
+	}
+	if w.Header().Get("Content-Length") == "" {
+		t.Errorf("Content-Length must be set on compressed response")
 	}
 	decompressed := string(decompressGzip(t, w.Body.Bytes()))
 	if !strings.Contains(decompressed, "+++aidoc+v1+++") {

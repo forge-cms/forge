@@ -1,10 +1,12 @@
 package forge
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -288,22 +290,28 @@ func extractNode(item any) Node {
 
 // gzipMinBytes is the minimum body size below which gzip compression is skipped.
 // Compressing small responses wastes CPU — the overhead outweighs the saving.
-const gzipMinBytes = 1400
+// 1024 bytes aligns with the industry consensus threshold used by NGINX, Cloudflare,
+// Spring Boot, and Akamai for text/plain and text/markdown content.
+const gzipMinBytes = 1024
 
 // compressIfAccepted writes body to w, applying gzip compression when the
 // client sends Accept-Encoding: gzip and len(body) >= [gzipMinBytes].
-// Always sets Content-Type and Vary: Accept-Encoding.
+// Always sets Content-Type, Content-Length, and Vary: Accept-Encoding.
 func compressIfAccepted(w http.ResponseWriter, r *http.Request, body []byte, contentType string) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Vary", "Accept-Encoding")
 	if len(body) >= gzipMinBytes && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		w.WriteHeader(http.StatusOK)
-		gz := gzip.NewWriter(w)
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
 		gz.Write(body) //nolint:errcheck
 		gz.Close()     //nolint:errcheck
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		w.WriteHeader(http.StatusOK)
+		w.Write(buf.Bytes()) //nolint:errcheck
 		return
 	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(body) //nolint:errcheck
 }

@@ -642,20 +642,22 @@ app.Content(&Post{},
 **Endpoints affected:** `/llms.txt` (`CompactHandler`), `/llms-full.txt` (`FullHandler`), `/{prefix}/{slug}/aidoc` (`aiDocHandler` → `renderAIDoc`).
 
 **Behaviour:**
-- When `Accept-Encoding: gzip` is present **and** the response body is ≥ 1400 bytes, the response is gzip-compressed.
-- `Content-Encoding: gzip` and `Vary: Accept-Encoding` headers are always set on all three endpoints (regardless of whether compression is applied).
-- Below 1400 bytes the plain body is returned — compression overhead would exceed the saving on small responses.
+- When `Accept-Encoding: gzip` is present **and** the response body is ≥ 1024 bytes, the response is gzip-compressed.
+- `Content-Encoding: gzip`, `Content-Length`, and `Vary: Accept-Encoding` headers are set on all three endpoints (Content-Length is set on plain responses too).
+- Below 1024 bytes the plain body is returned — compression overhead would exceed the saving on small responses.
 
 **Rationale:**
 - `llms-full.txt` is a full Markdown corpus that can reach hundreds of KB on large sites; gzip saves 70–80% on the wire, meaningfully reducing crawl bandwidth.
 - Requiring operators to wrap Forge AI handlers with a custom gzip middleware creates unnecessary friction and is inconsistent with the “production-ready by default” principle.
-- The 1400-byte threshold aligns with the typical TCP MSS so that single-packet responses are never pointlessly compressed.
+- The 1024-byte threshold aligns with the industry consensus used by NGINX, Cloudflare, Spring Boot, and Akamai for text/plain and text/markdown content (2026 defaults).
 - The helper is scoped to AI endpoints only — HTML/JSON/RSS responses are not affected.
 
 **Consequences of amendment:**
 - `renderAIDoc` now takes `r *http.Request` as its second parameter (unexported function, no external API change).
-- `gzipMinBytes = 1400` is an unexported package-level constant, accessible to tests in the same package.
+- `compressIfAccepted` compresses into a `bytes.Buffer` first so `Content-Length` can be set before `WriteHeader`; `Content-Length` is also set on the plain (non-compressed) path for consistent HTTP hygiene.
+- `gzipMinBytes = 1024` is an unexported package-level constant, accessible to tests in the same package.
 - No change to the public `Option` API or any exported symbol.
+- **Brotli is deferred:** Go's standard library has no `compress/brotli` package; adding a third-party dependency violates Decision 3. Revisit if stdlib adds brotli support or if a `forge-brotli` opt-in extension module is introduced.
 
 ---
 
