@@ -491,7 +491,7 @@ func TestCompressIfAccepted_smallBody(t *testing.T) {
 	if w.Header().Get("Vary") != "Accept-Encoding" {
 		t.Errorf("Vary = %q; want Accept-Encoding", w.Header().Get("Vary"))
 	}
-	if string(w.Body.Bytes()) != string(body) {
+	if w.Body.String() != string(body) {
 		t.Errorf("plain body mismatch for small body path")
 	}
 }
@@ -508,7 +508,7 @@ func TestCompressIfAccepted_noAcceptEncoding(t *testing.T) {
 	if w.Header().Get("Content-Encoding") != "" {
 		t.Errorf("expected no Content-Encoding without Accept-Encoding header, got %q", w.Header().Get("Content-Encoding"))
 	}
-	if string(w.Body.Bytes()) != string(body) {
+	if w.Body.String() != string(body) {
 		t.Errorf("plain body mismatch for no-accept-encoding path")
 	}
 }
