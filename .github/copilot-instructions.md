@@ -211,67 +211,10 @@ After completing a step:
 
 Never update only one file — always keep both in sync.
 
-### When to create a milestone backlog
-
-Before writing any code for a milestone:
-1. Create `Milestone{N}_BACKLOG.md` with full step detail
-2. Add the step summaries to `BACKLOG.md` under the relevant milestone section
-3. Both files must be reviewed and confirmed before implementation starts
-
 ### Structure of a milestone backlog file
 
-The file follows this structure exactly:
-
-```
-# Forge — Milestone {N} Backlog (v{semver})
-
-One-line description of the milestone goal.
-
----
-
-## Progress
-
-| Step | File | Status | Completed |
-|------|------|--------|-----------|
-| 1    | foo.go | 🔲 Not started | — |
-...
-
----
-
-## Layer {N} — {Layer name} ({dependency note})
-
-### Step {N} — {filename}
-
-**Depends on:** {nothing | list of files}
-**Decisions:** {Decision numbers and Amendment IDs}
-**Files:** `{impl file}`, `{test file}`
-
-#### {N}.{M} — {Sub-section name}
-
-- [ ] Specific, atomic implementation task
-- [ ] Another task
-...
-
-#### Verification
-
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run Test{Name} ./...` — all green
-- [ ] `BACKLOG.md` — step table row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] `README.md` — section status badges updated if this step ships a documented feature
-- [ ] `integration_full_test.go` — new cross-milestone groups added (final step of each milestone only)
-
----
-
-## Completion criteria for Milestone {N}
-
-- [ ] Criterion 1
-- [ ] `integration_full_test.go` — new cross-milestone groups (G{N}+) added and all passing
-- [ ] `README.md` — all section badges updated to reflect features shipped in this milestone
-...
-```
+The file follows the structure defined in `Milestone_BACKLOG_TEMPLATE.md`.
+Copy that file and fill in the placeholders before implementation starts.
 
 ### Rules for steps
 
@@ -300,24 +243,3 @@ One-line description of the milestone goal.
   - [ ] Review ARCHITECTURE.md and DECISIONS.md — no new decisions required,
         or new Decision/Amendment drafted and agreed upon
   ```
-
-### Progress tracking
-
-- Mark a step `🔲 In progress` in the Progress table of `Milestone{N}_BACKLOG.md` when work begins.
-- After a step passes verification:
-  1. Tick all its checkboxes in `Milestone{N}_BACKLOG.md`
-  2. Mark it `✅ Done` with date in the `Milestone{N}_BACKLOG.md` Progress table
-  3. Tick its summary checkbox in `BACKLOG.md`
-  4. Update its row in the `BACKLOG.md` step table
-- Never mark a step done if `go test ./...` is red.
-- If all steps in a milestone are complete, update the milestone row in the
-  `BACKLOG.md` top Progress table to ✅.
-- Never batch updates — update immediately after each step is verified.
-
-### Naming convention
-
-| Milestone | File |
-|-----------|------|
-| Milestone 1 | `Milestone1_BACKLOG.md` |
-| Milestone 2 | `Milestone2_BACKLOG.md` |
-| … | … |
