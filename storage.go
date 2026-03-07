@@ -3,10 +3,13 @@ package forge
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
+	"time"
+	"unicode"
 )
 
 // DB is satisfied by *sql.DB, *sql.Tx, and any pgx adapter such as
@@ -382,4 +385,209 @@ func sortItems[T any](items []T, field string, desc bool) {
 	for i, p := range pairs {
 		items[i] = p.item
 	}
+}
+
+// ---------------------------------------------------------------------------
+// SQLRepo[T] — production Repository[T] backed by forge.DB
+// ---------------------------------------------------------------------------
+
+// SQLRepoOption configures a [SQLRepo]. Obtain values via [Table].
+type SQLRepoOption interface{ isSQLRepoOption() }
+
+// tableOption overrides the automatically derived SQL table name.
+type tableOption struct{ name string }
+
+func (tableOption) isSQLRepoOption() {}
+
+// Table returns a [SQLRepoOption] that overrides the automatically derived
+// table name for a [SQLRepo]. Use it when the default snake_case plural
+// derivation does not produce the correct name.
+//
+//	repo := forge.NewSQLRepo[BlogPost](db, forge.Table("posts"))
+func Table(name string) SQLRepoOption { return tableOption{name: name} }
+
+// camelToSnake converts a CamelCase identifier to snake_case.
+// "BlogPost" → "blog_post". "Article" → "article".
+func camelToSnake(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for i, r := range s {
+		if unicode.IsUpper(r) && i > 0 {
+			b.WriteByte('_')
+		}
+		b.WriteRune(unicode.ToLower(r))
+	}
+	return b.String()
+}
+
+// tableName derives the SQL table name for T from the registered [Table]
+// option, or falls back to the snake_case plural of the type name.
+// Pointer types are unwrapped: *BlogPost → "blog_posts".
+func tableName[T any](opts []SQLRepoOption) string {
+	for _, o := range opts {
+		if to, ok := o.(tableOption); ok {
+			return to.name
+		}
+	}
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return camelToSnake(t.Name()) + "s"
+}
+
+// SQLRepo is a production [Repository][T] backed by [forge.DB].
+// T must embed [forge.Node] — its fields are mapped to SQL columns via `db`
+// struct tags, falling back to lowercase field names (the same rules as
+// [Query] and [QueryOne]).
+//
+// All queries use $N positional placeholders (PostgreSQL / pgx compatible).
+// Use the [Table] option to override the automatically derived table name.
+type SQLRepo[T any] struct {
+	db       DB
+	table    string
+	elemType reflect.Type // underlying struct type (never a pointer)
+}
+
+// NewSQLRepo returns a [SQLRepo][T] ready for use. The table name is derived
+// automatically from T (e.g. BlogPost → "blog_posts"); pass [Table] to
+// override.
+func NewSQLRepo[T any](db DB, opts ...SQLRepoOption) *SQLRepo[T] {
+	t := reflect.TypeOf((*T)(nil)).Elem()
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return &SQLRepo[T]{
+		db:       db,
+		table:    tableName[T](opts),
+		elemType: t,
+	}
+}
+
+// columnForField returns the SQL column name for the given Go field name.
+// Returns ("", false) if the field is unknown or excluded from mapping.
+func (r *SQLRepo[T]) columnForField(goName string) (string, bool) {
+	for _, f := range dbFields(r.elemType) {
+		if r.elemType.Field(f.index).Name == goName {
+			return f.name, true
+		}
+	}
+	return "", false
+}
+
+// FindByID returns the item with the given id, or [ErrNotFound].
+func (r *SQLRepo[T]) FindByID(ctx context.Context, id string) (T, error) {
+	return QueryOne[T](ctx, r.db,
+		"SELECT * FROM "+r.table+" WHERE id = $1", id)
+}
+
+// FindBySlug returns the item with the given slug, or [ErrNotFound].
+func (r *SQLRepo[T]) FindBySlug(ctx context.Context, slug string) (T, error) {
+	return QueryOne[T](ctx, r.db,
+		"SELECT * FROM "+r.table+" WHERE slug = $1", slug)
+}
+
+// FindAll returns items matching opts. Status filter, ordering, and
+// pagination are translated to SQL WHERE / ORDER BY / LIMIT OFFSET clauses.
+func (r *SQLRepo[T]) FindAll(ctx context.Context, opts ListOptions) ([]T, error) {
+	query := "SELECT * FROM " + r.table
+	args := make([]any, 0, len(opts.Status)+2)
+	n := 1
+
+	if len(opts.Status) > 0 {
+		placeholders := make([]string, len(opts.Status))
+		for i, s := range opts.Status {
+			placeholders[i] = fmt.Sprintf("$%d", n)
+			args = append(args, string(s))
+			n++
+		}
+		query += " WHERE status IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	if opts.OrderBy != "" {
+		if col, ok := r.columnForField(opts.OrderBy); ok {
+			query += " ORDER BY " + col
+			if opts.Desc {
+				query += " DESC"
+			}
+		}
+	}
+
+	if opts.PerPage > 0 {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", n, n+1)
+		args = append(args, opts.PerPage, opts.Offset())
+	}
+
+	return Query[T](ctx, r.db, query, args...)
+}
+
+// Save upserts item into the table. UpdatedAt is set to the current UTC time.
+// CreatedAt is set only when its current value is the zero time.
+// The upsert key is the "id" column.
+func (r *SQLRepo[T]) Save(ctx context.Context, item T) error {
+	// Create an addressable copy so we can write timestamps.
+	cp := reflect.New(r.elemType)
+	src := reflect.ValueOf(item)
+	for src.Kind() == reflect.Ptr {
+		src = src.Elem()
+	}
+	cp.Elem().Set(src)
+	rv := cp.Elem()
+
+	now := time.Now().UTC()
+	if path := goFieldPath(r.elemType, "UpdatedAt"); path != nil {
+		if f := rv.FieldByIndex(path); f.CanSet() {
+			f.Set(reflect.ValueOf(now))
+		}
+	}
+	if path := goFieldPath(r.elemType, "CreatedAt"); path != nil {
+		if f := rv.FieldByIndex(path); f.CanSet() {
+			if ts, ok := f.Interface().(time.Time); ok && ts.IsZero() {
+				f.Set(reflect.ValueOf(now))
+			}
+		}
+	}
+
+	fields := dbFields(r.elemType)
+	cols := make([]string, len(fields))
+	placeholders := make([]string, len(fields))
+	vals := make([]any, len(fields))
+	setParts := make([]string, 0, len(fields))
+
+	for i, f := range fields {
+		cols[i] = f.name
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		vals[i] = rv.Field(f.index).Interface()
+		if f.name != "id" {
+			setParts = append(setParts, f.name+"=EXCLUDED."+f.name)
+		}
+	}
+
+	query := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (id) DO UPDATE SET %s",
+		r.table,
+		strings.Join(cols, ", "),
+		strings.Join(placeholders, ", "),
+		strings.Join(setParts, ", "),
+	)
+	_, err := r.db.ExecContext(ctx, query, vals...)
+	return err
+}
+
+// Delete removes the item with the given id. Returns [ErrNotFound] if no row
+// was deleted.
+func (r *SQLRepo[T]) Delete(ctx context.Context, id string) error {
+	result, err := r.db.ExecContext(ctx,
+		"DELETE FROM "+r.table+" WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

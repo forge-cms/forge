@@ -30,6 +30,35 @@ func setFakeResult(cols []string, rows [][]driver.Value) {
 	fakeResultMu.Unlock()
 }
 
+// fakeQueryMu protects fakeLastQuery and fakeExecRows.
+var (
+	fakeQueryMu   sync.Mutex
+	fakeLastQuery string
+	fakeExecRows  int64
+)
+
+// setFakeExecRows sets the RowsAffected value returned by the next Exec call.
+func setFakeExecRows(n int64) {
+	fakeQueryMu.Lock()
+	fakeExecRows = n
+	fakeQueryMu.Unlock()
+}
+
+// getLastQuery returns and clears the last prepared query string.
+func getLastQuery() string {
+	fakeQueryMu.Lock()
+	defer fakeQueryMu.Unlock()
+	q := fakeLastQuery
+	fakeLastQuery = ""
+	return q
+}
+
+// fakeExecResult is returned by forgeTestStmt.Exec.
+type fakeExecResult struct{ n int64 }
+
+func (r fakeExecResult) LastInsertId() (int64, error) { return 0, nil }
+func (r fakeExecResult) RowsAffected() (int64, error) { return r.n, nil }
+
 type forgeTestDriver struct{}
 
 func (forgeTestDriver) Open(_ string) (driver.Conn, error) {
@@ -38,9 +67,14 @@ func (forgeTestDriver) Open(_ string) (driver.Conn, error) {
 
 type forgeTestConn struct{}
 
-func (forgeTestConn) Prepare(_ string) (driver.Stmt, error) { return &forgeTestStmt{}, nil }
-func (forgeTestConn) Close() error                          { return nil }
-func (forgeTestConn) Begin() (driver.Tx, error)             { return &forgeTestTx{}, nil }
+func (forgeTestConn) Prepare(query string) (driver.Stmt, error) {
+	fakeQueryMu.Lock()
+	fakeLastQuery = query
+	fakeQueryMu.Unlock()
+	return &forgeTestStmt{}, nil
+}
+func (forgeTestConn) Close() error              { return nil }
+func (forgeTestConn) Begin() (driver.Tx, error) { return &forgeTestTx{}, nil }
 
 type forgeTestTx struct{}
 
@@ -49,9 +83,14 @@ func (forgeTestTx) Rollback() error { return nil }
 
 type forgeTestStmt struct{}
 
-func (forgeTestStmt) Close() error                                 { return nil }
-func (forgeTestStmt) NumInput() int                                { return -1 }
-func (forgeTestStmt) Exec(_ []driver.Value) (driver.Result, error) { return nil, nil }
+func (forgeTestStmt) Close() error  { return nil }
+func (forgeTestStmt) NumInput() int { return -1 }
+func (forgeTestStmt) Exec(_ []driver.Value) (driver.Result, error) {
+	fakeQueryMu.Lock()
+	n := fakeExecRows
+	fakeQueryMu.Unlock()
+	return fakeExecResult{n: n}, nil
+}
 func (forgeTestStmt) Query(_ []driver.Value) (driver.Rows, error) {
 	fakeResultMu.Lock()
 	cols := append([]string(nil), fakeResultCols...)
@@ -430,5 +469,152 @@ func BenchmarkQueryScanCached(b *testing.B) {
 			[][]driver.Value{{"bench-id", "Bench Title"}},
 		)
 		_, _ = Query[scanTarget](ctx, db, "SELECT id, title FROM t")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SQLRepo[T] test types
+// ---------------------------------------------------------------------------
+
+// BlogPost and PageContent are test-only types used to exercise SQLRepo[T]
+// table-name derivation and query generation. They live here in the test
+// binary only and are not exported from the forge package.
+type BlogPost struct {
+	ID    string `db:"id"`
+	Title string `db:"title"`
+}
+
+type PageContent struct {
+	ID string `db:"id"`
+}
+
+// ---------------------------------------------------------------------------
+// SQLRepo[T] tests
+// ---------------------------------------------------------------------------
+
+func TestSQLRepo_tableName_auto(t *testing.T) {
+	r := NewSQLRepo[BlogPost](nil)
+	if r.table != "blog_posts" {
+		t.Errorf("expected blog_posts, got %q", r.table)
+	}
+	r2 := NewSQLRepo[PageContent](nil)
+	if r2.table != "page_contents" {
+		t.Errorf("expected page_contents, got %q", r2.table)
+	}
+}
+
+func TestSQLRepo_tableName_override(t *testing.T) {
+	r := NewSQLRepo[BlogPost](nil, Table("posts"))
+	if r.table != "posts" {
+		t.Errorf("expected posts, got %q", r.table)
+	}
+}
+
+func TestSQLRepo_FindByID_query(t *testing.T) {
+	db := newTestDB(t)
+	setFakeResult(
+		[]string{"id", "title"},
+		[][]driver.Value{{"1", "Hello"}},
+	)
+	r := NewSQLRepo[BlogPost](db)
+	item, err := r.FindByID(context.Background(), "1")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+	if item.ID != "1" || item.Title != "Hello" {
+		t.Errorf("unexpected item: %+v", item)
+	}
+	want := "SELECT * FROM blog_posts WHERE id = $1"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+func TestSQLRepo_FindBySlug_query(t *testing.T) {
+	db := newTestDB(t)
+	setFakeResult(
+		[]string{"id", "title"},
+		[][]driver.Value{{"2", "World"}},
+	)
+	r := NewSQLRepo[BlogPost](db)
+	_, err := r.FindBySlug(context.Background(), "world")
+	if err != nil {
+		t.Fatalf("FindBySlug: %v", err)
+	}
+	want := "SELECT * FROM blog_posts WHERE slug = $1"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+func TestSQLRepo_Save_insert(t *testing.T) {
+	db := newTestDB(t)
+	setFakeExecRows(1)
+	r := NewSQLRepo[BlogPost](db)
+	err := r.Save(context.Background(), BlogPost{ID: "1", Title: "Hello"})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := "INSERT INTO blog_posts (id, title) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+func TestSQLRepo_Delete_query(t *testing.T) {
+	db := newTestDB(t)
+	setFakeExecRows(1)
+	r := NewSQLRepo[BlogPost](db)
+	err := r.Delete(context.Background(), "1")
+	if err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	want := "DELETE FROM blog_posts WHERE id = $1"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+func TestSQLRepo_Delete_notFound(t *testing.T) {
+	db := newTestDB(t)
+	setFakeExecRows(0)
+	r := NewSQLRepo[BlogPost](db)
+	err := r.Delete(context.Background(), "ghost")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestSQLRepo_FindAll_noFilter(t *testing.T) {
+	db := newTestDB(t)
+	setFakeResult(
+		[]string{"id", "title"},
+		[][]driver.Value{{"1", "Hello"}, {"2", "World"}},
+	)
+	r := NewSQLRepo[BlogPost](db)
+	items, err := r.FindAll(context.Background(), ListOptions{})
+	if err != nil {
+		t.Fatalf("FindAll: %v", err)
+	}
+	if len(items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(items))
+	}
+	want := "SELECT * FROM blog_posts"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+func TestSQLRepo_FindAll_statusFilter(t *testing.T) {
+	db := newTestDB(t)
+	setFakeResult([]string{"id", "title"}, nil)
+	r := NewSQLRepo[BlogPost](db)
+	_, err := r.FindAll(context.Background(), ListOptions{Status: []Status{Published}})
+	if err != nil {
+		t.Fatalf("FindAll: %v", err)
+	}
+	want := "SELECT * FROM blog_posts WHERE status IN ($1)"
+	if q := getLastQuery(); q != want {
+		t.Errorf("query = %q, want %q", q, want)
 	}
 }

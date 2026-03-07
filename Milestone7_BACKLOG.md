@@ -16,7 +16,7 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | storage.go | 🔲 Not started | — |
+| 1 | storage.go | ✅ Done | 2026-03-07 |
 | 2 | redirects.go | 🔲 Not started | — |
 | 3 | redirectmanifest.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |

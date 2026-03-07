@@ -159,12 +159,12 @@ optional DB persistence, and `/.well-known/redirects.json` inspect endpoint.
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | storage.go | 🔲 Not started | — |
+| 1 | storage.go | ✅ Done | 2026-03-07 |
 | 2 | redirects.go | 🔲 Not started | — |
 | 3 | redirectmanifest.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `storage.go`: `SQLRepo[T]` production `Repository[T]` backed by `forge.DB`; `Table()` SQLRepoOption; auto-derived table names; full CRUD using `dbFields` cache (Amendment A19)
+- [x] Step 1 — `storage.go`: `SQLRepo[T]` production `Repository[T]` backed by `forge.DB`; `Table()` SQLRepoOption; auto-derived table names; full CRUD using `dbFields` cache (Amendment A19)
 - [ ] Step 2 — `redirects.go`: `RedirectCode`, `RedirectEntry` (+`IsPrefix`), `From`/`Redirects` option, `RedirectStore` (exact + prefix lookup, chain collapse, DB persistence via `Load`/`Save`/`Remove`), `App.Redirect()`, `"/"` fallback wiring in `forge.go` (Amendment A20)
 - [ ] Step 3 — `redirectmanifest.go`: `/.well-known/redirects.json` — always mounted, live serialisation, reuses `ManifestAuth` option (Amendment A21)
 - [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G16–G18 (redirect enforcement, prefix rewrite + M2, full M7 stack + manifest + M6 ManifestAuth) + README badge updates
