@@ -15,7 +15,7 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | cookies.go | ✅ Done | 2026-03-07 |
-| 2 | cookiemanifest.go | 🔲 Not started | — |
+| 2 | cookiemanifest.go | ✅ Done | 2026-03-07 |
 | 3 | integration_full_test.go | 🔲 Not started | — |
 
 ---
@@ -30,13 +30,13 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 
 #### 1.1 — CookieCategory type and constants
 
-- [ ] Define `CookieCategory` as `type CookieCategory string`
-- [ ] Define four constants: `Necessary`, `Preferences`, `Analytics`, `Marketing`
-- [ ] Add godoc comment to each constant explaining GDPR relevance
+- [x] Define `CookieCategory` as `type CookieCategory string`
+- [x] Define four constants: `Necessary`, `Preferences`, `Analytics`, `Marketing`
+- [x] Add godoc comment to each constant explaining GDPR relevance
 
 #### 1.2 — Cookie struct
 
-- [ ] Define `Cookie` struct with fields:
+- [x] Define `Cookie` struct with fields:
   - `Name     string`        — cookie name as set on the wire
   - `Category CookieCategory` — determines which set API is legal
   - `Path     string`        — URL path scope (default `"/"` applied in SetCookie)
@@ -46,65 +46,65 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
   - `SameSite http.SameSite` — `http.SameSiteStrictMode` recommended default
   - `MaxAge   int`           — seconds; 0 = session; -1 = delete on read
   - `Purpose  string`        — human-readable description for the manifest
-- [ ] Add godoc comment explaining enforcement model
+- [x] Add godoc comment explaining enforcement model
 
 #### 1.3 — SetCookie (Necessary only)
 
-- [ ] Implement `SetCookie(w http.ResponseWriter, c Cookie, value string)`
-- [ ] Panics with descriptive message if `c.Category != Necessary` — makes misuse visible at first use, not in production
-- [ ] Applies `c.Path = "/"` if empty
-- [ ] Sets the `http.Cookie` and calls `http.SetCookie`
-- [ ] Add godoc comment: "Use SetCookie only for Necessary cookies. For all other categories, use SetCookieIfConsented."
+- [x] Implement `SetCookie(w http.ResponseWriter, c Cookie, value string)`
+- [x] Panics with descriptive message if `c.Category != Necessary` — makes misuse visible at first use, not in production
+- [x] Applies `c.Path = "/"` if empty
+- [x] Sets the `http.Cookie` and calls `http.SetCookie`
+- [x] Add godoc comment: "Use SetCookie only for Necessary cookies. For all other categories, use SetCookieIfConsented."
 
 #### 1.4 — SetCookieIfConsented (non-Necessary)
 
-- [ ] Implement `SetCookieIfConsented(w http.ResponseWriter, r *http.Request, c Cookie, value string) bool`
-- [ ] Panics if `c.Category == Necessary` (wrong API for Necessary cookies)
-- [ ] Calls `ConsentFor(r, c.Category)`; returns `false` without setting cookie if no consent
-- [ ] Sets cookie and returns `true` if consent is present
-- [ ] Applies `c.Path = "/"` if empty
+- [x] Implement `SetCookieIfConsented(w http.ResponseWriter, r *http.Request, c Cookie, value string) bool`
+- [x] Panics if `c.Category == Necessary` (wrong API for Necessary cookies)
+- [x] Calls `ConsentFor(r, c.Category)`; returns `false` without setting cookie if no consent
+- [x] Sets cookie and returns `true` if consent is present
+- [x] Applies `c.Path = "/"` if empty
 
 #### 1.5 — ReadCookie and ClearCookie
 
-- [ ] Implement `ReadCookie(r *http.Request, name string) (string, bool)` — wraps `r.Cookie`, returns ("", false) on miss
-- [ ] Implement `ClearCookie(w http.ResponseWriter, c Cookie)` — sets MaxAge=-1+Expires past to expire immediately
+- [x] Implement `ReadCookie(r *http.Request, name string) (string, bool)` — wraps `r.Cookie`, returns ("", false) on miss
+- [x] Implement `ClearCookie(w http.ResponseWriter, c Cookie)` — sets MaxAge=-1+Expires past to expire immediately
 
 #### 1.6 — Consent storage and ConsentFor
 
-- [ ] Define unexported constant `consentCookieName = "forge_consent"` — the Necessary cookie that stores consent
-- [ ] Define unexported `consentCookie Cookie` with `Category: Necessary`, `HttpOnly: true`, `Secure: true`, `SameSite: http.SameSiteStrictMode`
-- [ ] Implement `ConsentFor(r *http.Request, cat CookieCategory) bool`
+- [x] Define unexported constant `consentCookieName = "forge_consent"` — the Necessary cookie that stores consent
+- [x] Define unexported `consentCookie Cookie` with `Category: Necessary`, `HttpOnly: true`, `Secure: true`, `SameSite: http.SameSiteStrictMode`
+- [x] Implement `ConsentFor(r *http.Request, cat CookieCategory) bool`
   - Reads `forge_consent` cookie value
   - Parses comma-separated category list
   - Returns true if `cat` is in the list OR `cat == Necessary`
-- [ ] Implement `GrantConsent(w http.ResponseWriter, cats ...CookieCategory)` — sets/overwrites `forge_consent` with the given categories; `Necessary` is always implicit and must not be stored in the value (it is always true)
-- [ ] Implement `RevokeConsent(w http.ResponseWriter)` — clears `forge_consent` cookie
+- [x] Implement `GrantConsent(w http.ResponseWriter, cats ...CookieCategory)` — sets/overwrites `forge_consent` with the given categories; `Necessary` is always implicit and must not be stored in the value (it is always true)
+- [x] Implement `RevokeConsent(w http.ResponseWriter)` — clears `forge_consent` cookie
 
 #### 1.7 — Tests (cookies_test.go)
 
-- [ ] `TestCookieCategory_constants` — verify the four constant values
-- [ ] `TestSetCookie_necessary` — sets cookie on ResponseWriter correctly
-- [ ] `TestSetCookie_panicsOnNonNecessary` — panics if Category != Necessary
-- [ ] `TestSetCookieIfConsented_panicsOnNecessary` — panics if Category == Necessary
-- [ ] `TestSetCookieIfConsented_noConsent` — returns false, no Set-Cookie header
-- [ ] `TestSetCookieIfConsented_withConsent` — GrantConsent first, then returns true
-- [ ] `TestReadCookie_hit` — reads cookie added to request
-- [ ] `TestReadCookie_miss` — returns ("", false) for absent cookie
-- [ ] `TestClearCookie` — Set-Cookie header has MaxAge=0 and past Expires
-- [ ] `TestConsentFor_necessary_alwaysTrue` — Necessary always returns true without any consent cookie
-- [ ] `TestConsentFor_absent` — returns false when no forge_consent cookie
-- [ ] `TestConsentFor_granted` — GrantConsent then ConsentFor returns true
-- [ ] `TestRevokeConsent` — after Revoke, ConsentFor returns false
+- [x] `TestCookieCategory_constants` — verify the four constant values
+- [x] `TestSetCookie_necessary` — sets cookie on ResponseWriter correctly
+- [x] `TestSetCookie_panicsOnNonNecessary` — panics if Category != Necessary
+- [x] `TestSetCookieIfConsented_panicsOnNecessary` — panics if Category == Necessary
+- [x] `TestSetCookieIfConsented_noConsent` — returns false, no Set-Cookie header
+- [x] `TestSetCookieIfConsented_withConsent` — GrantConsent first, then returns true
+- [x] `TestReadCookie_hit` — reads cookie added to request
+- [x] `TestReadCookie_miss` — returns ("", false) for absent cookie
+- [x] `TestClearCookie` — Set-Cookie header has MaxAge=0 and past Expires
+- [x] `TestConsentFor_necessary_alwaysTrue` — Necessary always returns true without any consent cookie
+- [x] `TestConsentFor_absent` — returns false when no forge_consent cookie
+- [x] `TestConsentFor_granted` — GrantConsent then ConsentFor returns true
+- [x] `TestRevokeConsent` — after Revoke, ConsentFor returns false
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestCookie|TestSetCookie|TestReadCookie|TestClearCookie|TestConsentFor|TestGrantConsent|TestRevokeConsent ./...` — all green
-- [ ] `BACKLOG.md` — step 1 row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestCookie|TestSetCookie|TestReadCookie|TestClearCookie|TestConsentFor|TestGrantConsent|TestRevokeConsent ./...` — all green
+- [x] `BACKLOG.md` — step 1 row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
@@ -119,28 +119,28 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 
 #### 2.1 — App.Cookies method and cookieDecls field
 
-- [ ] Add `cookieDecls []Cookie` field to `App` struct in `forge.go`
-- [ ] Implement `func (a *App) Cookies(decls ...Cookie)` — appends declarations; idempotent (dedup by name)
-- [ ] Add godoc: "Cookies registers cookie declarations for the compliance manifest. Call once at startup."
+- [x] Add `cookieDecls []Cookie` field to `App` struct in `forge.go`
+- [x] Implement `func (a *App) Cookies(decls ...Cookie)` — appends declarations; idempotent (dedup by name)
+- [x] Add godoc: "Cookies registers cookie declarations for the compliance manifest. Call once at startup."
 
 #### 2.2 — CookieManifest JSON types
 
-- [ ] Define unexported `cookieManifestEntry` struct with JSON tags:
+- [x] Define unexported `cookieManifestEntry` struct with JSON tags:
   - `Name`, `Category`, `HttpOnly`, `Secure`, `SameSite` (string), `MaxAge`, `Purpose`
-- [ ] Define unexported `cookieManifest` struct: `Site string`, `Generated string` (RFC3339), `Count int`, `Cookies []cookieManifestEntry`
-- [ ] Implement unexported `buildManifest(site string, decls []Cookie) cookieManifest`
+- [x] Define unexported `cookieManifest` struct: `Site string`, `Generated string` (RFC3339), `Count int`, `Cookies []cookieManifestEntry`
+- [x] Implement unexported `buildManifest(site string, decls []Cookie) cookieManifest`
   — maps `[]Cookie` to `[]cookieManifestEntry`, sets `Site` and `Generated` (time.Now().UTC())
 
 #### 2.3 — ManifestAuth option
 
-- [ ] Define `manifestAuthOption` with `auth AuthFunc` field
-- [ ] Implement `ManifestAuth(auth AuthFunc) Option` constructor
-- [ ] Implement `applyOption` on `manifestAuthOption`: stores auth on `cookieManifestState`
+- [x] Define `manifestAuthOption` with `auth AuthFunc` field
+- [x] Implement `ManifestAuth(auth AuthFunc) Option` constructor
+- [x] Implement `applyOption` on `manifestAuthOption`: stores auth on `cookieManifestState`
 
 #### 2.4 — cookieManifestHandler
 
-- [ ] Define unexported `cookieManifestState` struct: `auth AuthFunc` (nil = public)
-- [ ] Implement unexported `newCookieManifestHandler(site string, decls []Cookie, opts ...Option) http.Handler`
+- [x] Define unexported `cookieManifestState` struct: `auth AuthFunc` (nil = public)
+- [x] Implement unexported `newCookieManifestHandler(site string, decls []Cookie, opts ...Option) http.Handler`
   - Builds manifest once at construction (static response — cookie declarations don't change at runtime)
   - Marshals to JSON (sorted by name for deterministic output)
   - Returns `http.HandlerFunc` that:
@@ -149,30 +149,30 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 
 #### 2.5 — Wire into App.Handler()
 
-- [ ] In `forge.go` `App.Handler()`: if `len(a.cookieDecls) > 0`, mount `GET /.well-known/cookies.json` using `newCookieManifestHandler`
-- [ ] Pass `a.cfg.BaseURL` hostname as the `site` argument
+- [x] In `forge.go` `App.Handler()`: if `len(a.cookieDecls) > 0`, mount `GET /.well-known/cookies.json` using `newCookieManifestHandler`
+- [x] Pass `a.cfg.BaseURL` hostname as the `site` argument
 
 #### 2.6 — Tests (cookiemanifest_test.go)
 
-- [ ] `TestCookieManifest_empty` — zero declarations → manifest with `"count": 0, "cookies": []`
-- [ ] `TestCookieManifest_fields` — declared cookie appears in manifest with correct fields
-- [ ] `TestCookieManifest_sortedByName` — multiple declarations appear sorted alphabetically
-- [ ] `TestCookieManifest_endpoint_200` — `GET /.well-known/cookies.json` returns 200 + JSON
-- [ ] `TestCookieManifest_contentType` — `Content-Type: application/json`
-- [ ] `TestCookieManifest_noDecls_notMounted` — if no `app.Cookies(...)` called, endpoint returns 404
-- [ ] `TestCookieManifest_manifestAuth_401` — ManifestAuth rejects unauthenticated request
-- [ ] `TestCookieManifest_manifestAuth_200` — ManifestAuth allows authenticated request
+- [x] `TestCookieManifest_empty` — zero declarations → manifest with `"count": 0, "cookies": []`
+- [x] `TestCookieManifest_fields` — declared cookie appears in manifest with correct fields
+- [x] `TestCookieManifest_sortedByName` — multiple declarations appear sorted alphabetically
+- [x] `TestCookieManifest_endpoint_200` — `GET /.well-known/cookies.json` returns 200 + JSON
+- [x] `TestCookieManifest_contentType` — `Content-Type: application/json`
+- [x] `TestCookieManifest_noDecls_notMounted` — if no `app.Cookies(...)` called, endpoint returns 404
+- [x] `TestCookieManifest_manifestAuth_401` — ManifestAuth rejects unauthenticated request
+- [x] `TestCookieManifest_manifestAuth_200` — ManifestAuth allows authenticated request
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestCookieManifest ./...` — all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 2 row and summary checkbox updated
-- [ ] `README.md` — no examples broken by this step
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestCookieManifest ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 2 row and summary checkbox updated
+- [x] `README.md` — no examples broken by this step
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

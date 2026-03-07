@@ -31,6 +31,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-06 | Milestone 5 Step 4: `integration_full_test.go` extended — G9–G12 cross-milestone groups appended: G9 (Social + SitemapConfig M3): OG/Twitter tags in forge:head, Draft → 404; G10 (AIIndex + M4 content negotiation): /llms.txt Published/Draft filter, /posts/{slug}/aidoc 200/404, Accept:text/markdown alongside AIDoc; G11 (Feed + M1 AfterPublish signal): /posts/feed.xml RSS 2.0, Draft excluded, AfterPublish fires within 500ms; G12 (Full M5 stack): Social+AIIndex+Feed+SitemapConfig+HeadFunc+Templates — OG/Twitter, /llms.txt, /aidoc, /feed.xml all verified. README.md: AI indexing and Social sharing badges updated from 🔲 Coming in Milestone 5 → ✅ Available. Milestone 5 complete. |
 | 2026-03-06 | Amendment A17: `compressIfAccepted(w, r, body, contentType)` helper added to `ai.go`; gzip applied directly at AI endpoint handlers — `CompactHandler`, `FullHandler`, `renderAIDoc` (now takes `r *http.Request`); 1400-byte threshold; `Vary: Accept-Encoding` always set. Supersedes Decision 13 Amendment A clause 3. Tests: `TestCompressIfAccepted_gzip`, `TestCompressIfAccepted_smallBody`, `TestCompressIfAccepted_noAcceptEncoding`, `TestLLMsTxt_gzip`, `TestAIDoc_gzip`. |
 | 2026-03-07 | Milestone 6 Step 1: `cookies.go` implemented — `CookieCategory` (`Necessary`/`Preferences`/`Analytics`/`Marketing`), `Cookie` struct, `SetCookie`, `SetCookieIfConsented`, `ReadCookie`, `ClearCookie`, `ConsentFor`, `GrantConsent`, `RevokeConsent`; `forge_consent` Necessary cookie stores consent state; Decision 5 enforcement: `SetCookie` panics on non-Necessary, `SetCookieIfConsented` panics on Necessary. |
+| 2026-03-07 | Milestone 6 Step 2: `cookiemanifest.go` implemented — `cookieManifest`/`cookieManifestEntry` JSON types, `buildManifest`, `sameSiteName`, `ManifestAuth` option, `newCookieManifestHandler`; Amendment A18: `App.Cookies()`, `App.CookiesManifestAuth()`, `cookieDecls`/`cookieManifestOpts` fields added to `forge.go`; `GET /.well-known/cookies.json` mounted lazily in `App.Handler()`. |
 ---
 
 ## Package structure
@@ -127,8 +128,9 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 │                     SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie,
 │                     ConsentFor, GrantConsent, RevokeConsent;
 │                     forge_consent Necessary cookie stores consent state
-├── cookiemanifest.go  App.Cookies(), ManifestAuth option,
-│                     /.well-known/cookies.json manifest handler          (Milestone 6, Step 2)
+├── cookiemanifest.go  ManifestAuth option, buildManifest, newCookieManifestHandler;
+│                     App.Cookies(), App.CookiesManifestAuth();
+│                     GET /.well-known/cookies.json (mounted lazily in App.Handler())
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
 └── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
@@ -382,7 +384,7 @@ head.go         — no internal dependencies                              (Miles
 forge.go        — depends on: all of the above                          (Milestone 2)
 templates.go    — depends on: head, context, node                       (Milestone 4)
 cookies.go      — depends on: errors (none — stdlib net/http only)
-├── cookiemanifest.go — depends on: cookies, forge.go                   (Milestone 6, Step 2)
+├── cookiemanifest.go — depends on: cookies, forge.go (Amendment A18)
 redirects.go    — depends on: node, errors                              (Milestone 7)
 sitemap.go      — depends on: node, signals                             (Milestone 3)
 rss.go          — depends on: node, signals, head                       (Milestone 5)

@@ -123,6 +123,9 @@ type App struct {
 	llmsFullTxtRegistered  bool             // true once GET /llms-full.txt is registered
 	feedStore              *FeedStore       // non-nil when at least one module uses Feed(...)
 	feedIndexRegistered    bool             // true once GET /feed.xml is registered
+	cookieDecls            []Cookie         // registered via Cookies(); drives /.well-known/cookies.json
+	cookieManifestOpts     []Option         // options for the manifest handler (e.g. ManifestAuth)
+	cookieManifestReg      bool             // true once GET /.well-known/cookies.json is registered
 }
 
 // New creates a new [App] from cfg.
@@ -270,6 +273,13 @@ func (a *App) Handler() http.Handler {
 		a.feedIndexRegistered = true
 		a.mux.Handle("GET /feed.xml", a.feedStore.IndexHandler())
 	}
+	if len(a.cookieDecls) > 0 && !a.cookieManifestReg {
+		a.cookieManifestReg = true
+		u, _ := url.Parse(a.cfg.BaseURL)
+		a.mux.Handle("GET /.well-known/cookies.json",
+			newCookieManifestHandler(u.Hostname(), a.cookieDecls, a.cookieManifestOpts...),
+		)
+	}
 	if len(a.templateModules) > 0 {
 		bindErrorTemplates(a.templateModules)
 	}
@@ -291,6 +301,41 @@ func (a *App) SEO(opts ...SEOOption) {
 	for _, opt := range opts {
 		opt.applySEO(&a.seo)
 	}
+}
+
+// Cookies registers cookie declarations for the compliance manifest at
+// /.well-known/cookies.json. Call once at startup with all cookies the
+// application may set.
+//
+// Duplicate declarations (same Name) are silently deduplicated; the first
+// declaration with a given name wins.
+//
+// Optionally pass [ManifestAuth] to restrict the manifest endpoint to
+// authenticated requests:
+//
+//	app.Cookies(
+//	    forge.Cookie{Name: "session", Category: forge.Necessary, ...},
+//	    forge.Cookie{Name: "prefs",   Category: forge.Preferences, ...},
+//	)
+func (a *App) Cookies(decls ...Cookie) {
+	seen := make(map[string]struct{}, len(a.cookieDecls))
+	for _, d := range a.cookieDecls {
+		seen[d.Name] = struct{}{}
+	}
+	for _, d := range decls {
+		if _, ok := seen[d.Name]; !ok {
+			a.cookieDecls = append(a.cookieDecls, d)
+			seen[d.Name] = struct{}{}
+		}
+	}
+}
+
+// CookiesManifestAuth sets the [AuthFunc] that guards /.well-known/cookies.json.
+// Call before [App.Handler] or [App.Run].
+//
+//	app.CookiesManifestAuth(forge.BearerHMAC(secret, forge.Editor))
+func (a *App) CookiesManifestAuth(auth AuthFunc) {
+	a.cookieManifestOpts = append(a.cookieManifestOpts, ManifestAuth(auth))
 }
 
 // Run starts the HTTP server on addr (e.g. ":8080") and blocks until

@@ -142,11 +142,11 @@ Typed cookie declarations, category-enforced consent, compliance manifest.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | cookies.go | ✅ Done | 2026-03-07 |
-| 2 | cookiemanifest.go | 🔲 Not started | — |
+| 2 | cookiemanifest.go | ✅ Done | 2026-03-07 |
 | 3 | integration_full_test.go | 🔲 Not started | — |
 
 - [x] Step 1 — `cookies.go`: CookieCategory, Necessary/Preferences/Analytics/Marketing, Cookie struct, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, GrantConsent, RevokeConsent, ConsentFor
-- [ ] Step 2 — `cookiemanifest.go`: cookieManifest JSON type, buildManifest, newCookieManifestHandler, ManifestAuth option, App.Cookies() + wiring in forge.go
+- [x] Step 2 — `cookiemanifest.go`: cookieManifest JSON type, buildManifest, newCookieManifestHandler, ManifestAuth option, App.Cookies() + wiring in forge.go
 - [ ] Step 3 — `integration_full_test.go`: cross-milestone groups G13–G15 (consent enforcement, consent lifecycle + M1 roles, full M6 stack + manifest) + README badge
 
 ---

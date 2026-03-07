@@ -661,6 +661,28 @@ app.Content(&Post{},
 
 ---
 
+### Amendment A18 — App.Cookies() and /.well-known/cookies.json wired into forge.go
+
+**Date:** 2026-03-07  
+**Status:** Agreed  
+**Amends:** Decision 5 (Cookie consent enforcement)
+
+**Change:** The compliance manifest (`/.well-known/cookies.json`) and the `App.Cookies()` / `App.CookiesManifestAuth()` entry points are implemented in `cookiemanifest.go` but require three additions to `forge.go`:
+- `cookieDecls []Cookie` and `cookieManifestOpts []Option` fields on `App`
+- `App.Cookies(decls ...Cookie)` method (append with name-based deduplication)
+- `App.CookiesManifestAuth(auth AuthFunc)` method (sets manifest auth guard)
+- `App.Handler()`: mounts `GET /.well-known/cookies.json` when `len(a.cookieDecls) > 0`
+
+This crosses the file boundary from `cookiemanifest.go` into `forge.go`. It was pre-specified in `Milestone6_BACKLOG.md` §2.1 and §2.5 and agreed as part of the Milestone 6 plan.
+
+**Consequences:**
+- `App` gains two new exported methods (`Cookies`, `CookiesManifestAuth`) and three unexported fields.
+- `/.well-known/cookies.json` is mounted lazily in `Handler()`, consistent with the sitemap/robots/llms-txt/feed pattern already established.
+- When no declarations are registered, the endpoint is not mounted and returns 404.
+- No change to `Option` interface, `Module`, or any content-serving path.
+
+---
+
 ## Decision 14 — Content lifecycle
 
 **Status:** Locked  
