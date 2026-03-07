@@ -19,7 +19,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M5 | Social & AI (v0.5.0) | ✅ Done |
 | M6 | Cookies & Compliance (v0.6.0) | ✅ Done |
 | M7 | Redirects (v0.7.0) | ✅ Done |
-| M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
+| M8 | Scheduled publishing (v0.8.0) | ✅ Done |
 | M9 | v1.0.0 stabilisation | 🔲 Not started |
 | M10 | MCP support (v2) | 🔲 Not started |
 
@@ -179,10 +179,10 @@ Adaptive ticker, Scheduled→Published transition, AfterPublish signal.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | scheduler.go | ✅ Done | 2026-03-07 |
-| 2 | integration_full_test.go | 🔲 Not started | — |
+| 2 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 - [x] Step 1 — `scheduler.go`: adaptive ticker, fallback 60s, Scheduled→Published, PublishedAt assignment, AfterPublish signal, sitemap+feed trigger, graceful shutdown; + Amendments A23 (db tags on Node), A24 (NewBackgroundContext), A25 (Module.processScheduled), A26 (forge.go wiring)
-- [ ] Step 2 — `integration_full_test.go`: cross-milestone groups G19–G20 (scheduler end-to-end with MemoryRepo + M1 signals, scheduler + App + sitemap M8+M3+M2) + README badge update
+- [x] Step 2 — `integration_full_test.go`: cross-milestone groups G19–G20 (scheduler end-to-end with MemoryRepo + M1 signals, scheduler + App + sitemap M8+M3+M2) + README badge update
 
 ---
 

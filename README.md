@@ -270,7 +270,7 @@ forge.Archived   // hidden from public, preserved in storage
 
 ### Scheduled publishing
 
-> 🔲 **Coming in Milestone 8** — the adaptive ticker and automatic `Scheduled → Published` transition are not yet implemented.
+> ✅ **Available** — the adaptive ticker and automatic `Scheduled → Published` transition are implemented as of Milestone 8.
 
 Forge runs an internal ticker. No external cron needed.
 

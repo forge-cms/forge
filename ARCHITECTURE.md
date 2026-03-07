@@ -38,6 +38,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-07 | Milestone 7 Step 3: `redirectmanifest.go` implemented — `redirectManifestEntry`/`redirectManifest` JSON types, `buildRedirectManifest` (delegates to `store.All()` for sorted entries), `newRedirectManifestHandler` (serialises per-request from live store, reuses `manifestAuthOption`, `Cache-Control: no-store`); `forge.go` Amendment A21: `redirectManifestReg bool`, `GET /.well-known/redirects.json` always mounted in `Handler()`. 8 new `TestRedirectManifest_*` tests. |
 | 2026-03-07 | Milestone 7 Step 4: `integration_full_test.go` extended — G16–G18 cross-milestone groups appended: G16 (M7 Decision 17): 301/410/404 enforcement + forward chain collapse; G17 (M7 + M2): prefix rewrite via `Redirects(From)`, exact-beats-prefix; G18 (M7 + M6 + M1): `SQLRepo[T]` satisfies `Repository[T]` compile check, redirect manifest always mounted, entries reflect `app.Redirect()` calls, `App.RedirectManifestAuth()` (Amendment A22) 401/200. `forge.go` Amendment A22: `redirectManifestOpts []Option` field + `App.RedirectManifestAuth(auth AuthFunc)` method. README: Redirects badge → ✅ Available; SQLRepo production repository section added. Milestone 7 complete. |
 | 2026-03-07 | Milestone 8 Step 1: `scheduler.go` implemented — `schedulableModule` interface, `Scheduler` struct, `newScheduler`, `Start(ctx)`, `Wait()`, `tick()` (aggregates min next across modules), `run(ctx)` adaptive timer with 60s fallback, `nextDur` helper. Amendment A23 (`node.go`): `db` struct tags added to `PublishedAt`, `ScheduledAt`, `CreatedAt`, `UpdatedAt` fixing `SQLRepo` column mapping. Amendment A24 (`context.go`): `NewBackgroundContext(siteName string) Context` for long-lived goroutine use. Amendment A25 (`module.go`): `setNodeStatus`/`setNodeTime`/`setNodeTimePtr` reflection helpers + `Module[T].processScheduled` — queries Scheduled items, publishes overdue, fires `AfterPublish`, triggers sitemap/feed debounce. Amendment A26 (`forge.go`): `schedulerModules []schedulableModule` field, `Content()` appends modules, `Run()` starts scheduler before `ListenAndServe` and stops it (via `defer`) after `srv.Shutdown`. `scheduler_test.go`: 7 tests covering overdue publish, skip-not-yet-due, AfterPublish signal, mixed items, adaptive next, start/stop lifecycle, and `NewBackgroundContext`. |
+| 2026-03-07 | Milestone 8 Step 2: `integration_full_test.go` extended — G19–20 cross-milestone groups appended: G19 (M8 + M1) `TestFull_scheduler_publishesOverdue` — direct `processScheduled` call on a `MemoryRepo`-backed module, verifies past-due item → Published (Status, PublishedAt, ScheduledAt nil), future item unchanged, returned `next` == future ScheduledAt, AfterPublish signal fires once within 500ms; G20 (M8 + M2 + M3) `TestFull_scheduler_appWiring` — `App.Content()` wires module into `schedulerModules` (A26), `newScheduler` + `tick()` publishes overdue item, future item stays Scheduled, adaptive `next` returned correctly. README: Scheduled publishing badge → ✅ Available. Milestone 8 complete. |
 
 ---
 
@@ -460,7 +461,7 @@ SitemapRegenerate
 
 ---
 
-## Scheduler *(planned — Milestone 8)*
+## Scheduler *(Milestone 8)*
 
 The scheduled publishing loop runs as a goroutine started by `app.Run()`.
 

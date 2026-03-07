@@ -25,6 +25,8 @@ package forge
 //   G16 — Redirect enforcement: 301/410/404 + chain collapse (M7, Decision 17)
 //   G17 — Prefix redirect via Redirects(From) + exact-beats-prefix (M7 + M2)
 //   G18 — Full M7 stack: SQLRepo interface check + redirect manifest + ManifestAuth (M7 + M6 + M1)
+//   G19 — Scheduler end-to-end: processScheduled + AfterPublish signal (M8 + M1)
+//   G20 — Scheduler wired through App.Content(): schedulerModules populated, tick publishes (M8 + M2 + M3)
 
 import (
 	"bytes"
@@ -1822,5 +1824,153 @@ func TestFull_manifest_redirect_authGuard(t *testing.T) {
 	h.ServeHTTP(w2, r2)
 	if w2.Code != http.StatusOK {
 		t.Errorf("authenticated Editor: status = %d; want 200", w2.Code)
+	}
+}
+
+// — G19: Scheduler end-to-end + AfterPublish signal (M8 + M1) ——————————————
+
+// TestFull_scheduler_publishesOverdue verifies the end-to-end Scheduled→Published
+// transition: a past-due item is published, a future item is left Scheduled,
+// and the AfterPublish signal (M1) fires exactly once.
+func TestFull_scheduler_publishesOverdue(t *testing.T) {
+	var fired atomic.Int32
+	repo := NewMemoryRepo[*testPost]()
+	bgCtx := NewBackgroundContext("example.com")
+
+	m := NewModule((*testPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		On(AfterPublish, func(_ Context, _ *testPost) error {
+			fired.Add(1)
+			return nil
+		}),
+	)
+
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	future := time.Now().UTC().Add(30 * time.Minute)
+
+	overdue := &testPost{Node: Node{ID: NewID(), Slug: "overdue", Status: Scheduled, ScheduledAt: &past}}
+	pending := &testPost{Node: Node{ID: NewID(), Slug: "pending", Status: Scheduled, ScheduledAt: &future}}
+
+	if err := repo.Save(context.Background(), overdue); err != nil {
+		t.Fatalf("seed overdue: %v", err)
+	}
+	if err := repo.Save(context.Background(), pending); err != nil {
+		t.Fatalf("seed pending: %v", err)
+	}
+
+	now := time.Now().UTC()
+	published, next, err := m.processScheduled(bgCtx, now)
+	if err != nil {
+		t.Fatalf("processScheduled: %v", err)
+	}
+	if published != 1 {
+		t.Errorf("published = %d; want 1", published)
+	}
+	if next == nil {
+		t.Fatal("next should not be nil — pending item has a future ScheduledAt")
+	}
+
+	// Overdue item must be Published with ScheduledAt cleared.
+	got, err := repo.FindByID(context.Background(), overdue.ID)
+	if err != nil {
+		t.Fatalf("FindByID overdue: %v", err)
+	}
+	if got.Status != Published {
+		t.Errorf("overdue status = %v; want Published", got.Status)
+	}
+	if got.ScheduledAt != nil {
+		t.Errorf("overdue ScheduledAt = %v; want nil", got.ScheduledAt)
+	}
+	if got.PublishedAt.IsZero() {
+		t.Error("overdue PublishedAt should be set")
+	}
+
+	// Pending item must remain Scheduled.
+	gotPending, err := repo.FindByID(context.Background(), pending.ID)
+	if err != nil {
+		t.Fatalf("FindByID pending: %v", err)
+	}
+	if gotPending.Status != Scheduled {
+		t.Errorf("pending status = %v; want Scheduled", gotPending.Status)
+	}
+
+	// AfterPublish (M1 signal) must fire exactly once — give dispatchAfter time.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && fired.Load() < 1 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := fired.Load(); got != 1 {
+		t.Errorf("AfterPublish fired %d times; want 1", got)
+	}
+}
+
+// — G20: Scheduler wired via App.Content() (M8 + M2 + M3) —————————————————
+
+// TestFull_scheduler_appWiring verifies that App.Content() registers modules
+// into schedulerModules (Amendment A26), that a Scheduler built from those
+// modules processes overdue items, and that the soonest future ScheduledAt
+// is returned for the adaptive timer.
+func TestFull_scheduler_appWiring(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+
+	m := NewModule((*testPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		SitemapConfig{},
+	)
+	app.Content(m)
+
+	// Amendment A26: schedulerModules must contain the registered module.
+	if len(app.schedulerModules) != 1 {
+		t.Fatalf("schedulerModules len = %d; want 1", len(app.schedulerModules))
+	}
+
+	// Seed overdue + future items.
+	past := time.Now().UTC().Add(-1 * time.Minute)
+	future := time.Now().UTC().Add(20 * time.Minute)
+	p1 := &testPost{Node: Node{ID: NewID(), Slug: "sched-past", Status: Scheduled, ScheduledAt: &past}}
+	p2 := &testPost{Node: Node{ID: NewID(), Slug: "sched-future", Status: Scheduled, ScheduledAt: &future}}
+	if err := repo.Save(context.Background(), p1); err != nil {
+		t.Fatalf("seed p1: %v", err)
+	}
+	if err := repo.Save(context.Background(), p2); err != nil {
+		t.Fatalf("seed p2: %v", err)
+	}
+
+	// Build a Scheduler directly from the wired modules to test the A26 integration.
+	bgCtx := NewBackgroundContext("example.com")
+	sched := newScheduler(app.schedulerModules, bgCtx)
+	next := sched.tick()
+
+	// Overdue item must be Published.
+	got, err := repo.FindByID(context.Background(), p1.ID)
+	if err != nil {
+		t.Fatalf("FindByID p1: %v", err)
+	}
+	if got.Status != Published {
+		t.Errorf("p1 status = %v; want Published", got.Status)
+	}
+
+	// Future item must remain Scheduled.
+	gotFuture, err := repo.FindByID(context.Background(), p2.ID)
+	if err != nil {
+		t.Fatalf("FindByID p2: %v", err)
+	}
+	if gotFuture.Status != Scheduled {
+		t.Errorf("p2 status = %v; want Scheduled", gotFuture.Status)
+	}
+
+	// Adaptive timer: next must point to the future item's ScheduledAt.
+	if next == nil {
+		t.Fatal("next should not be nil — future item exists")
+	}
+	if !next.Equal(future) {
+		t.Errorf("next = %v; want %v", *next, future)
 	}
 }

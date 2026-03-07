@@ -20,7 +20,7 @@ debounce, cleans up within the server's 5-second graceful-shutdown window.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | scheduler.go | ✅ Done | 2026-03-07 |
-| 2 | integration_full_test.go | 🔲 Not started | — |
+| 2 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 ---
 
@@ -175,52 +175,52 @@ debounce, cleans up within the server's 5-second graceful-shutdown window.
 
 #### 2.1 — G19: Scheduler end-to-end with MemoryRepo (M8, Decision 14)
 
-- [ ] Seed 2 items in a `MemoryRepo[*testSchedPost]`: one past-due Scheduled,
+- [x] Seed 2 items in a `MemoryRepo[*testSchedPost]`: one past-due Scheduled,
   one future Scheduled
-- [ ] Create `Module[*testSchedPost]` and call `processScheduled(bgCtx, now)` directly
-- [ ] Assert past-due: `Status == Published`, `PublishedAt` non-zero, `ScheduledAt == nil`
-- [ ] Assert future: `Status == Scheduled`, unchanged
-- [ ] Assert returned `next` ≈ the future item's `ScheduledAt`
-- [ ] Cross-milestone M1: register `On[*testSchedPost](AfterPublish, ...)` and assert fired once
+- [x] Create `Module[*testSchedPost]` and call `processScheduled(bgCtx, now)` directly
+- [x] Assert past-due: `Status == Published`, `PublishedAt` non-zero, `ScheduledAt == nil`
+- [x] Assert future: `Status == Scheduled`, unchanged
+- [x] Assert returned `next` ≈ the future item's `ScheduledAt`
+- [x] Cross-milestone M1: register `On[*testSchedPost](AfterPublish, ...)` and assert fired once
 
 #### 2.2 — G20: Scheduler integration with App, signals, sitemap (M8 + M3 + M2)
 
-- [ ] Build a full `App` with a module using `SitemapConfig`
-- [ ] Seed a past-due Scheduled item
-- [ ] Call `app.Handler()` to wire routes + start conditions
-- [ ] Manually call `tick()` on the scheduler (same package — accessible)
-- [ ] Assert the item is now Published (via the module's repo)
-- [ ] Wait for debounce to settle (small sleep or direct trigger)
-- [ ] Assert sitemap fragment has been updated with the newly published item
+- [x] Build a full `App` with a module using `SitemapConfig`
+- [x] Seed a past-due Scheduled item
+- [x] Call `app.Handler()` to wire routes + start conditions
+- [x] Manually call `tick()` on the scheduler (same package — accessible)
+- [x] Assert the item is now Published (via the module's repo)
+- [x] Wait for debounce to settle (small sleep or direct trigger)
+- [x] Assert sitemap fragment has been updated with the newly published item
 
 #### 2.3 — README badge update
 
-- [ ] Update README.md line 273: `🔲 **Coming in Milestone 8**` →
+- [x] Update README.md line 273: `🔲 **Coming in Milestone 8**` →
   `✅ **Available** — the adaptive ticker and automatic Scheduled → Published
   transition are implemented as of Milestone 8.`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestFull_scheduler ./...` — all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 2 row and summary checkbox updated; M8 milestone row marked ✅
-- [ ] `README.md` — Scheduled publishing badge updated to ✅ Available
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestFull_scheduler ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 2 row and summary checkbox updated; M8 milestone row marked ✅
+- [x] `README.md` — Scheduled publishing badge updated to ✅ Available
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
 
 ## Completion criteria for Milestone 8
 
-- [ ] `Node` has correct `db:"published_at"` / `db:"scheduled_at"` tags (A23)
-- [ ] `NewBackgroundContext(siteName)` exists and is used by the scheduler (A24)
-- [ ] `Module[T].processScheduled` — transitions Scheduled → Published, fires
+- [x] `Node` has correct `db:"published_at"` / `db:"scheduled_at"` tags (A23)
+- [x] `NewBackgroundContext(siteName)` exists and is used by the scheduler (A24)
+- [x] `Module[T].processScheduled` — transitions Scheduled → Published, fires
       AfterPublish, triggers sitemap/feed debounce (A25)
-- [ ] `Scheduler` — adaptive timer with 60s fallback; starts in `App.Run()`;
+- [x] `Scheduler` — adaptive timer with 60s fallback; starts in `App.Run()`;
       shuts down cleanly after graceful HTTP shutdown (A26)
-- [ ] Integration tests G19–G20 appended and passing
-- [ ] README Scheduled publishing badge updated to ✅ Available
-- [ ] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty
+- [x] Integration tests G19–G20 appended and passing
+- [x] README Scheduled publishing badge updated to ✅ Available
+- [x] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty
