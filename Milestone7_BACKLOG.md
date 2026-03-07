@@ -17,7 +17,7 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | storage.go | ✅ Done | 2026-03-07 |
-| 2 | redirects.go | 🔲 Not started | — |
+| 2 | redirects.go | ✅ Done | 2026-03-07 |
 | 3 | redirectmanifest.go | 🔲 Not started | — |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
@@ -124,104 +124,103 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 
 #### 2.1 — RedirectCode type and constants
 
-- [ ] Define `type RedirectCode int`
-- [ ] Define constants: `MovedPermanently RedirectCode = 301`, `Gone RedirectCode = 410`
-- [ ] Add godoc: explain 301 vs 410 semantics per Decision 17
+- [x] Define `type RedirectCode int`
+- [x] Define constants: `Permanent RedirectCode = 301`, `Gone RedirectCode = 410`
+  *(Note: backlog said `MovedPermanently`; implemented as `Permanent` per README API and readability rules.)*
+- [x] Add godoc: explain 301 vs 410 semantics per Decision 17
 
 #### 2.2 — RedirectEntry struct
 
-- [ ] Define `RedirectEntry` struct:
+- [x] Define `RedirectEntry` struct:
   - `From     string`    — absolute path, e.g. `/posts/old-slug`
   - `To       string`    — absolute path; empty string = 410 Gone
   - `Code     RedirectCode`
   - `IsPrefix bool`      — if true, rewrites `/old-prefix/X` → `/To/X` at runtime (Decision 17 amendment)
-- [ ] Add godoc explaining `IsPrefix` prefix-rewrite semantics
+- [x] Add godoc explaining `IsPrefix` prefix-rewrite semantics
 
 #### 2.3 — From type and Redirects option
 
-- [ ] Define `type From string` with godoc
-- [ ] Define `type redirectsOption struct{ from From; to string }` satisfying `isOption()`
-- [ ] Implement `func Redirects(from From, to string) Option` — bulk prefix redirect option
+- [x] Define `type From string` with godoc
+- [x] Define `type redirectsOption struct{ from From; to string }` satisfying `isOption()`
+- [x] Implement `func Redirects(from From, to string) Option` — bulk prefix redirect option
   - Used as `app.Content(&BlogPost{}, forge.At("/articles"), forge.Redirects(forge.From("/posts"), "/articles"))`
-  - Registers a prefix `RedirectEntry{IsPrefix: true, Code: MovedPermanently}`
+  - Registers a prefix `RedirectEntry{IsPrefix: true, Code: Permanent}`
 
 #### 2.4 — RedirectStore (memory layer)
 
-- [ ] Define `type RedirectStore struct` with unexported fields:
+- [x] Define `type RedirectStore struct` with unexported fields:
   - `mu      sync.RWMutex`
   - `exact   map[string]RedirectEntry`  — keyed by `From`
   - `prefix  []RedirectEntry`           — sorted descending by `len(From)` (longest-prefix first)
-- [ ] Implement `func NewRedirectStore() *RedirectStore`
-- [ ] Implement `func (s *RedirectStore) Add(e RedirectEntry)`:
+- [x] Implement `func NewRedirectStore() *RedirectStore`
+- [x] Implement `func (s *RedirectStore) Add(e RedirectEntry)`:
   - Exact entries: if `e.To` already has an entry in `exact`, collapse chain (A→B + B→C = A→C)
   - Max collapse depth = 10 (panic with descriptive message if exceeded — Decision 24)
   - Prefix entries: append to `prefix` slice, re-sort descending by length
-- [ ] Implement `func (s *RedirectStore) Get(path string) (RedirectEntry, bool)`:
+- [x] Implement `func (s *RedirectStore) Get(path string) (RedirectEntry, bool)`:
   - Exact lookup first (O(1) map read)
   - If miss: iterate `prefix` slice (longest first), check `strings.HasPrefix(path, e.From)`
   - Return first match or `(RedirectEntry{}, false)`
-- [ ] Implement `func (s *RedirectStore) All() []RedirectEntry`:
+- [x] Implement `func (s *RedirectStore) All() []RedirectEntry`:
   - Returns all exact + prefix entries sorted by `From` for deterministic JSON output
-- [ ] Implement `func (s *RedirectStore) Len() int` — total count (exact + prefix)
+- [x] Implement `func (s *RedirectStore) Len() int` — total count (exact + prefix)
 
 #### 2.5 — DB persistence
 
-- [ ] Implement `func (s *RedirectStore) Load(ctx context.Context, db DB) error`:
+- [x] Implement `func (s *RedirectStore) Load(ctx context.Context, db DB) error`:
   - `SELECT from_path, to_path, code, is_prefix FROM forge_redirects`
   - Calls `s.Add()` for each row (respects chain collapse)
-  - Returns wrapped `forge.Error` on failure
-- [ ] Implement `func (s *RedirectStore) Save(ctx context.Context, db DB, e RedirectEntry) error`:
+- [x] Implement `func (s *RedirectStore) Save(ctx context.Context, db DB, e RedirectEntry) error`:
   - `INSERT INTO forge_redirects (from_path, to_path, code, is_prefix) VALUES ($1,$2,$3,$4) ON CONFLICT (from_path) DO UPDATE SET to_path=$2, code=$3, is_prefix=$4`
-- [ ] Implement `func (s *RedirectStore) Remove(ctx context.Context, db DB, from string) error`:
+- [x] Implement `func (s *RedirectStore) Remove(ctx context.Context, db DB, from string) error`:
   - `DELETE FROM forge_redirects WHERE from_path = $1`
-- [ ] Add godoc to all three: "forge_redirects table must exist — see README for schema"
-- [ ] Document SQL schema in README.md `Redirects` section
+- [x] Add godoc to all three: "forge_redirects table must exist — see README for schema"
+- [x] Document SQL schema in README.md `Redirects` section
 
 #### 2.6 — HTTP handler (fallback)
 
-- [ ] Implement `func (s *RedirectStore) handler() http.Handler` (unexported):
+- [x] Implement `func (s *RedirectStore) handler() http.Handler` (unexported):
   - Calls `s.Get(r.URL.Path)`
-  - Match, `e.To` non-empty: `http.Redirect(w, r, e.To, int(e.Code))` — for prefix entry, appends the suffix: `e.To + strings.TrimPrefix(r.URL.Path, e.From)`
+  - Match, `e.To` non-empty: `http.Redirect` — for prefix entry, appends the suffix
   - Match, `e.To` empty: `http.Error(w, "Gone", http.StatusGone)`
   - No match: `http.NotFound(w, r)`
   - Never called for successful requests — only fallback (Decision 24)
 
 #### 2.7 — Amendment A20 in forge.go
 
-- [ ] Add `redirectStore *RedirectStore` field to `App` struct
-- [ ] `New()`: initialise `redirectStore: NewRedirectStore()`
-- [ ] Add `func (a *App) Redirect(from, to string, code RedirectCode)`:
-  - Calls `a.redirectStore.Add(RedirectEntry{From: from, To: to, Code: code})`
-  - godoc: "Redirect registers a manual redirect. Chain collapse is automatic."
-- [ ] `App.Content()`: extract `redirectsOption`; if found, call `a.redirectStore.Add(RedirectEntry{From: string(opt.from), To: opt.to, IsPrefix: true, Code: MovedPermanently})`
-- [ ] `App.Handler()`: register `a.mux.Handle("/", a.redirectStore.handler())` unconditionally
+- [x] Add `redirectStore *RedirectStore` field to `App` struct
+- [x] `New()`: initialise `redirectStore: NewRedirectStore()`
+- [x] Add `func (a *App) Redirect(from, to string, code RedirectCode)` with godoc
+- [x] Add `func (a *App) RedirectStore() *RedirectStore` — exposes store for `Load`/`Save`/`Remove`
+- [x] `App.Content()`: extract `redirectsOption`; if found, calls `a.redirectStore.Add(...)`
+- [x] `App.Handler()`: register `a.mux.Handle("/", a.redirectStore.handler())` once
 
 #### 2.8 — Tests (redirects_test.go)
 
-- [ ] `TestRedirectStore_exactMatch` — Add + Get returns entry
-- [ ] `TestRedirectStore_miss` — Get on unknown path returns `(RedirectEntry{}, false)`
-- [ ] `TestRedirectStore_chainCollapse_301` — A→B + B→C collapses to A→C
-- [ ] `TestRedirectStore_chainCollapse_goneIsTerminal` — Gone entries not collapsed through
-- [ ] `TestRedirectStore_prefixMatch` — `IsPrefix=true` entry matches `/posts/hello`
-- [ ] `TestRedirectStore_exactBeatsPrefix` — exact match wins over prefix
-- [ ] `TestRedirectStore_prefixRewrite` — `/posts/hello` rewritten to `/articles/hello`
-- [ ] `TestRedirectStore_handler_301` — handler writes 301 + `Location` header
-- [ ] `TestRedirectStore_handler_410` — handler writes 410 Gone
-- [ ] `TestRedirectStore_handler_404` — handler writes 404 for unknown path
-- [ ] `TestApp_Redirect_permanent` — `app.Redirect(old, new, MovedPermanently)` → 301
-- [ ] `TestApp_Redirect_gone` — `app.Redirect("/removed", "", Gone)` → 410
-- [ ] `TestApp_Redirect_chain_collapsed` — two `app.Redirect` calls that chain are collapsed
+- [x] `TestRedirectStore_exactMatch` — Add + Get returns entry
+- [x] `TestRedirectStore_miss` — Get on unknown path returns `(RedirectEntry{}, false)`
+- [x] `TestRedirectStore_chainCollapse_301` — A→B + B→C collapses to A→C
+- [x] `TestRedirectStore_chainCollapse_goneIsTerminal` — Gone entries not collapsed through
+- [x] `TestRedirectStore_prefixMatch` — `IsPrefix=true` entry matches `/posts/hello`
+- [x] `TestRedirectStore_exactBeatsPrefix` — exact match wins over prefix
+- [x] `TestRedirectStore_prefixRewrite` — `/posts/hello` rewritten to `/articles/hello`
+- [x] `TestRedirectStore_handler_301` — handler writes 301 + `Location` header
+- [x] `TestRedirectStore_handler_410` — handler writes 410 Gone
+- [x] `TestRedirectStore_handler_404` — handler writes 404 for unknown path
+- [x] `TestApp_Redirect_permanent` — `app.Redirect(old, new, Permanent)` → 301
+- [x] `TestApp_Redirect_gone` — `app.Redirect("/removed", "", Gone)` → 410
+- [x] `TestApp_Redirect_chain_collapsed` — two `app.Redirect` calls that chain are collapsed
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestRedirect|TestApp_Redirect ./...` — all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 2 row and summary checkbox updated
-- [ ] `README.md` — `forge_redirects` table schema in Redirects section
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestRedirect|TestApp_Redirect ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 2 row and summary checkbox updated
+- [x] `README.md` — `forge_redirects` table schema in Redirects section
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

@@ -572,7 +572,7 @@ Forge renders in `<head>`:
 
 ## Cookies & compliance
 
-> 🔲 **Coming in Milestone 6** — typed cookie declarations, consent enforcement, and `/.well-known/cookies.json` are not yet implemented.
+> ✅ **Available** — typed cookie declarations, consent enforcement, and `/.well-known/cookies.json` are implemented as of Milestone 6.
 
 Forge treats cookies as typed, declared, compliance-aware values.
 The category determines which API you can use — enforced at compile time.
@@ -951,7 +951,7 @@ id := ctx.RequestID()
 
 ## Redirects & content mobility
 
-> 🔲 **Coming in Milestone 7** — automatic redirect tracking, 410 Gone, and `/.well-known/redirects.json` are not yet implemented.
+> 🔲 **Coming in Milestone 7** — automatic redirect tracking (slug rename, archive, delete) and `/.well-known/redirects.json` are not yet implemented. Manual redirects and prefix rewrites are available now.
 
 Forge automatically tracks every URL a piece of content has ever had.
 Rename a slug, change a prefix, archive a post — inbound links and SEO
@@ -978,13 +978,33 @@ For a CMS, this is almost always what you want.
 ```go
 // Bulk redirect when renaming a module prefix
 app.Content(&BlogPost{},
-    forge.At("/articles"),                   // new prefix
-    forge.Redirects(forge.From("/posts")),   // 301 all /posts/* → /articles/*
+    forge.At("/articles"),                              // new prefix
+    forge.Redirects(forge.From("/posts"), "/articles"), // 301 all /posts/* → /articles/*
 )
 
 // One-off redirects
 app.Redirect("/old-path",  "/new-path", forge.Permanent) // 301
 app.Redirect("/removed",   "",          forge.Gone)       // 410
+```
+
+### Optional DB persistence
+
+To persist redirects across restarts, create the `forge_redirects` table and
+call `Load` at startup:
+
+```sql
+CREATE TABLE forge_redirects (
+    from_path TEXT PRIMARY KEY,
+    to_path   TEXT NOT NULL DEFAULT '',
+    code      INTEGER NOT NULL DEFAULT 301,
+    is_prefix BOOLEAN NOT NULL DEFAULT FALSE
+);
+```
+
+```go
+if err := app.RedirectStore().Load(ctx, db); err != nil {
+    log.Fatal(err)
+}
 ```
 
 ### Inspect the redirect table

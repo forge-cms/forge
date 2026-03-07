@@ -126,6 +126,8 @@ type App struct {
 	cookieDecls            []Cookie         // registered via Cookies(); drives /.well-known/cookies.json
 	cookieManifestOpts     []Option         // options for the manifest handler (e.g. ManifestAuth)
 	cookieManifestReg      bool             // true once GET /.well-known/cookies.json is registered
+	redirectStore          *RedirectStore   // runtime redirect table; always non-nil after New()
+	redirectFallbackReg    bool             // true once "/" fallback handler is registered
 }
 
 // New creates a new [App] from cfg.
@@ -148,8 +150,9 @@ func New(cfg Config) *App {
 		cfg.IdleTimeout = defaultIdleTimeout
 	}
 	return &App{
-		cfg: cfg,
-		mux: http.NewServeMux(),
+		cfg:           cfg,
+		mux:           http.NewServeMux(),
+		redirectStore: NewRedirectStore(),
 	}
 }
 
@@ -189,6 +192,17 @@ func (a *App) Handle(pattern string, handler http.Handler) {
 // as a repoOption[any] — type safety is lost. Prefer the [Registrator] path
 // for all production code.
 func (a *App) Content(v any, opts ...Option) {
+	// Extract any redirect options regardless of Registrator path.
+	for _, o := range opts {
+		if ro, ok := o.(redirectsOption); ok {
+			a.redirectStore.Add(RedirectEntry{
+				From:     string(ro.from),
+				To:       ro.to,
+				Code:     Permanent,
+				IsPrefix: true,
+			})
+		}
+	}
 	if r, ok := v.(Registrator); ok {
 		r.Register(a.mux)
 		if sm, ok := r.(interface{ setSitemap(*SitemapStore, string) }); ok {
@@ -280,6 +294,10 @@ func (a *App) Handler() http.Handler {
 			newCookieManifestHandler(u.Hostname(), a.cookieDecls, a.cookieManifestOpts...),
 		)
 	}
+	if !a.redirectFallbackReg {
+		a.redirectFallbackReg = true
+		a.mux.Handle("/", a.redirectStore.handler())
+	}
 	if len(a.templateModules) > 0 {
 		bindErrorTemplates(a.templateModules)
 	}
@@ -336,6 +354,33 @@ func (a *App) Cookies(decls ...Cookie) {
 //	app.CookiesManifestAuth(forge.BearerHMAC(secret, forge.Editor))
 func (a *App) CookiesManifestAuth(auth AuthFunc) {
 	a.cookieManifestOpts = append(a.cookieManifestOpts, ManifestAuth(auth))
+}
+
+// Redirect registers a manual redirect rule. Chain collapse is applied
+// automatically: if from already redirects to an intermediate path and this
+// call adds a rule for that intermediate path, the chain is collapsed (A→B
+// + B→C = A→C). Maximum collapse depth is 10 (Decision 24).
+//
+// To issue a 301 Moved Permanently:
+//
+//	app.Redirect("/old-path", "/new-path", forge.Permanent)
+//
+// To issue a 410 Gone (pass an empty destination):
+//
+//	app.Redirect("/removed", "", forge.Gone)
+func (a *App) Redirect(from, to string, code RedirectCode) {
+	a.redirectStore.Add(RedirectEntry{From: from, To: to, Code: code})
+}
+
+// RedirectStore returns the App's [RedirectStore], which can be used to load
+// persisted redirects from a database at startup, or to save/remove entries
+// at runtime:
+//
+//	if err := app.RedirectStore().Load(ctx, db); err != nil {
+//	    log.Fatal(err)
+//	}
+func (a *App) RedirectStore() *RedirectStore {
+	return a.redirectStore
 }
 
 // Run starts the HTTP server on addr (e.g. ":8080") and blocks until
