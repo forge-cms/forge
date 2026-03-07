@@ -2169,3 +2169,95 @@ app.RedirectManifestAuth(forge.BearerHMAC(secret, forge.Editor))
 - Mirrors `CookiesManifestAuth` exactly — no new patterns introduced
 - No existing callers broken (opts are additive; nil slice = public endpoint)
 - README does not document this method yet — will be added in M7 final docs pass
+
+
+---
+
+### Amendment A23 — node.go: `db` struct tags on `Node` time fields (Milestone 8, Step 1)
+
+**Date:** 2026-03-07
+**Status:** Agreed
+**Amends:** Decision 14 (Content lifecycle) — `Node` struct
+
+**Change:** `dbFields` lowercases Go field names without inserting underscores, so
+`ScheduledAt` maps to `scheduledat` (no underscore). SQL columns use `snake_case`
+(`scheduled_at`), causing a mismatch that silently drops those columns in
+`SQLRepo.FindAll/Save`. Explicit `db` struct tags fix this for all four time fields.
+
+**New tags on `Node`:**
+`go
+PublishedAt time.Time  `db:"published_at"`
+ScheduledAt *time.Time `db:"scheduled_at"`
+CreatedAt   time.Time  `db:"created_at"`
+UpdatedAt   time.Time  `db:"updated_at"`
+`
+
+**Consequences:**
+- `SQLRepo` now maps to the correct column names automatically
+- `MemoryRepo` is unaffected (does not use `db` tags)
+- No existing tests rely on the broken column names
+
+---
+
+### Amendment A24 — context.go: `NewBackgroundContext` (Milestone 8, Step 1)
+
+**Date:** 2026-03-07
+**Status:** Agreed
+**Amends:** Decision 21 (Context interface)
+
+**Change:** The scheduler goroutine needs a `Context` for repository calls and
+signal dispatch but has no HTTP request. `NewTestContext` is test-only and
+uses a request-scoped context that may be cancelled. A new constructor backed
+by `context.Background()` is needed.
+
+**New in context.go:** `func NewBackgroundContext(siteName string) Context`
+- Creates a synthetic `GET /` `*http.Request` (same pattern as `NewTestContext`)
+- Wraps with `context.Background()` — never times out
+- `user: GuestUser`, `locale: "en"`, `requestID: NewID()`
+- `siteName` set from parameter
+
+**Consequences:**
+- Scheduler can make repository calls and fire signals without an HTTP request
+- `NewTestContext` is unchanged — test code is unaffected
+
+---
+
+### Amendment A25 — module.go: `processScheduled` + helpers (Milestone 8, Step 1)
+
+**Date:** 2026-03-07
+**Status:** Agreed
+**Amends:** Decision 14 (Content lifecycle)
+
+**Change:** `Module[T]` must implement the `schedulableModule` interface so the
+`Scheduler` can drive the Scheduled to Published transition.
+
+**New in module.go:**
+- `setNodeStatus(item any, s Status)` — sets Status field via reflection
+- `setNodeTime(item any, field string, t time.Time)` — sets time.Time field
+- `setNodeTimePtr(item any, field string, t *time.Time)` — sets *time.Time field
+- `func (m *Module[T]) processScheduled(ctx Context, now time.Time) (int, *time.Time, error)`
+
+**Consequences:**
+- `Module[T]` now satisfies `schedulableModule` at compile time
+- No change to `Module[T]`'s public API
+- No new imports required in `module.go`
+
+---
+
+### Amendment A26 — forge.go: scheduler wiring (Milestone 8, Step 1)
+
+**Date:** 2026-03-07
+**Status:** Agreed
+**Amends:** Decision 2 (App bootstrap)
+
+**Change:** `App` must collect modules and start/stop the `Scheduler` in `Run()`.
+
+**New in forge.go:**
+- `schedulerModules []schedulableModule` field on `App` struct
+- `App.Content()`: appends module to `schedulerModules` when it satisfies `schedulableModule`
+- `App.Run()`: starts scheduler before `ListenAndServe`; `defer` stops it after `srv.Shutdown`
+
+**Consequences:**
+- Scheduler goroutine starts before HTTP server and stops cleanly after graceful shutdown
+- `App` with no content modules: no goroutine spawned
+- `App.Run()` return paths unchanged — defer handles all cleanup paths

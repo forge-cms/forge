@@ -174,13 +174,15 @@ optional DB persistence, and `/.well-known/redirects.json` inspect endpoint.
 ## Milestone 8 — Scheduled publishing (v0.8.0)
 
 Adaptive ticker, Scheduled→Published transition, AfterPublish signal.
-**Detail:** Milestone8_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone8_BACKLOG.md](Milestone8_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | scheduler.go | 🔲 Not started | — |
+| 1 | scheduler.go | ✅ Done | 2026-03-07 |
+| 2 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `scheduler.go`: adaptive ticker, fallback polling (60s), Scheduled→Published transition, PublishedAt assignment, AfterPublish signal, sitemap+feed trigger, graceful shutdown coordination
+- [x] Step 1 — `scheduler.go`: adaptive ticker, fallback 60s, Scheduled→Published, PublishedAt assignment, AfterPublish signal, sitemap+feed trigger, graceful shutdown; + Amendments A23 (db tags on Node), A24 (NewBackgroundContext), A25 (Module.processScheduled), A26 (forge.go wiring)
+- [ ] Step 2 — `integration_full_test.go`: cross-milestone groups G19–G20 (scheduler end-to-end with MemoryRepo + M1 signals, scheduler + App + sitemap M8+M3+M2) + README badge update
 
 ---
 

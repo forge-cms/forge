@@ -16,7 +16,7 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 |------|------|--------|-----------|
 | 1 | cookies.go | ✅ Done | 2026-03-07 |
 | 2 | cookiemanifest.go | ✅ Done | 2026-03-07 |
-| 3 | integration_full_test.go | 🔲 Not started | — |
+| 3 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 ---
 
@@ -187,40 +187,40 @@ consent is absent. Consent state is stored in a `Necessary` cookie (`forge_conse
 
 #### 3.1 — G13: Cookie consent enforcement (Decision 5)
 
-- [ ] G13 group: `SetCookie` for Necessary sets header; `ConsentFor` returns false without forge_consent; `SetCookieIfConsented` skips without consent; `GrantConsent` + `SetCookieIfConsented` succeeds; `RevokeConsent` clears consent
+- [x] G13 group: `SetCookie` for Necessary sets header; `ConsentFor` returns false without forge_consent; `SetCookieIfConsented` skips without consent; `GrantConsent` + `SetCookieIfConsented` succeeds; `RevokeConsent` clears consent
 
 #### 3.2 — G14: Consent lifecycle + M1 role integration
 
-- [ ] G14 group: full consent lifecycle — Grant → all categories consented; Revoke → all false; ClearCookie expires header; `ConsentFor(Necessary)` always true regardless of forge_consent state; wired through a module handler that sets a Preferences cookie
+- [x] G14 group: full consent lifecycle — Grant → all categories consented; Revoke → all false; ClearCookie expires header; `ConsentFor(Necessary)` always true regardless of forge_consent state; wired through a module handler that sets a Preferences cookie
 
 #### 3.3 — G15: Full M6 stack — manifest + M2 App integration
 
-- [ ] G15 group: `app.Cookies(...)` + `GET /.well-known/cookies.json` returns correct JSON; multiple declarations sort by name; ManifestAuth with Editor+ role blocks Guest (403) and allows Editor (200); manifest not mounted when no declarations
+- [x] G15 group: `app.Cookies(...)` + `GET /.well-known/cookies.json` returns correct JSON; multiple declarations sort by name; ManifestAuth with Editor+ role blocks Guest (403) and allows Editor (200); manifest not mounted when no declarations
 
 #### 3.4 — README badges
 
-- [ ] Update README.md: Cookies & Compliance section badge from `🔲 Coming in Milestone 6` → `✅ Available`
+- [x] Update README.md: Cookies & Compliance section badge from `🔲 Coming in Milestone 6` → `✅ Available`
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run "TestIntegrationFull/G1[3-5]" ./...` — G13–G15 all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 3 row and summary checkbox updated; M6 milestone row marked ✅
-- [ ] `README.md` — Cookies & Compliance badge updated to ✅ Available
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestIntegrationFull/G1[3-5]" ./...` — G13–G15 all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 3 row and summary checkbox updated; M6 milestone row marked ✅
+- [x] `README.md` — Cookies & Compliance badge updated to ✅ Available
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
 
 ## Completion criteria for Milestone 6
 
-- [ ] `cookies.go`: all types, constants, and functions implemented and tested
-- [ ] `cookiemanifest.go`: manifest handler + App.Cookies() wired
-- [ ] `forge_consent` cookie mechanism: GrantConsent / RevokeConsent / ConsentFor all correct
-- [ ] `/.well-known/cookies.json` served when declarations registered; 404 otherwise
-- [ ] Integration tests G13–G15 appended to `integration_full_test.go` and passing
-- [ ] `README.md` — Cookies & Compliance badge updated to ✅ Available
-- [ ] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty
+- [x] `cookies.go`: all types, constants, and functions implemented and tested
+- [x] `cookiemanifest.go`: manifest handler + App.Cookies() wired
+- [x] `forge_consent` cookie mechanism: GrantConsent / RevokeConsent / ConsentFor all correct
+- [x] `/.well-known/cookies.json` served when declarations registered; 404 otherwise
+- [x] Integration tests G13–G15 appended to `integration_full_test.go` and passing
+- [x] `README.md` — Cookies & Compliance badge updated to ✅ Available
+- [x] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty

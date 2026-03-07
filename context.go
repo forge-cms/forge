@@ -146,3 +146,26 @@ func NewTestContext(user User) Context {
 		w:         rec,
 	}
 }
+
+// NewBackgroundContext returns a [Context] for use in background goroutines
+// such as the scheduled-publishing ticker. It has no HTTP lifecycle and never
+// times out:
+//   - Request() returns a synthetic GET / request backed by [context.Background]
+//   - Response() returns a *httptest.ResponseRecorder (discards output)
+//   - User is [GuestUser]; Locale is "en"; RequestID is a generated UUID v7
+//
+// siteName should be the hostname portion of [Config.BaseURL] (e.g. "example.com").
+func NewBackgroundContext(siteName string) Context {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.Background())
+	return &contextImpl{
+		Context:   context.Background(),
+		user:      GuestUser,
+		locale:    "en",
+		siteName:  siteName,
+		requestID: NewID(),
+		req:       req,
+		w:         rec,
+	}
+}

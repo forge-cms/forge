@@ -802,6 +802,109 @@ func (m *Module[T]) triggerSitemap(ctx Context) {
 	m.debounce.Trigger()
 }
 
+// — Scheduler support ——————————————————————————————————————————————————————
+
+// setNodeStatus sets the Status field on a pointer-to-struct content item.
+func setNodeStatus(item any, s Status) {
+	rv := reflect.ValueOf(item)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if path := goFieldPath(rv.Type(), "Status"); path != nil {
+		rv.FieldByIndex(path).Set(reflect.ValueOf(s))
+	}
+}
+
+// setNodeTime sets a time.Time field by Go field name on a pointer-to-struct
+// content item.
+func setNodeTime(item any, field string, t time.Time) {
+	rv := reflect.ValueOf(item)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if path := goFieldPath(rv.Type(), field); path != nil {
+		rv.FieldByIndex(path).Set(reflect.ValueOf(t))
+	}
+}
+
+// setNodeTimePtr sets a *time.Time field by Go field name on a pointer-to-struct
+// content item. Passing nil clears the field to the zero pointer value.
+func setNodeTimePtr(item any, field string, t *time.Time) {
+	rv := reflect.ValueOf(item)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if path := goFieldPath(rv.Type(), field); path != nil {
+		fv := rv.FieldByIndex(path)
+		if t == nil {
+			fv.Set(reflect.Zero(fv.Type()))
+		} else {
+			fv.Set(reflect.ValueOf(t))
+		}
+	}
+}
+
+// processScheduled implements [schedulableModule]. It queries the module's
+// repository for all Scheduled items, transitions any whose ScheduledAt
+// is at or before now to Published, fires [AfterPublish] for each, and
+// triggers sitemap/feed debounce regeneration when at least one item
+// is published.
+//
+// Returns the count of items published, the soonest remaining ScheduledAt
+// across all still-scheduled items (nil when none remain), and any storage
+// error encountered during the transition.
+func (m *Module[T]) processScheduled(ctx Context, now time.Time) (int, *time.Time, error) {
+	items, err := m.repo.FindAll(ctx.Request().Context(), ListOptions{Status: []Status{Scheduled}})
+	if err != nil {
+		return 0, nil, err
+	}
+
+	published := 0
+	var next *time.Time
+
+	for _, item := range items {
+		rv := reflect.ValueOf(item)
+		if rv.Kind() == reflect.Ptr {
+			rv = rv.Elem()
+		}
+		path := goFieldPath(rv.Type(), "ScheduledAt")
+		if path == nil {
+			continue
+		}
+		fv := rv.FieldByIndex(path)
+		if fv.IsNil() {
+			continue
+		}
+		scheduledAt := fv.Elem().Interface().(time.Time)
+
+		if scheduledAt.After(now) {
+			// Not yet due — record as candidate for next timer wake.
+			if next == nil || scheduledAt.Before(*next) {
+				t := scheduledAt
+				next = &t
+			}
+			continue
+		}
+
+		// Due — transition to Published.
+		setNodeStatus(item, Published)
+		setNodeTime(item, "PublishedAt", now)
+		setNodeTimePtr(item, "ScheduledAt", nil)
+
+		if err := m.repo.Save(ctx.Request().Context(), item); err != nil {
+			return published, next, err
+		}
+		dispatchAfter(ctx, m.signals[AfterPublish], item)
+		published++
+	}
+
+	if published > 0 {
+		m.invalidateCache()
+		m.triggerSitemap(ctx)
+	}
+	return published, next, nil
+}
+
 // — newItemPtr allocates a *struct for T via reflection. ——————————————————
 
 // newItemPtr returns a pointer to a newly allocated zero value of T's

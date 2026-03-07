@@ -113,23 +113,24 @@ type App struct {
 	cfg                    Config
 	mux                    *http.ServeMux
 	middleware             []func(http.Handler) http.Handler
-	sitemapStore           *SitemapStore    // non-nil when at least one module has SitemapConfig
-	sitemapIndexRegistered bool             // true once GET /sitemap.xml is registered
-	seo                    seoState         // app-level SEO configuration set via SEO()
-	robotsTxtRegistered    bool             // true once GET /robots.txt is registered
-	templateModules        []templateParser // modules with HTML templates; parsed at Run() time
-	llmsStore              *LLMsStore       // non-nil when at least one module uses AIIndex
-	llmsTxtRegistered      bool             // true once GET /llms.txt is registered
-	llmsFullTxtRegistered  bool             // true once GET /llms-full.txt is registered
-	feedStore              *FeedStore       // non-nil when at least one module uses Feed(...)
-	feedIndexRegistered    bool             // true once GET /feed.xml is registered
-	cookieDecls            []Cookie         // registered via Cookies(); drives /.well-known/cookies.json
-	cookieManifestOpts     []Option         // options for the manifest handler (e.g. ManifestAuth)
-	cookieManifestReg      bool             // true once GET /.well-known/cookies.json is registered
-	redirectStore          *RedirectStore   // runtime redirect table; always non-nil after New()
-	redirectFallbackReg    bool             // true once "/" fallback handler is registered
-	redirectManifestReg    bool             // true once GET /.well-known/redirects.json is registered
-	redirectManifestOpts   []Option         // options for the redirect manifest handler (e.g. ManifestAuth)
+	sitemapStore           *SitemapStore       // non-nil when at least one module has SitemapConfig
+	sitemapIndexRegistered bool                // true once GET /sitemap.xml is registered
+	seo                    seoState            // app-level SEO configuration set via SEO()
+	robotsTxtRegistered    bool                // true once GET /robots.txt is registered
+	templateModules        []templateParser    // modules with HTML templates; parsed at Run() time
+	llmsStore              *LLMsStore          // non-nil when at least one module uses AIIndex
+	llmsTxtRegistered      bool                // true once GET /llms.txt is registered
+	llmsFullTxtRegistered  bool                // true once GET /llms-full.txt is registered
+	feedStore              *FeedStore          // non-nil when at least one module uses Feed(...)
+	feedIndexRegistered    bool                // true once GET /feed.xml is registered
+	cookieDecls            []Cookie            // registered via Cookies(); drives /.well-known/cookies.json
+	cookieManifestOpts     []Option            // options for the manifest handler (e.g. ManifestAuth)
+	cookieManifestReg      bool                // true once GET /.well-known/cookies.json is registered
+	redirectStore          *RedirectStore      // runtime redirect table; always non-nil after New()
+	redirectFallbackReg    bool                // true once "/" fallback handler is registered
+	redirectManifestReg    bool                // true once GET /.well-known/redirects.json is registered
+	redirectManifestOpts   []Option            // options for the redirect manifest handler (e.g. ManifestAuth)
+	schedulerModules       []schedulableModule // modules that implement scheduled publishing
 }
 
 // New creates a new [App] from cfg.
@@ -233,6 +234,9 @@ func (a *App) Content(v any, opts ...Option) {
 				a.feedStore = NewFeedStore(u.Hostname(), a.cfg.BaseURL)
 			}
 			fd.setFeedStore(a.feedStore, a.cfg.BaseURL)
+		}
+		if sm, ok := r.(schedulableModule); ok {
+			a.schedulerModules = append(a.schedulerModules, sm)
 		}
 		return
 	}
@@ -429,6 +433,20 @@ func (a *App) Run(addr string) error {
 
 	// serveErr receives the result of ListenAndServe.
 	serveErr := make(chan error, 1)
+
+	// Start the scheduled-publishing ticker if any modules were registered.
+	if len(a.schedulerModules) > 0 {
+		u, _ := url.Parse(a.cfg.BaseURL)
+		bgCtx := NewBackgroundContext(u.Hostname())
+		sched := newScheduler(a.schedulerModules, bgCtx)
+		schedCtx, schedCancel := context.WithCancel(context.Background())
+		sched.Start(schedCtx)
+		defer func() {
+			schedCancel()
+			sched.Wait()
+		}()
+	}
+
 	go func() {
 		serveErr <- srv.ListenAndServe()
 	}()

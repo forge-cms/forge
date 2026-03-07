@@ -63,17 +63,17 @@ type Node struct {
 
 	// PublishedAt is the time the content was first published. Zero until
 	// the first transition to Published.
-	PublishedAt time.Time
+	PublishedAt time.Time `db:"published_at"`
 
 	// ScheduledAt is the time at which a Scheduled item will be published.
 	// Nil for all other lifecycle states.
-	ScheduledAt *time.Time
+	ScheduledAt *time.Time `db:"scheduled_at"`
 
 	// CreatedAt is set by the storage layer on insert and never updated.
-	CreatedAt time.Time
+	CreatedAt time.Time `db:"created_at"`
 
 	// UpdatedAt is set by the storage layer on every Save.
-	UpdatedAt time.Time
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 // GetSlug returns the URL slug for this node. Satisfies the [SitemapNode]
