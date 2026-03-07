@@ -120,7 +120,14 @@ Every step — without exception — follows this exact sequence:
 - Before writing any code, scan all existing files for patterns, types, or helpers
   that overlap with what you are about to implement. Reuse and extend — never duplicate.
 - Tick checkboxes in the backlog as each task is completed.
-- Run verification after implementation: `go build`, `go vet`, `gofmt`, `go test`.
+- Run verification after implementation automatically — no permission needed:
+  `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`.
+  Fix any failures before proceeding. Never ask the user whether to run these.
+- Read any file in the workspace automatically — no permission needed.
+  Use PowerShell (`Get-Content`, `Select-String`, etc.) or the read_file tool
+  to read `DECISIONS.md`, `ARCHITECTURE.md`, `BACKLOG.md`, milestone backlog
+  files, or any source file before planning or implementing. Never ask the user
+  whether to read a file that already exists in the workspace.
 
 **Cross-milestone integration test rule:**
 Every milestone must include a final step that extends `integration_full_test.go`
@@ -157,6 +164,8 @@ milestone — it becomes a lie the moment the code merges.
 ### 6. Propose a commit message
 - Write a conventional commit message (format below).
 - Present it to the user for approval. Do not commit without explicit user approval.
+- Commits are the **only** action that requires explicit user approval. Build, vet,
+  format, and test commands are executed autonomously.
 
 ### Commit message format
 
