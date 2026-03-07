@@ -17,8 +17,8 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M3 | SEO & Head (v0.3.0) | ✅ Done |
 | M4 | Templates & Rendering (v0.4.0) | ✅ Done |
 | M5 | Social & AI (v0.5.0) | ✅ Done |
-| M6 | Cookies & Compliance (v0.6.0) | � In progress |
-| M7 | Redirects (v0.7.0) | 🔲 Not started |
+| M6 | Cookies & Compliance (v0.6.0) | ✅ Done |
+| M7 | Redirects (v0.7.0) | 🔲 In progress |
 | M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
 | M9 | v1.0.0 stabilisation | 🔲 Not started |
 | M10 | MCP support (v2) | 🔲 Not started |
@@ -143,26 +143,31 @@ Typed cookie declarations, category-enforced consent, compliance manifest.
 |------|------|--------|-----------|
 | 1 | cookies.go | ✅ Done | 2026-03-07 |
 | 2 | cookiemanifest.go | ✅ Done | 2026-03-07 |
-| 3 | integration_full_test.go | 🔲 Not started | — |
+| 3 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 - [x] Step 1 — `cookies.go`: CookieCategory, Necessary/Preferences/Analytics/Marketing, Cookie struct, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, GrantConsent, RevokeConsent, ConsentFor
 - [x] Step 2 — `cookiemanifest.go`: cookieManifest JSON type, buildManifest, newCookieManifestHandler, ManifestAuth option, App.Cookies() + wiring in forge.go
-- [ ] Step 3 — `integration_full_test.go`: cross-milestone groups G13–G15 (consent enforcement, consent lifecycle + M1 roles, full M6 stack + manifest) + README badge
+- [x] Step 3 — `integration_full_test.go`: cross-milestone groups G13–G15 (consent enforcement, consent lifecycle + M1 roles, full M6 stack + manifest) + README badge
 
 ---
 
 ## Milestone 7 — Redirects (v0.7.0)
 
-Automatic redirect tracking, 410 Gone, chain collapse, inspect endpoint.
-**Detail:** Milestone7_BACKLOG.md *(not yet created)*
+Production `SQLRepo[T]`, automatic redirect tracking, 410 Gone, chain collapse,
+optional DB persistence, and `/.well-known/redirects.json` inspect endpoint.
+**Detail:** [Milestone7_BACKLOG.md](Milestone7_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | redirects.go | 🔲 Not started | — |
-| 2 | redirectmanifest.go | 🔲 Not started | — |
+| 1 | storage.go | 🔲 Not started | — |
+| 2 | redirects.go | 🔲 Not started | — |
+| 3 | redirectmanifest.go | 🔲 Not started | — |
+| 4 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `redirects.go`: RedirectEntry, auto-create on slug/prefix rename, 410 on archive/delete, chain collapse, Redirects(From) bulk option, app.Redirect manual route
-- [ ] Step 2 — `redirectmanifest.go`: /.well-known/redirects.json inspect endpoint (Editor+)
+- [ ] Step 1 — `storage.go`: `SQLRepo[T]` production `Repository[T]` backed by `forge.DB`; `Table()` SQLRepoOption; auto-derived table names; full CRUD using `dbFields` cache (Amendment A19)
+- [ ] Step 2 — `redirects.go`: `RedirectCode`, `RedirectEntry` (+`IsPrefix`), `From`/`Redirects` option, `RedirectStore` (exact + prefix lookup, chain collapse, DB persistence via `Load`/`Save`/`Remove`), `App.Redirect()`, `"/"` fallback wiring in `forge.go` (Amendment A20)
+- [ ] Step 3 — `redirectmanifest.go`: `/.well-known/redirects.json` — always mounted, live serialisation, reuses `ManifestAuth` option (Amendment A21)
+- [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G16–G18 (redirect enforcement, prefix rewrite + M2, full M7 stack + manifest + M6 ManifestAuth) + README badge updates
 
 ---
 

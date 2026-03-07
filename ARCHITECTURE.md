@@ -32,6 +32,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-06 | Amendment A17: `compressIfAccepted(w, r, body, contentType)` helper added to `ai.go`; gzip applied directly at AI endpoint handlers — `CompactHandler`, `FullHandler`, `renderAIDoc` (now takes `r *http.Request`); 1400-byte threshold; `Vary: Accept-Encoding` always set. Supersedes Decision 13 Amendment A clause 3. Tests: `TestCompressIfAccepted_gzip`, `TestCompressIfAccepted_smallBody`, `TestCompressIfAccepted_noAcceptEncoding`, `TestLLMsTxt_gzip`, `TestAIDoc_gzip`. |
 | 2026-03-07 | Milestone 6 Step 1: `cookies.go` implemented — `CookieCategory` (`Necessary`/`Preferences`/`Analytics`/`Marketing`), `Cookie` struct, `SetCookie`, `SetCookieIfConsented`, `ReadCookie`, `ClearCookie`, `ConsentFor`, `GrantConsent`, `RevokeConsent`; `forge_consent` Necessary cookie stores consent state; Decision 5 enforcement: `SetCookie` panics on non-Necessary, `SetCookieIfConsented` panics on Necessary. |
 | 2026-03-07 | Milestone 6 Step 2: `cookiemanifest.go` implemented — `cookieManifest`/`cookieManifestEntry` JSON types, `buildManifest`, `sameSiteName`, `ManifestAuth` option, `newCookieManifestHandler`; Amendment A18: `App.Cookies()`, `App.CookiesManifestAuth()`, `cookieDecls`/`cookieManifestOpts` fields added to `forge.go`; `GET /.well-known/cookies.json` mounted lazily in `App.Handler()`. |
+| 2026-03-07 | Milestone 6 Step 3: `integration_full_test.go` extended — G13–G15 cross-milestone groups appended: G13 (M6 consent enforcement, Decision 5): SetCookie/ConsentFor/SetCookieIfConsented/GrantConsent/RevokeConsent; G14 (M6 + M2 handler pattern): consent lifecycle wired through an HTTP handler, ClearCookie expiry, Necessary always-true; G15 (M6 + M2 App + M1 BearerHMAC): manifest mounted/sorted/not-mounted-when-empty, authGuard 401/200. README.md: Cookies & Compliance badge updated from 🔲 Coming in Milestone 6 → ✅ Available. Milestone 6 complete. |
 ---
 
 ## Package structure
@@ -123,15 +124,17 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ### Planned (future milestones)
 
 ```
-├── cookies.go        CookieCategory (Necessary/Preferences/Analytics/Marketing),
-│                     Cookie struct (Name/Category/Path/Domain/Secure/HttpOnly/SameSite/MaxAge/Purpose),
-│                     SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie,
-│                     ConsentFor, GrantConsent, RevokeConsent;
-│                     forge_consent Necessary cookie stores consent state
-├── cookiemanifest.go  ManifestAuth option, buildManifest, newCookieManifestHandler;
-│                     App.Cookies(), App.CookiesManifestAuth();
-│                     GET /.well-known/cookies.json (mounted lazily in App.Handler())
-├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
+├── storage.go (extend) SQLRepo[T] — production Repository[T] backed by forge.DB;
+│                     Table() SQLRepoOption; auto-derived table names (snake_case plural);
+│                     FindByID/FindBySlug/FindAll/Save/Delete; reuses dbFields cache;
+│                     $N SQL placeholders (Decision 23); Amendment A19       (Milestone 7)
+├── redirects.go      RedirectCode (MovedPermanently/Gone), RedirectEntry (+IsPrefix),
+│                     From type, Redirects() option, RedirectStore (exact + prefix
+│                     lookup, chain collapse, DB persistence via Load/Save/Remove),
+│                     App.Redirect(), "/" fallback wiring (Amendment A20)      (Milestone 7)
+├── redirectmanifest.go  buildRedirectManifest, newRedirectManifestHandler;
+│                     GET /.well-known/redirects.json (always mounted, live JSON);
+│                     reuses ManifestAuth option (Amendment A21)               (Milestone 7)
 └── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
 
@@ -385,7 +388,8 @@ forge.go        — depends on: all of the above                          (Miles
 templates.go    — depends on: head, context, node                       (Milestone 4)
 cookies.go      — depends on: errors (none — stdlib net/http only)
 ├── cookiemanifest.go — depends on: cookies, forge.go (Amendment A18)
-redirects.go    — depends on: node, errors                              (Milestone 7)
+redirects.go    — depends on: errors, storage (forge.DB), forge.go (A20)       (Milestone 7)
+├── redirectmanifest.go — depends on: redirects, cookiemanifest (manifestAuthOption), forge.go (A21)
 sitemap.go      — depends on: node, signals                             (Milestone 3)
 rss.go          — depends on: node, signals, head                       (Milestone 5)
 ai.go           — depends on: node, head                                (Milestone 5)

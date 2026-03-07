@@ -2014,3 +2014,130 @@ The previous implementation in `listHandler` fetched all items with `FindAll(ctx
 - `MemoryRepo.FindAll` filters via `statusMatch` before collecting items
 - `listHandler` passes `Status: []Status{Published}` for guest users; `nil` for authors
 - In-Go filter loop after `FindAll` removed from `listHandler`
+
+---
+
+## Decision 23 — SQLRepo SQL placeholder style
+
+**Status:** Locked  
+**Date:** 2026-03-07
+
+**Decision:** `SQLRepo[T]` uses `$N`-style positional placeholders (e.g. `$1`, `$2`) for all
+generated SQL. This is the PostgreSQL/pgx native format and is also accepted by
+`modernc.org/sqlite` (pure-Go SQLite) and `lib/pq`.
+
+**Rationale:**
+`?`-style placeholders (MySQL, standard `database/sql`) are not supported by pgx
+without wrapping. Since `pgx/v5` is the recommended driver (Decision 22) and the
+primary supported database is PostgreSQL, `$N` is the correct default. SQLite
+users who pass a `*sql.DB` backed by `modernc.org/sqlite` get `$N` support
+automatically — no placeholder translation layer needed.
+
+**Consequences:**
+- All `SQLRepo[T]` generated queries use `$N` positional parameters
+- MySQL is not supported by `SQLRepo[T]` out of the box — a `forge-mysql` sibling
+  package can provide a `MySQLRepo[T]` with `?` placeholders in a future milestone
+- `MemoryRepo[T]` is unaffected
+
+---
+
+## Decision 24 — Redirect lookup on the 404 path; chain collapse depth limit
+
+**Status:** Locked  
+**Date:** 2026-03-07
+
+**Decision:** `RedirectStore.handler()` is mounted at `"/"` in `App.Handler()` as the
+ServeMux fallback. It is only reached when no other pattern matches, meaning:
+**redirect lookup adds zero overhead to successful requests**.
+
+Chain collapse maximum depth is **10**. If collapsing a chain would exceed 10 hops,
+`RedirectStore.Add` panics with a descriptive message. This prevents infinite
+loops and misconfiguration from silently degrading into a redirect spiral.
+
+**Rationale:**
+A chain longer than 10 hops is almost certainly a configuration error, not a
+legitimate content migration. Panicking at startup (when `app.Redirect()` is called
+in `main.go`) surfaces the problem immediately rather than at request time.
+
+**Consequences:**
+- `RedirectStore.handler()` is `a.mux.Handle("/", ...)` — always registered in `Handler()`
+- Empty store: `handler()` calls `http.NotFound` — identical to default ServeMux 404
+- `Add()` collapses chains on every insert; max depth 10 = panic guard
+- `Get()` is always O(1) for exact matches; O(prefix count) for prefix fallback
+
+---
+
+### Amendment A19 — SQLRepo[T] added to storage.go (Milestone 7, Step 1)
+
+**Date:** 2026-03-07  
+**Status:** Agreed  
+**Amends:** Decision 22 (Storage interface and database drivers)
+
+**Change:** `SQLRepo[T]` is added to `storage.go` alongside `MemoryRepo[T]`. Both
+implement `Repository[T]`. No new file — one step = one logical unit.
+
+**New in storage.go:**
+- `type SQLRepoOption interface{ isSQLRepoOption() }` — marker interface for SQL repo options
+- `func Table(name string) SQLRepoOption` — overrides auto-derived table name
+- `type SQLRepo[T any] struct` with fields `db DB`, `table string`
+- `func NewSQLRepo[T any](db DB, opts ...SQLRepoOption) *SQLRepo[T]`
+- `(r *SQLRepo[T]) FindByID`, `FindBySlug`, `FindAll`, `Save`, `Delete` — all satisfy `Repository[T]`
+- Auto-derived table name: snake_case plural of type name (`BlogPost` → `blog_posts`)
+- All SQL uses `$N` placeholders (Decision 23)
+- Reuses existing `dbFields` cache — no duplication
+
+**Consequences:**
+- `MemoryRepo[T]` is unchanged
+- `SQLRepo[T]` requires a table whose columns match the struct's `db` tags
+- README documents recommended table schema pattern
+- `forge-pgx` integration tests extended in a separate commit (Amendment A22)
+
+---
+
+### Amendment A20 — forge.go: RedirectStore, App.Redirect(), fallback handler (Milestone 7, Step 2)
+
+**Date:** 2026-03-07  
+**Status:** Agreed  
+**Amends:** Decision 17 (Redirects and content mobility)
+
+**Change:** Three additions to `forge.go`, pre-approved as part of the Milestone 7 plan.
+
+**New in forge.go:**
+- `redirectStore *RedirectStore` field on `App` struct
+- `New()` initialises `redirectStore: NewRedirectStore()`
+- `func (a *App) Redirect(from, to string, code RedirectCode)` — manual one-off redirect
+- `App.Content()`: extracts `redirectsOption`; registers prefix `RedirectEntry` in store
+- `App.Handler()`: `a.mux.Handle("/", a.redirectStore.handler())` — unconditional fallback
+
+**Decision 17 amendment — IsPrefix field:**  
+`RedirectEntry` gains `IsPrefix bool`. When `true`, the handler performs a
+runtime path rewrite: `/old-prefix/X` → `entry.To + "/X"`. This is a single
+in-memory entry — no DB expansion, zero per-request allocation beyond string concat.
+
+**Consequences:**
+- All existing `App.Redirect()` callers unaffected (exact redirects, `IsPrefix=false`)
+- `Redirects(From, to)` option registers a prefix entry via `App.Content()`
+- Fallback handler is always registered; empty store = standard 404 behaviour
+
+---
+
+### Amendment A21 — forge.go: /.well-known/redirects.json (Milestone 7, Step 3)
+
+**Date:** 2026-03-07  
+**Status:** Agreed  
+**Amends:** Decision 17 (Redirects and content mobility)
+
+**Change:** `/.well-known/redirects.json` is always mounted in `App.Handler()`,
+unlike `/.well-known/cookies.json` which only mounts when declarations exist.
+Redirect entries change at runtime so the manifest serialises on each request.
+
+**New in forge.go:**
+- `redirectManifestReg bool` field on `App` struct
+- `App.Handler()`: mounts `GET /.well-known/redirects.json` unconditionally via
+  `newRedirectManifestHandler(hostname, a.redirectStore)`
+- Reuses `manifestAuthOption` from `cookiemanifest.go` — no new option type
+
+**Consequences:**
+- Empty store returns `{"count": 0, "entries": []}` — never 404
+- Live serialisation: manifest always reflects the current store state
+- `ManifestAuth` is optional; endpoint is public by default
