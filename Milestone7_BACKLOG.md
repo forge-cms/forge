@@ -18,7 +18,7 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 |------|------|--------|-----------|
 | 1 | storage.go | ✅ Done | 2026-03-07 |
 | 2 | redirects.go | ✅ Done | 2026-03-07 |
-| 3 | redirectmanifest.go | 🔲 Not started | — |
+| 3 | redirectmanifest.go | ✅ Done | 2026-03-07 |
 | 4 | integration_full_test.go | 🔲 Not started | — |
 
 ---
@@ -273,13 +273,13 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestRedirectManifest ./...` — all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 3 row and summary checkbox updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestRedirectManifest ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 3 row and summary checkbox updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

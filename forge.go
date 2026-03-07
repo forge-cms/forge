@@ -128,6 +128,7 @@ type App struct {
 	cookieManifestReg      bool             // true once GET /.well-known/cookies.json is registered
 	redirectStore          *RedirectStore   // runtime redirect table; always non-nil after New()
 	redirectFallbackReg    bool             // true once "/" fallback handler is registered
+	redirectManifestReg    bool             // true once GET /.well-known/redirects.json is registered
 }
 
 // New creates a new [App] from cfg.
@@ -292,6 +293,13 @@ func (a *App) Handler() http.Handler {
 		u, _ := url.Parse(a.cfg.BaseURL)
 		a.mux.Handle("GET /.well-known/cookies.json",
 			newCookieManifestHandler(u.Hostname(), a.cookieDecls, a.cookieManifestOpts...),
+		)
+	}
+	if !a.redirectManifestReg {
+		a.redirectManifestReg = true
+		u2, _ := url.Parse(a.cfg.BaseURL)
+		a.mux.Handle("GET /.well-known/redirects.json",
+			newRedirectManifestHandler(u2.Hostname(), a.redirectStore),
 		)
 	}
 	if !a.redirectFallbackReg {
