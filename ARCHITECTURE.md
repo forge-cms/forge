@@ -30,6 +30,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-06 | Milestone 5 Step 2: `ai.go` implemented — `Markdownable` (A11: migrated from `module.go`), `AIDocSummary`, `AIFeature`, `LLMsTxt`/`LLMsTxtFull`/`AIDoc` constants, `AIIndex()` option, `WithoutID()` option, `LLMsEntry`, `LLMsTemplateData`, `LLMsStore`, `NewLLMsStore`, `extractNode`, `renderAIDoc`; `forgeLLMSEntries(data any)` wired in `templatehelpers.go` (A12); `LLMsStore` wiring in `forge.go` Content+Handler (A13); README one-liner added (A14); AIDoc URL uses `/{prefix}/{slug}/aidoc` — Go’s net/http.ServeMux does not support partial wildcard segments, so `/{slug}.aidoc` is not a valid pattern (A15: DECISIONS.md updated) || 2026-03-06 | Milestone 5 Step 3: `feed.go` implemented — `FeedConfig`, `Feed()` option (opt-in, Amendment A16: Decision 13 updated), `FeedDisabled()` option, `rssItem`/`rssChannel`/`rssRoot` XML structs, `FeedStore`, `NewFeedStore`, `buildRSSItem`, `capitalisePrefixTitle`, `guessMIMEType`, `writeRSSFeed`; `ModuleHandler` serves `/{prefix}/feed.xml`, `IndexHandler` serves `/feed.xml` aggregate (all Published items, reverse-chronological); `feedCfg`/`feedStore`/`regenerateFeed`/`setFeedStore` added to `module.go`; `feedStore`/`feedIndexRegistered` added to `forge.go` |
 | 2026-03-06 | Milestone 5 Step 4: `integration_full_test.go` extended — G9–G12 cross-milestone groups appended: G9 (Social + SitemapConfig M3): OG/Twitter tags in forge:head, Draft → 404; G10 (AIIndex + M4 content negotiation): /llms.txt Published/Draft filter, /posts/{slug}/aidoc 200/404, Accept:text/markdown alongside AIDoc; G11 (Feed + M1 AfterPublish signal): /posts/feed.xml RSS 2.0, Draft excluded, AfterPublish fires within 500ms; G12 (Full M5 stack): Social+AIIndex+Feed+SitemapConfig+HeadFunc+Templates — OG/Twitter, /llms.txt, /aidoc, /feed.xml all verified. README.md: AI indexing and Social sharing badges updated from 🔲 Coming in Milestone 5 → ✅ Available. Milestone 5 complete. |
 | 2026-03-06 | Amendment A17: `compressIfAccepted(w, r, body, contentType)` helper added to `ai.go`; gzip applied directly at AI endpoint handlers — `CompactHandler`, `FullHandler`, `renderAIDoc` (now takes `r *http.Request`); 1400-byte threshold; `Vary: Accept-Encoding` always set. Supersedes Decision 13 Amendment A clause 3. Tests: `TestCompressIfAccepted_gzip`, `TestCompressIfAccepted_smallBody`, `TestCompressIfAccepted_noAcceptEncoding`, `TestLLMsTxt_gzip`, `TestAIDoc_gzip`. |
+| 2026-03-07 | Milestone 6 Step 1: `cookies.go` implemented — `CookieCategory` (`Necessary`/`Preferences`/`Analytics`/`Marketing`), `Cookie` struct, `SetCookie`, `SetCookieIfConsented`, `ReadCookie`, `ClearCookie`, `ConsentFor`, `GrantConsent`, `RevokeConsent`; `forge_consent` Necessary cookie stores consent state; Decision 5 enforcement: `SetCookie` panics on non-Necessary, `SetCookieIfConsented` panics on Necessary. |
 ---
 
 ## Package structure
@@ -121,7 +122,13 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 ### Planned (future milestones)
 
 ```
-├── cookies.go        Cookie struct, categories, SetCookie, ConsentFor      (Milestone 6)
+├── cookies.go        CookieCategory (Necessary/Preferences/Analytics/Marketing),
+│                     Cookie struct (Name/Category/Path/Domain/Secure/HttpOnly/SameSite/MaxAge/Purpose),
+│                     SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie,
+│                     ConsentFor, GrantConsent, RevokeConsent;
+│                     forge_consent Necessary cookie stores consent state
+├── cookiemanifest.go  App.Cookies(), ManifestAuth option,
+│                     /.well-known/cookies.json manifest handler          (Milestone 6, Step 2)
 ├── redirects.go      RedirectEntry, redirect table, chain collapse         (Milestone 7)
 └── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
 ```
@@ -374,7 +381,8 @@ module.go       — depends on: node, context, signals, storage, errors, middlew
 head.go         — no internal dependencies                              (Milestone 3)
 forge.go        — depends on: all of the above                          (Milestone 2)
 templates.go    — depends on: head, context, node                       (Milestone 4)
-cookies.go      — depends on: errors                                    (Milestone 6)
+cookies.go      — depends on: errors (none — stdlib net/http only)
+├── cookiemanifest.go — depends on: cookies, forge.go                   (Milestone 6, Step 2)
 redirects.go    — depends on: node, errors                              (Milestone 7)
 sitemap.go      — depends on: node, signals                             (Milestone 3)
 rss.go          — depends on: node, signals, head                       (Milestone 5)

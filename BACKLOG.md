@@ -17,7 +17,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M3 | SEO & Head (v0.3.0) | ✅ Done |
 | M4 | Templates & Rendering (v0.4.0) | ✅ Done |
 | M5 | Social & AI (v0.5.0) | ✅ Done |
-| M6 | Cookies & Compliance (v0.6.0) | 🔲 Not started |
+| M6 | Cookies & Compliance (v0.6.0) | � In progress |
 | M7 | Redirects (v0.7.0) | 🔲 Not started |
 | M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
 | M9 | v1.0.0 stabilisation | 🔲 Not started |
@@ -137,15 +137,17 @@ Open Graph, Twitter Cards, llms.txt, AIDoc, RSS feeds.
 ## Milestone 6 — Cookies & Compliance (v0.6.0)
 
 Typed cookie declarations, category-enforced consent, compliance manifest.
-**Detail:** Milestone6_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone6_BACKLOG.md](Milestone6_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | cookies.go | 🔲 Not started | — |
+| 1 | cookies.go | ✅ Done | 2026-03-07 |
 | 2 | cookiemanifest.go | 🔲 Not started | — |
+| 3 | integration_full_test.go | 🔲 Not started | — |
 
-- [ ] Step 1 — `cookies.go`: Cookie struct, Necessary/Preferences/Analytics/Marketing categories, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, ConsentFor, app.Cookies
-- [ ] Step 2 — `cookiemanifest.go`: /.well-known/cookies.json endpoint, ManifestAuth option, consent state storage
+- [x] Step 1 — `cookies.go`: CookieCategory, Necessary/Preferences/Analytics/Marketing, Cookie struct, SetCookie, SetCookieIfConsented, ReadCookie, ClearCookie, GrantConsent, RevokeConsent, ConsentFor
+- [ ] Step 2 — `cookiemanifest.go`: cookieManifest JSON type, buildManifest, newCookieManifestHandler, ManifestAuth option, App.Cookies() + wiring in forge.go
+- [ ] Step 3 — `integration_full_test.go`: cross-milestone groups G13–G15 (consent enforcement, consent lifecycle + M1 roles, full M6 stack + manifest) + README badge
 
 ---
 
