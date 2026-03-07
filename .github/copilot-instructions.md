@@ -123,6 +123,12 @@ Every step — without exception — follows this exact sequence:
 - Run verification after implementation automatically — no permission needed:
   `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`.
   Fix any failures before proceeding. Never ask the user whether to run these.
+- **NEVER ask, announce, or request approval before running any of the following:
+  `go build`, `go vet`, `go test`, `gofmt`, or any read-only PowerShell file
+  command (`Get-Content`, `Select-String`, `Get-ChildItem`, `git diff`, `git log`,
+  `git status`). Just run them. Do not narrate the process. Only surface results
+  when they are unexpected (build failure, test failure, format diff). Commits
+  are the ONLY action that requires explicit user approval.**
 - Read any file in the workspace automatically — no permission needed.
   Use PowerShell (`Get-Content`, `Select-String`, etc.) or the read_file tool
   to read `DECISIONS.md`, `ARCHITECTURE.md`, `BACKLOG.md`, milestone backlog
