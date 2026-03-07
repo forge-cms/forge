@@ -774,6 +774,28 @@ type Repository[T any] interface {
 repo := forge.NewMemoryRepo[*BlogPost]()
 ```
 
+### Production SQL repository
+
+> ✅ **Available** — `SQLRepo[T]` is a production-ready `Repository[T]` backed by `forge.DB`, implemented as of Milestone 7.
+
+`SQLRepo[T]` derives the table name automatically (`BlogPost` → `blog_posts`) or accepts a `Table()` override:
+
+```go
+// Auto-derived table name: blog_posts
+repo := forge.NewSQLRepo[*BlogPost](db)
+
+// Explicit table name
+repo := forge.NewSQLRepo[*BlogPost](db, forge.Table("posts"))
+
+// Wire into a module
+app.Content(&BlogPost{},
+    forge.At("/posts"),
+    forge.Repo(repo),
+)
+```
+
+`SQLRepo` uses `$N` positional placeholders (PostgreSQL / pgx compatible) and upserts via `ON CONFLICT (id) DO UPDATE`.
+
 ---
 
 ## Middleware
@@ -951,7 +973,7 @@ id := ctx.RequestID()
 
 ## Redirects & content mobility
 
-> 🔲 **Coming in Milestone 7** — automatic redirect tracking (slug rename, archive, delete) and `/.well-known/redirects.json` are not yet implemented. Manual redirects and prefix rewrites are available now.
+> ✅ **Available** — manual redirects (`app.Redirect`), prefix rewrites (`Redirects(From(...))`), 410 Gone, chain collapse, and `/.well-known/redirects.json` are implemented as of Milestone 7.
 
 Forge automatically tracks every URL a piece of content has ever had.
 Rename a slug, change a prefix, archive a post — inbound links and SEO

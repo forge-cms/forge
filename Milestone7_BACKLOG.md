@@ -19,7 +19,7 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 | 1 | storage.go | ✅ Done | 2026-03-07 |
 | 2 | redirects.go | ✅ Done | 2026-03-07 |
 | 3 | redirectmanifest.go | ✅ Done | 2026-03-07 |
-| 4 | integration_full_test.go | 🔲 Not started | — |
+| 4 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 ---
 
@@ -294,49 +294,49 @@ endpoint. Closes the "production-ready by default" gap for storage and content m
 
 #### 4.1 — G16: Redirect enforcement (M7, Decision 17)
 
-- [ ] G16 group: `app.Redirect(old, new, MovedPermanently)` → 301 + Location header;
+- [x] G16 group: `app.Redirect(old, new, MovedPermanently)` → 301 + Location header;
       `app.Redirect("/removed", "", Gone)` → 410; unknown path → 404;
       two `app.Redirect` calls that chain are collapsed (A→C, not A→B→C)
 
 #### 4.2 — G17: Prefix redirect via Redirects(From) (M7 + M2)
 
-- [ ] G17 group: `app.Content(m, forge.At("/articles"), forge.Redirects(forge.From("/posts"), "/articles"))`;
+- [x] G17 group: `app.Content(m, forge.At("/articles"), forge.Redirects(forge.From("/posts"), "/articles"))`;
       `GET /posts/hello` → 301 to `/articles/hello`;
       exact entry beats prefix (register exact `/posts/about` → `/about`, prefix entries do not shadow it)
 
 #### 4.3 — G18: Full M7 stack — SQLRepo + manifest + ManifestAuth (M7 + M6 + M1)
 
-- [ ] G18 group:
+- [x] G18 group:
   - `NewSQLRepo[*testPost](mockDB)` satisfies `Repository[*testPost]`
   - `GET /.well-known/redirects.json` always mounted — 200 + JSON even when store empty
   - After `app.Redirect()` entries added, manifest reflects them
-  - `ManifestAuth(BearerHMAC(secret))` → 401 unauthenticated, 200 Editor token
+  - `App.RedirectManifestAuth(BearerHMAC(secret))` (Amendment A22) → 401 unauthenticated, 200 Editor token
 
 #### 4.4 — README badges
 
-- [ ] Update README.md: Redirects section badge from `🔲 Coming in Milestone 7` → `✅ Available`
-- [ ] Update README.md: SQLRepo section badge from `🔲 Coming in Milestone 7` → `✅ Available`
+- [x] Update README.md: Redirects section badge from `🔲 Coming in Milestone 7` → `✅ Available`
+- [x] Update README.md: SQLRepo section added with `✅ Available` badge
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run "TestFull_redirect|TestFull_manifest_redirect|TestFull_sqlrepo" ./...` — all green
-- [ ] `go test ./...` — full suite green
-- [ ] `BACKLOG.md` — step 4 row and summary checkbox updated; M7 milestone row marked ✅
-- [ ] `README.md` — Redirects + SQLRepo badges updated to ✅ Available
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestFull_redirect|TestFull_manifest_redirect|TestFull_sqlrepo" ./...` — all green
+- [x] `go test ./...` — full suite green
+- [x] `BACKLOG.md` — step 4 row and summary checkbox updated; M7 milestone row marked ✅
+- [x] `README.md` — Redirects + SQLRepo badges updated to ✅ Available
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
 
 ## Completion criteria for Milestone 7
 
-- [ ] `SQLRepo[T]` — satisfies `Repository[T]`; table name auto-derived; `Table()` override; full CRUD
-- [ ] `RedirectStore` — exact + prefix lookup; chain collapse; optional DB persistence via `forge.DB`
-- [ ] `App.Redirect()` and `Redirects(From)` option — complete public API per Decision 17
-- [ ] `GET /.well-known/redirects.json` — always mounted; live serialisation; `ManifestAuth` optional
-- [ ] Integration tests G16–G18 appended to `integration_full_test.go` and passing
-- [ ] README Redirects + SQLRepo badges updated to ✅ Available
-- [ ] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty
+- [x] `SQLRepo[T]` — satisfies `Repository[T]`; table name auto-derived; `Table()` override; full CRUD
+- [x] `RedirectStore` — exact + prefix lookup; chain collapse; optional DB persistence via `forge.DB`
+- [x] `App.Redirect()` and `Redirects(From)` option — complete public API per Decision 17
+- [x] `GET /.well-known/redirects.json` — always mounted; live serialisation; `ManifestAuth` optional
+- [x] Integration tests G16–G18 appended to `integration_full_test.go` and passing
+- [x] README Redirects + SQLRepo badges updated to ✅ Available
+- [x] `go test ./...` green; `go vet ./...` clean; `gofmt -l .` empty

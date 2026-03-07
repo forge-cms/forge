@@ -18,7 +18,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M4 | Templates & Rendering (v0.4.0) | ✅ Done |
 | M5 | Social & AI (v0.5.0) | ✅ Done |
 | M6 | Cookies & Compliance (v0.6.0) | ✅ Done |
-| M7 | Redirects (v0.7.0) | 🔲 In progress |
+| M7 | Redirects (v0.7.0) | ✅ Done |
 | M8 | Scheduled publishing (v0.8.0) | 🔲 Not started |
 | M9 | v1.0.0 stabilisation | 🔲 Not started |
 | M10 | MCP support (v2) | 🔲 Not started |
@@ -162,12 +162,12 @@ optional DB persistence, and `/.well-known/redirects.json` inspect endpoint.
 | 1 | storage.go | ✅ Done | 2026-03-07 |
 | 2 | redirects.go | ✅ Done | 2026-03-07 |
 | 3 | redirectmanifest.go | ✅ Done | 2026-03-07 |
-| 4 | integration_full_test.go | 🔲 Not started | — |
+| 4 | integration_full_test.go | ✅ Done | 2026-03-07 |
 
 - [x] Step 1 — `storage.go`: `SQLRepo[T]` production `Repository[T]` backed by `forge.DB`; `Table()` SQLRepoOption; auto-derived table names; full CRUD using `dbFields` cache (Amendment A19)
 - [x] Step 2 — `redirects.go`: `RedirectCode`, `RedirectEntry` (+`IsPrefix`), `From`/`Redirects` option, `RedirectStore` (exact + prefix lookup, chain collapse, DB persistence via `Load`/`Save`/`Remove`), `App.Redirect()`, `"/"` fallback wiring in `forge.go` (Amendment A20)
 - [x] Step 3 — `redirectmanifest.go`: `/.well-known/redirects.json` — always mounted, live serialisation, reuses `ManifestAuth` option (Amendment A21)
-- [ ] Step 4 — `integration_full_test.go`: cross-milestone groups G16–G18 (redirect enforcement, prefix rewrite + M2, full M7 stack + manifest + M6 ManifestAuth) + README badge updates
+- [x] Step 4 — `integration_full_test.go`: cross-milestone groups G16–G18 (redirect enforcement, prefix rewrite + M2, full M7 stack + manifest + M6 ManifestAuth) + README badge updates
 
 ---
 

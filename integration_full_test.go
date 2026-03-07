@@ -7,18 +7,24 @@ package forge
 // integration_test.go (which covers single-module M4 scenarios).
 //
 // Groups:
-//   G1 — Multi-module routing (M2)
-//   G2 — Role-based access via inline middleware (M1 + M2)
-//   G3 — Signal fire-through across modules (M1 + M2)
-//   G4 — Content negotiation: two modules, mixed template configuration (M2 + M4)
-//   G5 — forge:head + schema helpers through real render (M3 + M4)
-//   G6 — SEO wiring: robots.txt + sitemap registration (M2 + M3)
-//   G7 — Error template fallback across two modules (M2 + M4)
-//   G8 — TemplateData end-to-end (M3 + M4)
-//   G9 — Social + SitemapConfig (M5 + M3)
+//   G1  — Multi-module routing (M2)
+//   G2  — Role-based access via inline middleware (M1 + M2)
+//   G3  — Signal fire-through across modules (M1 + M2)
+//   G4  — Content negotiation: two modules, mixed template configuration (M2 + M4)
+//   G5  — forge:head + schema helpers through real render (M3 + M4)
+//   G6  — SEO wiring: robots.txt + sitemap registration (M2 + M3)
+//   G7  — Error template fallback across two modules (M2 + M4)
+//   G8  — TemplateData end-to-end (M3 + M4)
+//   G9  — Social + SitemapConfig (M5 + M3)
 //   G10 — AI indexing + content negotiation (M5 + M4)
 //   G11 — RSS feed + AfterPublish signal (M5 + M1)
 //   G12 — Full M5 stack (M5 + M3 + M4)
+//   G13 — Cookie consent enforcement (M6, Decision 5)
+//   G14 — Consent lifecycle wired through a handler (M6 + M2)
+//   G15 — Cookie manifest + App integration (M6 + M2 + M1)
+//   G16 — Redirect enforcement: 301/410/404 + chain collapse (M7, Decision 17)
+//   G17 — Prefix redirect via Redirects(From) + exact-beats-prefix (M7 + M2)
+//   G18 — Full M7 stack: SQLRepo interface check + redirect manifest + ManifestAuth (M7 + M6 + M1)
 
 import (
 	"bytes"
@@ -1278,5 +1284,543 @@ func TestFull_fullM5_feed(t *testing.T) {
 	}
 	if !strings.Contains(body, pub.Title) {
 		t.Errorf("published title %q missing from feed:\n%s", pub.Title, body)
+	}
+}
+
+// — G13: Cookie consent enforcement (M6, Decision 5) ————————————————————
+
+// TestFull_consent_setNecessarySetsHeader verifies that SetCookie writes a
+// Set-Cookie header for a Necessary cookie, and that ConsentFor(Necessary)
+// is always true without any forge_consent cookie in the request.
+func TestFull_consent_setNecessarySetsHeader(t *testing.T) {
+	c := Cookie{
+		Name:     "session",
+		Category: Necessary,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	w := httptest.NewRecorder()
+	SetCookie(w, c, "abc123")
+
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 Set-Cookie header, got %d", len(cookies))
+	}
+	if cookies[0].Name != "session" || cookies[0].Value != "abc123" {
+		t.Errorf("cookie = %+v; want name=session value=abc123", cookies[0])
+	}
+
+	// ConsentFor(Necessary) must be true without any forge_consent cookie.
+	r := httptest.NewRequest("GET", "/", nil)
+	if !ConsentFor(r, Necessary) {
+		t.Error("ConsentFor(Necessary) = false; want always true")
+	}
+}
+
+// TestFull_consent_noConsentSkips verifies that SetCookieIfConsented returns
+// false and writes no Set-Cookie header when forge_consent is absent.
+func TestFull_consent_noConsentSkips(t *testing.T) {
+	c := Cookie{Name: "theme", Category: Preferences}
+	r := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	set := SetCookieIfConsented(w, r, c, "dark")
+	if set {
+		t.Error("SetCookieIfConsented returned true without consent")
+	}
+	if got := w.Result().Cookies(); len(got) > 0 {
+		t.Errorf("expected no Set-Cookie header; got %v", got)
+	}
+	if ConsentFor(r, Preferences) {
+		t.Error("ConsentFor(Preferences) = true without forge_consent; want false")
+	}
+}
+
+// TestFull_consent_grantAllowsSet verifies that GrantConsent + SetCookieIfConsented
+// works end-to-end: consent written by GrantConsent is carried into a subsequent
+// request and allows the non-Necessary cookie to be set.
+func TestFull_consent_grantAllowsSet(t *testing.T) {
+	// Step 1: grant consent for Preferences and Analytics.
+	grantW := httptest.NewRecorder()
+	GrantConsent(grantW, Preferences, Analytics)
+
+	consentCookies := grantW.Result().Cookies()
+	if len(consentCookies) == 0 {
+		t.Fatal("GrantConsent wrote no Set-Cookie header")
+	}
+
+	// Step 2: build a request that carries the consent cookie.
+	r := httptest.NewRequest("GET", "/", nil)
+	for _, ck := range consentCookies {
+		r.AddCookie(ck)
+	}
+
+	// Step 3: SetCookieIfConsented succeeds for Preferences.
+	setW := httptest.NewRecorder()
+	c := Cookie{Name: "theme", Category: Preferences}
+	if !SetCookieIfConsented(setW, r, c, "dark") {
+		t.Error("SetCookieIfConsented returned false despite granted Preferences consent")
+	}
+
+	// Marketing was not granted.
+	if ConsentFor(r, Marketing) {
+		t.Error("ConsentFor(Marketing) = true; Marketing was not granted")
+	}
+}
+
+// TestFull_consent_revokeConsentFalse verifies that RevokeConsent writes an
+// expired Set-Cookie for forge_consent, and that ConsentFor returns false for
+// non-Necessary categories on a request carrying the revoked cookie.
+func TestFull_consent_revokeConsentFalse(t *testing.T) {
+	revW := httptest.NewRecorder()
+	RevokeConsent(revW)
+
+	revCookies := revW.Result().Cookies()
+	if len(revCookies) == 0 {
+		t.Fatal("RevokeConsent wrote no Set-Cookie header")
+	}
+	if revCookies[0].MaxAge != -1 {
+		t.Errorf("revoke cookie MaxAge = %d; want -1", revCookies[0].MaxAge)
+	}
+
+	// A request with the revoked (empty value) cookie loses all non-Necessary consent.
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(&http.Cookie{Name: "forge_consent", Value: ""})
+	if ConsentFor(r, Preferences) {
+		t.Error("ConsentFor(Preferences) = true after RevokeConsent; want false")
+	}
+}
+
+// — G14: Consent lifecycle wired through a handler (M6 + M2) ————————————
+
+// TestFull_consent_moduleHandlerSetsPreferences verifies the full consent
+// lifecycle wired through an HTTP handler (M2 pattern): without consent the
+// handler returns 204 and sets no cookie; after GrantConsent the handler
+// returns 200 and sets the Preferences cookie.
+func TestFull_consent_moduleHandlerSetsPreferences(t *testing.T) {
+	themeCookie := Cookie{Name: "theme", Category: Preferences}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /set-preference", func(w http.ResponseWriter, r *http.Request) {
+		if SetCookieIfConsented(w, r, themeCookie, "dark") {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+
+	// Without consent: handler returns 204.
+	r1 := httptest.NewRequest("GET", "/set-preference", nil)
+	w1 := httptest.NewRecorder()
+	mux.ServeHTTP(w1, r1)
+	if w1.Code != http.StatusNoContent {
+		t.Errorf("without consent: status = %d; want 204", w1.Code)
+	}
+
+	// Grant Preferences consent on a separate response.
+	grantW := httptest.NewRecorder()
+	GrantConsent(grantW, Preferences)
+
+	// With consent cookie: handler returns 200 and writes the theme cookie.
+	r2 := httptest.NewRequest("GET", "/set-preference", nil)
+	for _, ck := range grantW.Result().Cookies() {
+		r2.AddCookie(ck)
+	}
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("with consent: status = %d; want 200", w2.Code)
+	}
+	setCookies := w2.Result().Cookies()
+	if len(setCookies) == 0 || setCookies[0].Name != "theme" {
+		t.Errorf("theme cookie not set: %v", setCookies)
+	}
+}
+
+// TestFull_consent_clearCookieExpiresHeader verifies that ClearCookie writes a
+// Set-Cookie header with MaxAge -1, and that ConsentFor(Necessary) remains true
+// even when forge_consent contains garbage data.
+func TestFull_consent_clearCookieExpiresHeader(t *testing.T) {
+	c := Cookie{Name: "prefs", Category: Preferences}
+	w := httptest.NewRecorder()
+	ClearCookie(w, c)
+
+	cookies := w.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("ClearCookie wrote no Set-Cookie header")
+	}
+	if cookies[0].MaxAge != -1 {
+		t.Errorf("MaxAge = %d; want -1", cookies[0].MaxAge)
+	}
+	if cookies[0].Expires.After(time.Now().UTC()) {
+		t.Errorf("Expires = %v is in the future; want past", cookies[0].Expires)
+	}
+
+	// ConsentFor(Necessary) is always true — even with corrupted forge_consent.
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(&http.Cookie{Name: "forge_consent", Value: "garbage-data,,,"})
+	if !ConsentFor(r, Necessary) {
+		t.Error("ConsentFor(Necessary) = false; want always true")
+	}
+}
+
+// — G15: Cookie manifest + App integration (M6 + M2 + M1) ———————————————
+
+// TestFull_manifest_mountedWhenDeclared verifies that /.well-known/cookies.json
+// is mounted by App.Handler() when App.Cookies() has been called, returns 200,
+// Content-Type application/json, and valid JSON with the correct site and count.
+func TestFull_manifest_mountedWhenDeclared(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("secret-key-for-test-use"),
+	}))
+	app.Cookies(
+		Cookie{Name: "session", Category: Necessary, Purpose: "Auth session"},
+		Cookie{Name: "theme", Category: Preferences, Purpose: "UI theme"},
+	)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/.well-known/cookies.json", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q; want application/json", ct)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &manifest); err != nil {
+		t.Fatalf("invalid JSON: %v\nbody: %s", err, w.Body.String())
+	}
+	if manifest["site"] != "example.com" {
+		t.Errorf("site = %v; want example.com", manifest["site"])
+	}
+	if count, _ := manifest["count"].(float64); int(count) != 2 {
+		t.Errorf("count = %v; want 2", manifest["count"])
+	}
+}
+
+// TestFull_manifest_sortedByName verifies that the manifest entries are sorted
+// alphabetically, regardless of declaration order in App.Cookies().
+func TestFull_manifest_sortedByName(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("secret-key-for-test-use"),
+	}))
+	app.Cookies(
+		Cookie{Name: "zebra", Category: Analytics, Purpose: "z"},
+		Cookie{Name: "alpha", Category: Preferences, Purpose: "a"},
+		Cookie{Name: "mango", Category: Marketing, Purpose: "m"},
+	)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/.well-known/cookies.json", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var manifest struct {
+		Cookies []struct {
+			Name string `json:"name"`
+		} `json:"cookies"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &manifest); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	want := []string{"alpha", "mango", "zebra"}
+	for i, c := range manifest.Cookies {
+		if c.Name != want[i] {
+			t.Errorf("cookies[%d].name = %q; want %q", i, c.Name, want[i])
+		}
+	}
+}
+
+// TestFull_manifest_notMountedWhenNoDecls verifies that /.well-known/cookies.json
+// returns 404 when App.Cookies() has never been called — no leaking of empty manifests.
+func TestFull_manifest_notMountedWhenNoDecls(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("secret-key-for-test-use"),
+	}))
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/.well-known/cookies.json", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d; want 404 when no cookies declared", w.Code)
+	}
+}
+
+// TestFull_manifest_authGuard verifies that App.CookiesManifestAuth (M1 BearerHMAC)
+// blocks unauthenticated requests with 401 and passes valid Editor tokens through.
+func TestFull_manifest_authGuard(t *testing.T) {
+	const secret = "test-secret-long-enough"
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("secret-key-for-test-use"),
+	}))
+	app.Cookies(Cookie{Name: "session", Category: Necessary, Purpose: "Auth"})
+	app.CookiesManifestAuth(BearerHMAC(secret))
+	h := app.Handler()
+
+	// Unauthenticated request — 401.
+	r1 := httptest.NewRequest("GET", "/.well-known/cookies.json", nil)
+	w1 := httptest.NewRecorder()
+	h.ServeHTTP(w1, r1)
+	if w1.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated: status = %d; want 401", w1.Code)
+	}
+
+	// Authenticated Editor — 200.
+	tok, err := SignToken(User{ID: "u1", Roles: []Role{Editor}}, secret, 0)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+	r2 := httptest.NewRequest("GET", "/.well-known/cookies.json", nil)
+	r2.Header.Set("Authorization", "Bearer "+tok)
+	w2 := httptest.NewRecorder()
+	h.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("authenticated Editor: status = %d; want 200", w2.Code)
+	}
+}
+
+// — G16: Redirect enforcement (M7, Decision 17) ——————————————————————————
+
+// TestFull_redirect_permanent verifies that app.Redirect("/old", "/new", Permanent)
+// issues a 301 with the correct Location header.
+func TestFull_redirect_permanent(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Redirect("/old-path", "/new-path", Permanent)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/old-path", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want 301", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/new-path" {
+		t.Errorf("Location = %q; want /new-path", loc)
+	}
+}
+
+// TestFull_redirect_gone verifies that app.Redirect("/removed", "", Gone)
+// issues a 410 Gone response.
+func TestFull_redirect_gone(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Redirect("/removed", "", Gone)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/removed", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusGone {
+		t.Fatalf("status = %d; want 410", w.Code)
+	}
+}
+
+// TestFull_redirect_unknownPath verifies that an unregistered path returns 404
+// from the fallback handler.
+func TestFull_redirect_unknownPath(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/no-such-page", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d; want 404", w.Code)
+	}
+}
+
+// TestFull_redirect_chainCollapsed verifies that two Redirect calls that form
+// a chain are collapsed: when B→C is registered before A→B, the forward
+// collapse fires so A is stored directly as A→C (Decision 24).
+func TestFull_redirect_chainCollapsed(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	// Register the destination leg first so the forward collapse can fire.
+	app.Redirect("/b", "/c", Permanent)
+	app.Redirect("/a", "/b", Permanent)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/a", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want 301", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/c" {
+		t.Errorf("Location = %q; want /c (chain collapsed)", loc)
+	}
+}
+
+// — G17: Prefix redirect via Redirects(From) (M7 + M2) ——————————————————
+
+// TestFull_prefix_redirect_rewritesPath verifies that a Redirects(From("/posts"), "/articles")
+// option on app.Content() rewrites GET /posts/hello to 301 → /articles/hello.
+func TestFull_prefix_redirect_rewritesPath(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	m := NewModule((*testPost)(nil), Repo(repo), At("/articles"))
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Content(m, Redirects(From("/posts"), "/articles"))
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/posts/hello", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want 301", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/articles/hello" {
+		t.Errorf("Location = %q; want /articles/hello", loc)
+	}
+}
+
+// TestFull_prefix_redirect_exactBeatsPrefix verifies that an exact redirect
+// entry takes priority over a prefix entry for the same base path.
+func TestFull_prefix_redirect_exactBeatsPrefix(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	m := NewModule((*testPost)(nil), Repo(repo), At("/articles"))
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Content(m, Redirects(From("/posts"), "/articles"))
+	// Exact entry for /posts/about overrides the prefix rewrite.
+	app.Redirect("/posts/about", "/about", Permanent)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/posts/about", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d; want 301", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/about" {
+		t.Errorf("Location = %q; want /about (exact beats prefix)", loc)
+	}
+}
+
+// — G18: Full M7 stack — SQLRepo + manifest + ManifestAuth (M7 + M6 + M1) —
+
+// TestFull_sqlrepo_satisfiesInterface verifies at compile time that
+// *SQLRepo[*testPost] satisfies Repository[*testPost], and that NewSQLRepo
+// returns a usable value at runtime.
+func TestFull_sqlrepo_satisfiesInterface(t *testing.T) {
+	db := newTestDB(t)
+	var _ Repository[*testPost] = NewSQLRepo[*testPost](db)
+}
+
+// TestFull_manifest_redirect_alwaysMounted verifies that GET
+// /.well-known/redirects.json is mounted unconditionally and returns valid JSON
+// even when the redirect store is empty.
+func TestFull_manifest_redirect_alwaysMounted(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/.well-known/redirects.json", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200", w.Code)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON: %v\nbody: %s", err, w.Body.String())
+	}
+	if count, _ := m["count"].(float64); int(count) != 0 {
+		t.Errorf("count = %v; want 0", m["count"])
+	}
+}
+
+// TestFull_manifest_redirect_reflectsEntries verifies that redirects added via
+// App.Redirect() appear in /.well-known/redirects.json.
+func TestFull_manifest_redirect_reflectsEntries(t *testing.T) {
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Redirect("/old", "/new", Permanent)
+	app.Redirect("/gone", "", Gone)
+	h := app.Handler()
+
+	r := httptest.NewRequest("GET", "/.well-known/redirects.json", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200", w.Code)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if count, _ := m["count"].(float64); int(count) != 2 {
+		t.Errorf("count = %v; want 2", m["count"])
+	}
+}
+
+// TestFull_manifest_redirect_authGuard verifies that App.RedirectManifestAuth
+// (Amendment A22) blocks unauthenticated requests with 401 and passes valid
+// Editor tokens through.
+func TestFull_manifest_redirect_authGuard(t *testing.T) {
+	const secret = "test-secret-long-enough"
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("secret-key-for-test-use"),
+	}))
+	app.Redirect("/old", "/new", Permanent)
+	app.RedirectManifestAuth(BearerHMAC(secret))
+	h := app.Handler()
+
+	// Unauthenticated — 401.
+	r1 := httptest.NewRequest("GET", "/.well-known/redirects.json", nil)
+	w1 := httptest.NewRecorder()
+	h.ServeHTTP(w1, r1)
+	if w1.Code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated: status = %d; want 401", w1.Code)
+	}
+
+	// Authenticated Editor — 200.
+	tok, err := SignToken(User{ID: "u1", Roles: []Role{Editor}}, secret, 0)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+	r2 := httptest.NewRequest("GET", "/.well-known/redirects.json", nil)
+	r2.Header.Set("Authorization", "Bearer "+tok)
+	w2 := httptest.NewRecorder()
+	h.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("authenticated Editor: status = %d; want 200", w2.Code)
 	}
 }

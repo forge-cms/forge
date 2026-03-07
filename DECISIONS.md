@@ -2090,7 +2090,7 @@ implement `Repository[T]`. No new file — one step = one logical unit.
 - `MemoryRepo[T]` is unchanged
 - `SQLRepo[T]` requires a table whose columns match the struct's `db` tags
 - README documents recommended table schema pattern
-- `forge-pgx` integration tests extended in a separate commit (Amendment A22)
+- `forge-pgx` integration tests deferred to a future milestone
 
 ---
 
@@ -2141,3 +2141,31 @@ Redirect entries change at runtime so the manifest serialises on each request.
 - Empty store returns `{"count": 0, "entries": []}` — never 404
 - Live serialisation: manifest always reflects the current store state
 - `ManifestAuth` is optional; endpoint is public by default
+
+---
+
+### Amendment A22 — forge.go: App.RedirectManifestAuth() (Milestone 7, Step 4)
+
+**Date:** 2026-03-07  
+**Status:** Agreed  
+**Amends:** Amendment A21 (forge.go: /.well-known/redirects.json)
+
+**Change:** `/.well-known/redirects.json` needs an app-level auth guard method,
+mirroring `App.CookiesManifestAuth()` (Amendment A18). Without this method, the
+only way to set auth is via `ManifestAuth` inside `newRedirectManifestHandler`,
+which is not accessible from outside the package.
+
+**New in forge.go:**
+- `redirectManifestOpts []Option` field on `App` struct
+- `func (a *App) RedirectManifestAuth(auth AuthFunc)` — appends `ManifestAuth(auth)` to `redirectManifestOpts`
+- `App.Handler()`: passes `a.redirectManifestOpts...` to `newRedirectManifestHandler`
+
+**Call-site syntax:**
+```go
+app.RedirectManifestAuth(forge.BearerHMAC(secret, forge.Editor))
+```
+
+**Consequences:**
+- Mirrors `CookiesManifestAuth` exactly — no new patterns introduced
+- No existing callers broken (opts are additive; nil slice = public endpoint)
+- README does not document this method yet — will be added in M7 final docs pass

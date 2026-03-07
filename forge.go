@@ -129,6 +129,7 @@ type App struct {
 	redirectStore          *RedirectStore   // runtime redirect table; always non-nil after New()
 	redirectFallbackReg    bool             // true once "/" fallback handler is registered
 	redirectManifestReg    bool             // true once GET /.well-known/redirects.json is registered
+	redirectManifestOpts   []Option         // options for the redirect manifest handler (e.g. ManifestAuth)
 }
 
 // New creates a new [App] from cfg.
@@ -299,7 +300,7 @@ func (a *App) Handler() http.Handler {
 		a.redirectManifestReg = true
 		u2, _ := url.Parse(a.cfg.BaseURL)
 		a.mux.Handle("GET /.well-known/redirects.json",
-			newRedirectManifestHandler(u2.Hostname(), a.redirectStore),
+			newRedirectManifestHandler(u2.Hostname(), a.redirectStore, a.redirectManifestOpts...),
 		)
 	}
 	if !a.redirectFallbackReg {
@@ -389,6 +390,14 @@ func (a *App) Redirect(from, to string, code RedirectCode) {
 //	}
 func (a *App) RedirectStore() *RedirectStore {
 	return a.redirectStore
+}
+
+// RedirectManifestAuth sets the [AuthFunc] that guards /.well-known/redirects.json.
+// Call before [App.Handler] or [App.Run].
+//
+//	app.RedirectManifestAuth(forge.BearerHMAC(secret, forge.Editor))
+func (a *App) RedirectManifestAuth(auth AuthFunc) {
+	a.redirectManifestOpts = append(a.redirectManifestOpts, ManifestAuth(auth))
 }
 
 // Run starts the HTTP server on addr (e.g. ":8080") and blocks until
