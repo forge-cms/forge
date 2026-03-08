@@ -198,7 +198,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 | 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | ✅ Done | 2026-03-08 |
 | 5 | example/docs/ | ✅ Done | 2026-03-08 |
-| 6 | example/api/ | 🔲 Not started | — |
+| 6 | example/api/ | ✅ Done | 2026-03-08 |
 | 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
 
 - [x] Step 1 — coverage audit: targeted test additions to reach ≥ 85%; covers `App.RedirectStore`, `TrustedProxy`, `CacheStore.Sweep`, `RedirectStore.Len`, `stripMarkdown`, `forgeLLMSEntries`
@@ -206,7 +206,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 - [x] Step 3 — godoc pass: `forge.go` `type App` struct comment + all A18–A26 methods; `storage.go` `SQLRepo[T]` method parity with `MemoryRepo[T]`
 - [x] Step 4 — `example/blog/`: standalone module with Post type, MemoryRepo, SitemapConfig, Social, FeedConfig, AIIndex, scheduled publishing
 - [x] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
-- [ ] Step 6 — `example/api/`: standalone module with Article type, BearerHMAC, role-based access, redirects, SecurityHeaders/RateLimit, JSON-only
+- [x] Step 6 — `example/api/`: standalone module with Resource type, BearerHMAC+Authenticate, role-based access, BeforeCreate validation, legacy redirects, SecurityHeaders/RateLimit, JSON-only
 - [ ] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
 
 ---

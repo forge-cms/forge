@@ -7,3 +7,5 @@ use ./forge-pgx
 use ./example/blog
 
 use ./example/docs
+
+use ./example/api

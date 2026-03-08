@@ -13,7 +13,7 @@ v1.0.0 stabilisation: coverage audit, benchmarks, godoc pass, example apps, CHAN
 | 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | ✅ Done | 2026-03-08 |
 | 5 | example/docs/ | ✅ Done | 2026-03-08 |
-| 6 | example/api/ | 🔲 Not started | — |
+| 6 | example/api/ | ✅ Done | 2026-03-08 |
 | 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
 
 ---
@@ -294,40 +294,37 @@ file requires a new test file.
 
 #### 6.1 — Content type and seeding
 
-- [ ] Define `Article` struct embedding `forge.Node` with fields `Title string`,
-  `Body string`, `AuthorID string`
-- [ ] Seed 6 Published articles, 1 Archived (with redirect from old slug)
+- [x] Define `Resource` struct embedding `forge.Node` with fields `Title string`,
+  `URL string`, `Description string`, `Tags []string`
+- [x] Seed 8 Published resources, 1 Draft, 1 Scheduled
 
 #### 6.2 — Module wiring
 
-- [ ] `forge.NewModule[*Article]` with:
-  - `forge.At("/articles")`
+- [x] `forge.NewModule[*Resource]` with:
+  - `forge.At("/resources")`
   - `forge.Repo(repo)`
-  - `forge.Auth(forge.BearerHMAC(secret))` — write endpoints require auth
-  - `forge.Read(forge.Guest)` — public read
-  - `forge.Write(forge.Editor)` — Editor+ to write
-  - `forge.On(forge.BeforeCreate, ...)` — validation hook
-  - `forge.Redirects(forge.From("/old-articles/{slug}"))` — legacy path
-- [ ] `app.Use(forge.Chain(forge.SecurityHeaders, forge.RateLimit(100)))` — global middleware
-- [ ] `app.Content(m)`
+  - `forge.Auth(forge.Read(forge.Guest), forge.Write(forge.Editor))`
+  - `forge.On[*Resource](forge.BeforeCreate, ...)` — validation hook
+- [x] `app.Use(forge.Authenticate(auth), forge.SecurityHeaders(), forge.RateLimit(100, time.Second))`
+- [x] `app.Content(m, forge.Redirects(forge.From("/resources/go-spec"), "/resources/go-language-spec"))`
 
 #### 6.3 — App wiring
 
-- [ ] JSON-only app — no `forge.Templates` option
-- [ ] `go.mod` with `replace` directive
-- [ ] Top-of-file comment with: how to get a signed token for testing, example curl commands
+- [x] JSON-only app — no `forge.Templates` option
+- [x] `go.mod` with `replace` directive
+- [x] Top-of-file comment with: how to get a signed token for testing, example curl commands
 
 #### 6.4 — Inline comments
 
-- [ ] Role check pattern, redirect setup, content negotiation all annotated
+- [x] Role check pattern, redirect setup, content negotiation all annotated
 
 #### Verification
 
-- [ ] `go build .` from `example/api/` — compiles
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `BACKLOG.md` — step 6 row updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build .` from `example/api/` — compiles
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `BACKLOG.md` — step 6 row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
