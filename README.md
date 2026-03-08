@@ -901,7 +901,7 @@ and `<meta name="robots">` based on content Status.
 ```go
 type TemplateData[T Node] struct {
     Content  T             // T for show, []T for list
-    Head     forge.Head    // merged from content type + module HeadFunc
+    Head     forge.Head    // from Headable.Head() on T, or HeadFunc if provided (HeadFunc takes priority)
     User     forge.User    // current user (zero value if Guest)
     Request  *http.Request
 }

@@ -27,6 +27,7 @@ package forge
 //   G18 — Full M7 stack: SQLRepo interface check + redirect manifest + ManifestAuth (M7 + M6 + M1)
 //   G19 — Scheduler end-to-end: processScheduled + AfterPublish signal (M8 + M1)
 //   G20 — Scheduler wired through App.Content(): schedulerModules populated, tick publishes (M8 + M2 + M3)
+//   G21 — Full v1.0.0 stack: scheduler + sitemap + feed + AI index + redirects (M1+M2+M3+M5+M7+M8)
 
 import (
 	"bytes"
@@ -1972,5 +1973,153 @@ func TestFull_scheduler_appWiring(t *testing.T) {
 	}
 	if !next.Equal(future) {
 		t.Errorf("next = %v; want %v", *next, future)
+	}
+}
+
+// — G21: Full v1.0.0 stack (M1+M2+M3+M5+M7+M8) ——————————————————————————
+
+// TestFull_G21_V1FullStack wires a single App with every cross-milestone
+// feature that shipped in v1.0.0: Auth (M1), App routing (M2), SitemapConfig
+// (M3), Feed + AIIndex (M5), Redirects (M7), and the scheduler (M8). It
+// verifies that all endpoints respond correctly and that an overdue Scheduled
+// item is promoted to Published by the scheduler and then served via the
+// module list endpoint.
+//
+// Note on App.Content() ordering: per-module routes (/{prefix}/feed.xml,
+// /{prefix}/sitemap.xml) require the module stores to be set before Register
+// is called. App.Content currently calls Register first, so aggregate routes
+// (/feed.xml, /sitemap.xml) are tested here instead. This is tracked as a
+// known gap; the per-module feed route is exercised directly in G11/G12.
+func TestFull_G21_V1FullStack(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+
+	// One already-Published post.
+	pub := &testPost{Node: Node{
+		ID:     NewID(),
+		Slug:   "hello-world",
+		Status: Published,
+	}}
+	if err := repo.Save(context.Background(), pub); err != nil {
+		t.Fatalf("seed published: %v", err)
+	}
+
+	// One overdue Scheduled post (ScheduledAt in the past).
+	past := time.Now().UTC().Add(-2 * time.Minute)
+	overduePost := &testPost{Node: Node{
+		ID:          NewID(),
+		Slug:        "scheduled-post",
+		Status:      Scheduled,
+		ScheduledAt: &past,
+	}}
+	if err := repo.Save(context.Background(), overduePost); err != nil {
+		t.Fatalf("seed scheduled: %v", err)
+	}
+
+	m := NewModule((*testPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Auth(Read(Guest), Write(Author)),
+		SitemapConfig{},
+		Feed(FeedConfig{Title: "G21 Blog"}),
+		AIIndex(LLMsTxt),
+		HeadFunc(func(_ Context, p *testPost) Head {
+			return Head{Title: p.Slug, Description: p.Slug + " description"}
+		}),
+	)
+
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Content(m, Redirects(From("/old-posts"), "/posts"))
+
+	// M8: run the scheduler before building the handler so that regeneration
+	// results are visible at route-registration time.
+	bgCtx := NewBackgroundContext("example.com")
+	newScheduler(app.schedulerModules, bgCtx).tick()
+
+	// Populate the feed and AI stores so that App.Handler registers the
+	// aggregate /feed.xml and /llms.txt routes.
+	m.regenerateFeed(bgCtx)
+	m.regenerateAI(bgCtx)
+
+	h := app.Handler()
+
+	// M2: GET /posts → 200 JSON, both posts present.
+	r := httptest.NewRequest("GET", "/posts", nil)
+	r.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /posts status = %d; want 200", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "hello-world") {
+		t.Errorf("GET /posts missing published post slug")
+	}
+	if !strings.Contains(body, "scheduled-post") {
+		t.Errorf("GET /posts missing scheduler-promoted post slug (M8+M2 cross-check)")
+	}
+
+	// M3: GET /sitemap.xml → 200.
+	r = httptest.NewRequest("GET", "/sitemap.xml", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /sitemap.xml status = %d; want 200", w.Code)
+	}
+
+	// M5 (Feed): GET /feed.xml (aggregate) → 200 RSS 2.0.
+	// Note: per-module /posts/feed.xml requires store injection before Register;
+	// tested directly in G11/G12. Aggregate feed verified here.
+	r = httptest.NewRequest("GET", "/feed.xml", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /feed.xml status = %d; want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `version="2.0"`) {
+		t.Errorf("GET /feed.xml missing RSS version attribute")
+	}
+
+	// M5 (AIIndex): GET /llms.txt → 200, contains published slug.
+	r = httptest.NewRequest("GET", "/llms.txt", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /llms.txt status = %d; want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "hello-world") {
+		t.Errorf("GET /llms.txt missing published post slug")
+	}
+
+	// M7 (Redirects): GET /.well-known/redirects.json → 200.
+	r = httptest.NewRequest("GET", "/.well-known/redirects.json", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /.well-known/redirects.json status = %d; want 200", w.Code)
+	}
+
+	// M7 (prefix redirect): GET /old-posts/hello-world → 301 → /posts/hello-world.
+	r = httptest.NewRequest("GET", "/old-posts/hello-world", nil)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusMovedPermanently {
+		t.Errorf("GET /old-posts/hello-world status = %d; want 301", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/posts/hello-world" {
+		t.Errorf("Location = %q; want /posts/hello-world", loc)
+	}
+
+	// M1 (Auth): POST /posts as Guest (no token) → 403 Forbidden.
+	// 403 is correct: the request is authenticated as Guest (role level 10)
+	// but Write requires Author (level 20). 401 would indicate unknown identity.
+	r = httptest.NewRequest("POST", "/posts", nil)
+	r.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("POST /posts as Guest status = %d; want 403", w.Code)
 	}
 }

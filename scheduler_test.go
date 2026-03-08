@@ -165,7 +165,7 @@ func TestProcessScheduled_firesAfterPublish(t *testing.T) {
 		fired.Add(1)
 		return nil
 	}
-	m, repo := schedModule(On[*testPost](AfterPublish, handler))
+	m, repo := schedModule(On(AfterPublish, handler))
 	ctx := NewBackgroundContext("example.com")
 
 	past := time.Now().UTC().Add(-30 * time.Second)

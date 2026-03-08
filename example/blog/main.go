@@ -103,7 +103,7 @@ func main() {
 
 		// Forge: On fires this handler every time a post transitions to Published,
 		// whether via the scheduler or a direct API call. One hook covers both paths.
-		forge.On[*Post](forge.AfterPublish, func(_ forge.Context, p *Post) error {
+		forge.On(forge.AfterPublish, func(_ forge.Context, p *Post) error {
 			log.Printf("[blog] published: %q (slug: %s)", p.Title, p.Slug)
 			return nil
 		}),

@@ -488,6 +488,26 @@ func (m *Module[T]) setFeedStore(store *FeedStore, baseURL string) {
 	}
 }
 
+// resolveHead returns the Head for item using the highest-priority source available:
+//  1. HeadFunc option — explicit module-level override, receives request context
+//  2. Headable interface on T — type-level default, no context required
+//  3. Zero Head
+//
+// Called by regenerateFeed, regenerateAI, aiDocHandler, and showHandler.
+// HeadFunc takes priority when both are present — no behaviour change for
+// existing code that supplies HeadFunc.
+func (m *Module[T]) resolveHead(ctx Context, item T) Head {
+	if m.headFunc != nil {
+		if fn, ok := m.headFunc.(func(Context, T) Head); ok {
+			return fn(ctx, item)
+		}
+	}
+	if h, ok := any(item).(Headable); ok {
+		return h.Head()
+	}
+	return Head{}
+}
+
 // regenerateFeed rebuilds the RSS 2.0 item list for this module and stores it
 // in the shared [FeedStore]. Called by the debouncer after every write event.
 // Skips silently when the store, repo, or FeedConfig is absent.
@@ -501,12 +521,7 @@ func (m *Module[T]) regenerateFeed(ctx Context) {
 	}
 	rssItems := make([]rssItem, 0, len(items))
 	for _, item := range items {
-		var head Head
-		if m.headFunc != nil {
-			if fn, ok := m.headFunc.(func(Context, T) Head); ok {
-				head = fn(ctx, item)
-			}
-		}
+		head := m.resolveHead(ctx, item)
 		n := extractNode(item)
 		canonical := head.Canonical
 		if canonical == "" && n.Slug != "" {
@@ -539,13 +554,7 @@ func (m *Module[T]) regenerateAI(ctx Context) {
 	}
 	rs := make([]resolved, 0, len(items))
 	for _, item := range items {
-		var head Head
-		if m.headFunc != nil {
-			if fn, ok := m.headFunc.(func(Context, T) Head); ok {
-				head = fn(ctx, item)
-			}
-		}
-		rs = append(rs, resolved{item: item, head: head, node: extractNode(item)})
+		rs = append(rs, resolved{item: item, head: m.resolveHead(ctx, item), node: extractNode(item)})
 	}
 
 	if hasAIFeature(m.aiFeatures, LLMsTxt) {
@@ -611,12 +620,7 @@ func (m *Module[T]) aiDocHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, ErrNotFound)
 		return
 	}
-	var head Head
-	if m.headFunc != nil {
-		if fn, ok := m.headFunc.(func(Context, T) Head); ok {
-			head = fn(ctx, item)
-		}
-	}
+	head := m.resolveHead(ctx, item)
 	n := extractNode(item)
 	renderAIDoc(w, r, head, n, item, m.withoutID)
 }

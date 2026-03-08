@@ -120,7 +120,7 @@ func main() {
 		// Forge: BeforeCreate fires synchronously before the item is saved.
 		// Returning a non-nil error aborts the create and sends a 422 response.
 		// forge.Err creates a forge.ValidationError carrying a field-level message.
-		forge.On[*Resource](forge.BeforeCreate, func(_ forge.Context, r *Resource) error {
+		forge.On(forge.BeforeCreate, func(_ forge.Context, r *Resource) error {
 			if !strings.HasPrefix(r.URL, "http://") && !strings.HasPrefix(r.URL, "https://") {
 				return forge.Err("url", "must start with http:// or https://")
 			}

@@ -115,8 +115,9 @@ type Head struct {
 // — Headable ——————————————————————————————————————————————————————————————
 
 // Headable is implemented by content types that provide their own SEO metadata.
-// Forge calls Head when building HTML responses, sitemaps, and AI endpoints.
-// Use HeadFunc on a module to override the content type's own Head method.
+// Module[T] calls Head() automatically when building HTML responses, sitemaps,
+// RSS feeds, and AI endpoints — no HeadFunc option required.
+// HeadFunc takes priority over Headable when both are present.
 type Headable interface{ Head() Head }
 
 // — HeadFunc option ———————————————————————————————————————————————————————

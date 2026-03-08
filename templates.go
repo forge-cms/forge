@@ -218,9 +218,8 @@ func (m *Module[T]) renderListHTML(w http.ResponseWriter, r *http.Request, ctx C
 }
 
 // renderShowHTML renders tplShow with a TemplateData[T] payload.
-// If a [HeadFunc] option was provided, its return value populates [Head];
-// otherwise Head is zero-valued and the developer template controls meta tags.
-// If tplShow is nil the request receives a 406 Not Acceptable response.
+// Head is resolved via [resolveHead]: HeadFunc takes priority, then [Headable],
+// then a zero Head. If tplShow is nil the request receives a 406 Not Acceptable response.
 func (m *Module[T]) renderShowHTML(w http.ResponseWriter, r *http.Request, ctx Context, item T) {
 	m.tplMu.RLock()
 	tpl := m.tplShow
@@ -231,13 +230,7 @@ func (m *Module[T]) renderShowHTML(w http.ResponseWriter, r *http.Request, ctx C
 		return
 	}
 
-	var head Head
-	if m.headFunc != nil {
-		if fn, ok := m.headFunc.(func(Context, T) Head); ok {
-			head = fn(ctx, item)
-		}
-	}
-
+	head := m.resolveHead(ctx, item)
 	data := NewTemplateData(ctx, item, head, m.siteName)
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, data); err != nil {

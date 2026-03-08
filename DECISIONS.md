@@ -39,6 +39,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | 20 | Configuration model | Locked | 2025-06-01 |
 | 21 | forge.Context is an interface | Locked | 2025-06-01 |
 | 22 | Storage interface and database drivers | Locked | 2025-06-01 |
+| A28 | Auto-detect `Headable` in `Module[T]` | Agreed | 2026-03-08 |
 
 ---
 
@@ -2302,3 +2303,74 @@ m := forge.NewModule[*Resource](&Resource{},
 **Rejected alternatives:**
 - `forge.Auth(forge.BearerHMAC(secret), forge.Read(Guest), ...)` — mixes authentication (request layer) with authorisation (module threshold layer).
 - Exporting `userContextKey` — breaks encapsulation of `Context`'s internal request state.
+
+---
+
+### Amendment A28 — Auto-detect `Headable` in `Module[T]` (amends Decision 3 + Decision 14)
+
+**Status:** Agreed  
+**Amends:** Decision 3 (Head/SEO ownership), Decision 14 (Content lifecycle) — `module.go`, `head.go`
+
+**The gap:** `Headable` was documented as "implemented by content types that provide their own SEO metadata" but `Module[T]` never called it. The only way to wire SEO metadata was via the explicit `HeadFunc` option — a closure the developer must write by hand. A content type that correctly implemented `Head() forge.Head` still received a zero `Head` in sitemaps, feeds, AI endpoints, and HTML rendering unless `HeadFunc` was also supplied. This made the interface decorative and broke the zero-config production-ready promise.
+
+**Change:** Add `resolveHead(ctx Context, item T) Head` to `Module[T]` in `module.go`:
+
+```go
+// resolveHead returns the Head for item using the highest-priority source available:
+//  1. HeadFunc option — explicit module-level override (context-aware)
+//  2. Headable interface on T — type-level default (no context)
+//  3. Zero Head
+func (m *Module[T]) resolveHead(ctx Context, item T) Head {
+    if m.headFunc != nil {
+        if fn, ok := m.headFunc.(func(Context, T) Head); ok {
+            return fn(ctx, item)
+        }
+    }
+    if h, ok := any(item).(Headable); ok {
+        return h.Head()
+    }
+    return Head{}
+}
+```
+
+Replace the four duplicated `headFunc` resolution blocks in `regenerateFeed`, `regenerateAI`, `aiDocHandler`, and `renderShowHTML` with `m.resolveHead(ctx, item)`.
+
+Update the `Headable` godoc in `head.go` to document that `Module[T]` calls it automatically.
+
+**Call-site before:**
+```go
+forge.NewModule[*Article](&Article{},
+    forge.At("/articles"),
+    forge.HeadFunc(func(_ forge.Context, a *Article) forge.Head {
+        return forge.Head{Title: a.Title, Description: a.Excerpt}
+    }),
+    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
+)
+```
+
+**Call-site after:**
+```go
+// Article implements forge.Headable
+func (a *Article) Head() forge.Head {
+    return forge.Head{Title: a.Title, Description: a.Excerpt}
+}
+
+forge.NewModule[*Article](&Article{},
+    forge.At("/articles"),
+    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
+)
+```
+
+`HeadFunc` remains supported and takes priority over `Headable` when both are present — no breaking change.
+
+**Consequences:**
+- `Headable` delivers its documented promise without an explicit `HeadFunc` option
+- `HeadFunc` is still the correct choice for context-aware or database-enriched metadata
+- The `any(item).(Headable)` assertion fires only in regeneration and show handlers — not on the list hot path
+- README hero examples and tweet-length demos are now accurate
+- Existing code with `HeadFunc` is unaffected — priority order ensures no behaviour change
+
+**Rejected alternatives:**
+- `forge.DefaultHead()` option — requires an extra call-site token; still leaves `Headable` decorative
+- Reflection on struct field names — fragile, no compile-time contract, inconsistent with codebase patterns
+- Exporting a head-resolution function — adds surface area with no benefit over an interface
