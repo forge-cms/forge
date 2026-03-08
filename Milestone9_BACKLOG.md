@@ -12,7 +12,7 @@ v1.0.0 stabilisation: coverage audit, benchmarks, godoc pass, example apps, CHAN
 | 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
 | 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | ✅ Done | 2026-03-08 |
-| 5 | example/docs/ | 🔲 Not started | — |
+| 5 | example/docs/ | ✅ Done | 2026-03-08 |
 | 6 | example/api/ | 🔲 Not started | — |
 | 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
 
@@ -248,40 +248,40 @@ file requires a new test file.
 
 #### 5.1 — Content type and seeding
 
-- [ ] Define `Doc` struct embedding `forge.Node` with fields `Title string`,
+- [x] Define `Doc` struct embedding `forge.Node` with fields `Title string`,
   `Body string`, `Section string`
-- [ ] Implement `forge.Headable` returning head with breadcrumbs
-  (`forge.Crumbs("Docs", "/docs")`)
-- [ ] Implement `forge.Markdownable` and `forge.AIDocSummary`
-- [ ] Seed 6 Published docs across 2 sections
+- [x] Implement `forge.Headable` returning head with breadcrumbs
+  (`forge.Crumbs(forge.Crumb("Docs", "/docs"), ...)`)
+- [x] Implement `forge.Markdownable` and `forge.AIDocSummary`
+- [x] Seed 6 Published docs across 2 sections
 
 #### 5.2 — Module wiring
 
-- [ ] `forge.NewModule[*Doc]` with options:
+- [x] `forge.NewModule[*Doc]` with options:
   - `forge.At("/docs")`
   - `forge.Repo(repo)`
   - `forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull, forge.AIDoc)`
-  - `forge.RobotsConfig{CrawlerPolicy: forge.AskFirst}` on the app
-- [ ] `app.Content(m)` + `app.SEO(robots)`
+  - `forge.RobotsConfig{AIScraper: forge.AskFirst}` on the app
+- [x] `app.Content(m)` + `app.SEO(robots)`
 
 #### 5.3 — App and templates
 
-- [ ] `base.html` with `{{ template "forge:head" . }}`
-- [ ] `index.html` grouped by Section
-- [ ] `doc.html` with full body, breadcrumb nav, link to `/{prefix}/{slug}/aidoc`
-- [ ] `go.mod` with `replace` directive
+- [x] `list.html` with `{{template "forge:head" .Head}}` (Forge uses list.html, not base.html+index.html)
+- [x] `list.html` grouped by Section via `$section` variable
+- [x] `show.html` with full body, breadcrumb nav, link to `/docs/{slug}/aidoc`
+- [x] `go.mod` with `replace` directive
 
 #### 5.4 — Inline comments
 
-- [ ] Each AIDoc/llms.txt feature annotated with a `// Forge:` comment
+- [x] Each AIDoc/llms.txt feature annotated with a `// Forge:` comment
 
 #### Verification
 
-- [ ] `go build .` from `example/docs/` — compiles
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `BACKLOG.md` — step 5 row updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build .` from `example/docs/` — compiles
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `BACKLOG.md` — step 5 row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

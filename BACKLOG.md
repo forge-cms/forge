@@ -197,7 +197,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 | 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
 | 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | ✅ Done | 2026-03-08 |
-| 5 | example/docs/ | 🔲 Not started | — |
+| 5 | example/docs/ | ✅ Done | 2026-03-08 |
 | 6 | example/api/ | 🔲 Not started | — |
 | 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
 
@@ -205,7 +205,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 - [x] Step 2 — `benchmarks_test.go`: 7 benchmarks for M5–M8 hot paths (auth sign/verify, consent, redirect lookup ×2, scheduler tick noop, feed build)
 - [x] Step 3 — godoc pass: `forge.go` `type App` struct comment + all A18–A26 methods; `storage.go` `SQLRepo[T]` method parity with `MemoryRepo[T]`
 - [x] Step 4 — `example/blog/`: standalone module with Post type, MemoryRepo, SitemapConfig, Social, FeedConfig, AIIndex, scheduled publishing
-- [ ] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
+- [x] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
 - [ ] Step 6 — `example/api/`: standalone module with Article type, BearerHMAC, role-based access, redirects, SecurityHeaders/RateLimit, JSON-only
 - [ ] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
 

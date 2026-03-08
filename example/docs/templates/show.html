@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Content.Title}} — Forge Docs</title>
+  {{/* forge:head emits <title>, <meta description>, Open Graph, canonical,
+       and JSON-LD BreadcrumbList tags from Doc.Head(). The BreadcrumbList
+       schema renders Docs → Section → Title and is consumed by search engines
+       to display breadcrumbs in result snippets. */}}
+  {{template "forge:head" .Head}}
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; color: #1a1a1a; }
+    header { border-bottom: 2px solid #0070f3; margin-bottom: 2rem; padding-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    header a { text-decoration: none; color: #0070f3; font-size: 0.875rem; }
+    header span { color: #aaa; font-size: 0.75rem; }
+    h1 { font-size: 2rem; margin: 0 0 0.5rem; line-height: 1.25; }
+    .section-tag { display: inline-block; background: #eef2ff; color: #4f46e5; border-radius: 4px; padding: 0.15rem 0.55rem; font-size: 0.8rem; font-weight: 600; margin-bottom: 1.25rem; }
+    .body p { margin: 0 0 1rem; }
+    .body h2, .body h3 { margin: 1.75rem 0 0.5rem; }
+    .body code { background: #f3f4f6; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+    .body pre { background: #f3f4f6; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    .body pre code { background: none; padding: 0; }
+    .body ul, .body ol { padding-left: 1.5rem; margin: 0 0 1rem; }
+    nav.breadcrumbs { font-size: 0.875rem; color: #666; margin-bottom: 1.5rem; }
+    nav.breadcrumbs a { color: #0070f3; text-decoration: none; }
+    nav.breadcrumbs a:hover { text-decoration: underline; }
+    nav.breadcrumbs span { margin: 0 0.3rem; color: #aaa; }
+    nav.page-nav { margin-top: 2.5rem; border-top: 1px solid #e5e5e5; padding-top: 1rem; }
+    nav.page-nav a { color: #0070f3; font-size: 0.9rem; text-decoration: none; }
+    nav.page-nav a:hover { text-decoration: underline; }
+    footer { border-top: 1px solid #e5e5e5; margin-top: 2rem; padding-top: 1rem; font-size: 0.875rem; color: #666; display: flex; gap: 1rem; }
+    footer a { color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    {{/* Breadcrumb navigation matches the JSON-LD BreadcrumbList emitted
+         by {{template "forge:head" .Head}} via Doc.Head(). Both the visible
+         navigation and the structured data are derived from forge.Crumbs(). */}}
+    <a href="/docs">Forge Docs</a>
+    <span>›</span>
+    <a href="/docs">{{.Content.Section}}</a>
+    <span>›</span>
+    <span>{{.Content.Title}}</span>
+  </header>
+  <main>
+    <span class="section-tag">{{.Content.Section}}</span>
+    <h1>{{.Content.Title}}</h1>
+
+    {{/* forge_markdown converts markdown to safe HTML.
+         Supported: headings, bold, italic, inline code, fenced code blocks,
+         links, ordered and unordered lists, paragraphs.
+         Content is HTML-escaped before markdown processing — no XSS risk. */}}
+    <div class="body">{{forge_markdown .Content.Body}}</div>
+
+    <nav class="page-nav">
+      <a href="/docs">← All documentation</a>
+    </nav>
+  </main>
+  <footer>
+    <a href="/docs">Docs home</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/llms-full.txt">llms-full.txt</a>
+    {{/* AIDoc link: machine-readable endpoint for this doc page.
+         Returns plain text with title, URL, summary, and full markdown body.
+         Enabled by forge.AIIndex(forge.AIDoc) on the module. Useful for AI
+         assistants that need to fetch a single page without parsing HTML. */}}
+    <a href="/docs/{{.Content.Slug}}/aidoc">AIDoc (machine-readable)</a>
+    <a href="/sitemap.xml">Sitemap</a>
+  </footer>
+</body>
+</html>
