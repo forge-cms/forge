@@ -3,7 +3,8 @@
 **The Go web framework designed for how you actually think.**  
 Built for developers. Optimized for AI. Zero compromises on readability.
 
-⚠️ **Work in progress** — not ready for production use. API will change without notice.
+[![Go Reference](https://pkg.go.dev/badge/github.com/forge-cms/forge.svg)](https://pkg.go.dev/github.com/forge-cms/forge)
+**v1.0.0 — stable.** All exported symbols are stable. No breaking changes without a major version bump. See [CHANGELOG.md](CHANGELOG.md).
 
 ```go
 app := forge.New(forge.Config{
