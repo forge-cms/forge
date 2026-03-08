@@ -11,7 +11,7 @@ v1.0.0 stabilisation: coverage audit, benchmarks, godoc pass, example apps, CHAN
 | 1 | coverage audit (test additions) | ✅ Done | 2026-03-08 |
 | 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
 | 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
-| 4 | example/blog/ | 🔲 Not started | — |
+| 4 | example/blog/ | ✅ Done | 2026-03-08 |
 | 5 | example/docs/ | 🔲 Not started | — |
 | 6 | example/api/ | 🔲 Not started | — |
 | 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
@@ -187,55 +187,53 @@ file requires a new test file.
 **Depends on:** Step 3 (final API surface locked before example authoring)
 **Decisions:** Decision 4 (rendering model), Decision 9 (sitemap), Decision 13 (feeds)
 **Files:** `example/blog/main.go`, `example/blog/go.mod`,
-`example/blog/templates/base.html`, `example/blog/templates/index.html`,
-`example/blog/templates/post.html`
+`example/blog/templates/list.html`, `example/blog/templates/show.html`
+*(Note: Forge requires `list.html`/`show.html`; backlog names `index.html`/`post.html` were corrected at implementation time.)*
 
 #### 4.1 — Content type and seeding
 
-- [ ] Define `Post` struct embedding `forge.Node` with fields `Title string`,
+- [x] Define `Post` struct embedding `forge.Node` with fields `Title string`,
   `Body string`, `Tags []string`
-- [ ] Implement `forge.Headable` on `Post` returning `forge.Head` with title, excerpt,
+- [x] Implement `forge.Headable` on `Post` returning `forge.Head` with title, excerpt,
   URL, OpenGraph card
-- [ ] Implement `forge.Markdownable` on `Post` returning markdown representation
-- [ ] Seed 8 posts: 6 Published, 1 Draft, 1 Scheduled (2 minutes in the future)
+- [x] Implement `forge.Markdownable` on `Post` returning markdown representation
+- [x] Seed 8 posts: 6 Published, 1 Draft, 1 Scheduled (2 minutes in the future)
 
 #### 4.2 — Module wiring
 
-- [ ] `forge.NewModule[*Post]` with options:
+- [x] `forge.NewModule[*Post]` with options:
   - `forge.At("/posts")`
   - `forge.Repo(repo)`
   - `forge.SitemapConfig{}`
-  - `forge.Social(forge.OpenGraph{}, forge.TwitterCard{})`
-  - `forge.FeedConfig{}`
-  - `forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull)`
-  - `forge.On(forge.AfterPublish, ...)` logging hook
-- [ ] Wire module to app via `app.Content(m)`
-- [ ] `app.SEO(forge.RobotsConfig{})` — allow all crawlers
+  - `forge.Social(forge.OpenGraph, forge.TwitterCard)` *(constants, not struct literals)*
+  - `forge.Feed(forge.FeedConfig{...})` *(Feed wraps FeedConfig)*
+  - `forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull, forge.AIDoc)`
+  - `forge.On[*Post](forge.AfterPublish, ...)` logging hook
+- [x] Wire module to app via `app.Content(m)`
+- [x] `app.SEO(&forge.RobotsConfig{Sitemaps: true})` — allow all crawlers, append sitemap
 
 #### 4.3 — App and templates
 
-- [ ] `forge.MustConfig(forge.Config{BaseURL: "http://localhost:8080", Secret: [32]byte{...}})`
-- [ ] `forge.Templates(...)` pointing at `templates/*.html`
-- [ ] `base.html`: semantic HTML skeleton with `{{ template "forge:head" . }}`
-- [ ] `index.html`: list of posts with title, date, excerpt
-- [ ] `post.html`: full post body rendered with `{{ forge_markdown .Content.Body }}`
-- [ ] `go.mod` uses `require github.com/forge-cms/forge` + `replace` directive
-  pointing to `../..`
+- [x] `forge.MustConfig(forge.Config{BaseURL: "http://localhost:8080", Secret: [32]byte{...}})`
+- [x] `forge.Templates("templates")` pointing at `templates/list.html` and `templates/show.html`
+- [x] `list.html`: list of posts with title, date, excerpt, tag list
+- [x] `show.html`: full post body rendered with `{{ forge_markdown .Content.Body }}`; both use `{{ template "forge:head" .Head }}`
+- [x] `go.mod` uses `require github.com/forge-cms/forge` + `replace` directive; `go.work` updated with `use ./example/blog`
 
 #### 4.4 — Inline comments
 
-- [ ] Each non-obvious Forge feature is annotated with a `// Forge:` comment explaining why
-- [ ] `main.go` has a top-level block comment explaining the app's purpose and the
+- [x] Each non-obvious Forge feature is annotated with a `// Forge:` comment explaining why
+- [x] `main.go` has a top-level block comment explaining the app's purpose and the
   features it demonstrates
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean (run from `example/blog/`)
-- [ ] `gofmt -l .` — returns nothing (run from `example/blog/`)
-- [ ] `go build .` from `example/blog/` — binary compiles with zero errors
-- [ ] `BACKLOG.md` — step 4 row updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean (run from `example/blog/`)
+- [x] `gofmt -l .` — returns nothing (run from `example/blog/`)
+- [x] `go build .` from `example/blog/` — binary compiles with zero errors
+- [x] `BACKLOG.md` — step 4 row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

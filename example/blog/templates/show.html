@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Content.Title}} — Forge Devlog</title>
+  {{/* forge:head emits Open Graph, Twitter Card, JSON-LD Article, and canonical
+       tags derived from the Post's Head() method. Social(OpenGraph, TwitterCard)
+       must be set on the module for og:/twitter: tags to appear. */}}
+  {{template "forge:head" .Head}}
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 740px; margin: 2rem auto; padding: 0 1rem; line-height: 1.7; color: #1a1a1a; }
+    header { border-bottom: 1px solid #e5e5e5; margin-bottom: 2rem; padding-bottom: 1rem; }
+    header a { text-decoration: none; color: #666; font-size: 0.875rem; }
+    h1 { font-size: 2rem; margin: 0.5rem 0; line-height: 1.25; }
+    time { font-size: 0.875rem; color: #666; display: block; margin-bottom: 1.5rem; }
+    .tags { list-style: none; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
+    .tags li { background: #f0f0f0; border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.8rem; }
+    .body p { margin: 0 0 1rem; }
+    .body h2, .body h3 { margin: 1.5rem 0 0.5rem; }
+    nav { margin-top: 2.5rem; border-top: 1px solid #e5e5e5; padding-top: 1rem; }
+    footer { border-top: 1px solid #e5e5e5; margin-top: 2rem; padding-top: 1rem; font-size: 0.875rem; color: #666; }
+    footer a { color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/posts">← Forge Devlog</a>
+  </header>
+  <main>
+    <article>
+      <h1>{{.Content.Title}}</h1>
+      {{with .Content.PublishedAt | forge_date}}<time>{{.}}</time>{{end}}
+      {{if .Content.Tags}}
+      <ul class="tags">{{range .Content.Tags}}<li>{{.}}</li>{{end}}</ul>
+      {{end}}
+      {{/* forge_markdown converts the body's markdown to safe HTML.
+           Supported: headings, bold, italic, code, links, lists, paragraphs. */}}
+      <div class="body">{{forge_markdown .Content.Body}}</div>
+    </article>
+    <nav>
+      <a href="/posts">← All posts</a>
+    </nav>
+  </main>
+  <footer>
+    <p>
+      <a href="/posts/feed.xml">RSS</a> ·
+      <a href="/llms.txt">llms.txt</a> ·
+      {{/* AIDoc link: machine-readable version of this post for AI assistants.
+           Enabled by AIIndex(LLMsTxt, LLMsTxtFull) on the module. */}}
+      <a href="/posts/{{.Content.Slug}}/aidoc">AIDoc</a> ·
+      <a href="/sitemap.xml">Sitemap</a>
+    </p>
+  </footer>
+</body>
+</html>
