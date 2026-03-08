@@ -4,7 +4,8 @@
 // for M1–M4 (node, storage, middleware, schema, sitemap, templatehelpers,
 // module, forge). Each benchmark here targets a code path introduced in
 // Milestone 5 (auth tokens, RSS feeds), 6 (cookie consent), 7 (redirects),
-// or 8 (scheduler tick).
+// or 8 (scheduler tick). A template render benchmark (M4) is also included
+// here so that all hot-path benchmarks live in a single file.
 //
 // Run all benchmarks with:
 //
@@ -16,6 +17,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -163,9 +166,70 @@ func BenchmarkScheduler_tick_noop(b *testing.B) {
 	}
 }
 
-// — Feed serving (M5) —————————————————————————————————————————————————————
+// — Template rendering (M4) ——————————————————————————————————————————————
 
-// BenchmarkFeedStore_serve measures the cost of serving an RSS feed from a
+// BenchmarkHTMLTemplateRender measures the cost of serving a module show
+// page through the full HTML template pipeline: content-type negotiation,
+// MemoryRepo lookup, TemplateData[T] assembly, and html/template execution.
+// HeadFunc is wired so the template data struct is fully populated on every
+// iteration — this is the steady-state cost of an uncached HTML page view.
+func BenchmarkHTMLTemplateRender(b *testing.B) {
+	dir := b.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "list.html"),
+		[]byte(`<!DOCTYPE html><html><body>{{range .Content}}<h2>{{.Title}}</h2>{{end}}</body></html>`),
+		0644); err != nil {
+		b.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "show.html"),
+		[]byte(`<!DOCTYPE html><html><head><title>{{.Head.Title}}</title></head><body><h1>{{.Content.Title}}</h1><p>{{.Content.Body}}</p></body></html>`),
+		0644); err != nil {
+		b.Fatal(err)
+	}
+
+	repo := NewMemoryRepo[*testPost]()
+	p := &testPost{
+		Node:  Node{ID: NewID(), Slug: "bench-post", Status: Published},
+		Title: "Benchmark Post Title",
+		Body:  "Body content for the benchmark post. Real prose goes here.",
+	}
+	if err := repo.Save(context.Background(), p); err != nil {
+		b.Fatalf("seed: %v", err)
+	}
+
+	m := NewModule((*testPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		Templates(dir),
+		HeadFunc(func(_ Context, p *testPost) Head {
+			return Head{Title: p.Title}
+		}),
+	)
+	if err := m.parseTemplates(); err != nil {
+		b.Fatalf("parseTemplates: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/posts/bench-post", nil)
+	req.Header.Set("Accept", "text/html")
+	req.SetPathValue("slug", "bench-post")
+
+	// Warmup.
+	w0 := httptest.NewRecorder()
+	m.showHandler(w0, req)
+	if w0.Code != http.StatusOK {
+		b.Fatalf("warmup status = %d; want 200", w0.Code)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		w := httptest.NewRecorder()
+		m.showHandler(w, req)
+		if w.Code != http.StatusOK {
+			b.Fatalf("status = %d; want 200", w.Code)
+		}
+	}
+}
+
 // FeedStore pre-seeded with 20 items. This is the hot path on every
 // GET /{prefix}/feed.xml request.
 func BenchmarkFeedStore_serve(b *testing.B) {

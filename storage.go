@@ -240,7 +240,7 @@ func (r *MemoryRepo[T]) Save(_ context.Context, node T) error {
 	return nil
 }
 
-// FindByID returns the item with the given ID, or ErrNotFound.
+// FindByID returns the item with the given ID, or [ErrNotFound].
 func (r *MemoryRepo[T]) FindByID(_ context.Context, id string) (T, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -252,7 +252,7 @@ func (r *MemoryRepo[T]) FindByID(_ context.Context, id string) (T, error) {
 	return item, nil
 }
 
-// FindBySlug returns the first item whose Slug field matches slug, or ErrNotFound.
+// FindBySlug returns the first item whose Slug field matches slug, or [ErrNotFound].
 func (r *MemoryRepo[T]) FindBySlug(_ context.Context, slug string) (T, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -313,7 +313,7 @@ func (r *MemoryRepo[T]) FindAll(_ context.Context, opts ListOptions) ([]T, error
 	return all[off:end], nil
 }
 
-// Delete removes the item with the given ID. Returns ErrNotFound if absent.
+// Delete removes the item with the given ID. Returns [ErrNotFound] if absent.
 func (r *MemoryRepo[T]) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

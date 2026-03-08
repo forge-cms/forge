@@ -10,7 +10,7 @@ v1.0.0 stabilisation: coverage audit, benchmarks, godoc pass, example apps, CHAN
 |------|------|--------|-----------|
 | 1 | coverage audit (test additions) | ✅ Done | 2026-03-08 |
 | 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
-| 3 | forge.go + storage.go (godoc) | 🔲 Not started | — |
+| 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | 🔲 Not started | — |
 | 5 | example/docs/ | 🔲 Not started | — |
 | 6 | example/api/ | 🔲 Not started | — |
@@ -155,29 +155,29 @@ file requires a new test file.
 
 #### 3.1 — forge.go godoc additions
 
-- [ ] Add `// App is the central registry...` struct-level godoc to `type App struct`
-- [ ] Audit and add godoc to any App method added in Amendments A18–A26 that is
+- [x] Add `// App is the central registry...` struct-level godoc to `type App struct`
+- [x] Audit and add godoc to any App method added in Amendments A18–A26 that is
   missing a doc comment: `Cookies()`, `CookieManifestAuth()`, `Redirect()`,
   `RedirectStore()`, `RedirectManifestAuth()`
-- [ ] Verify `Config`, `MustConfig`, `New`, `Run`, `Handler`, `Use`, `Content`,
+- [x] Verify `Config`, `MustConfig`, `New`, `Run`, `Handler`, `Use`, `Content`,
   `Handle`, `SEO` all have godoc
 
 #### 3.2 — storage.go godoc additions
 
-- [ ] Audit `SQLRepo[T]` methods: `FindByID`, `FindBySlug`, `FindAll`, `Save`,
+- [x] Audit `SQLRepo[T]` methods: `FindByID`, `FindBySlug`, `FindAll`, `Save`,
   `Delete` — add godoc to any that are missing, matching the style of `MemoryRepo[T]`
-- [ ] Audit `NewSQLRepo`, `Table`, `SQLRepoOption` for godoc completeness
+- [x] Audit `NewSQLRepo`, `Table`, `SQLRepoOption` for godoc completeness
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go doc github.com/forge-cms/forge App` — shows struct-level godoc
-- [ ] `go doc github.com/forge-cms/forge SQLRepo` — shows type-level godoc
-- [ ] `go test -count=1 ./...` — full suite still green
-- [ ] `BACKLOG.md` — step 3 row updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go doc github.com/forge-cms/forge App` — shows struct-level godoc
+- [x] `go doc github.com/forge-cms/forge SQLRepo` — shows type-level godoc
+- [x] `go test -count=1 ./...` — full suite still green
+- [x] `BACKLOG.md` — step 3 row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

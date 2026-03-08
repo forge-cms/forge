@@ -108,7 +108,19 @@ type seoState struct {
 	robots *RobotsConfig
 }
 
-// App is the top-level application. Obtain one with [New].
+// App is the central registry for a Forge application. It couples the HTTP
+// router, global middleware, and all content modules into a single value.
+//
+// Create an App with [New], wire in modules with [App.Content], add global
+// middleware with [App.Use], then serve with [App.Run] or [App.Handler].
+//
+// Optional cross-cutting features are configured directly on the App:
+//   - [App.SEO] — robots.txt, sitemap index, AI-crawler policy
+//   - [App.Cookies] + [App.CookiesManifestAuth] — typed cookie compliance manifest
+//   - [App.Redirect] + [App.RedirectStore] + [App.RedirectManifestAuth] — redirect rules
+//
+// App is not safe for concurrent configuration: set it up in main before
+// calling Run or Handler, then treat it as read-only.
 type App struct {
 	cfg                    Config
 	mux                    *http.ServeMux

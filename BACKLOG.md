@@ -195,7 +195,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 |------|------|--------|-----------|
 | 1 | coverage audit (test additions) | ✅ Done | 2026-03-08 |
 | 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
-| 3 | forge.go + storage.go (godoc) | 🔲 Not started | — |
+| 3 | forge.go + storage.go (godoc) | ✅ Done | 2026-03-08 |
 | 4 | example/blog/ | 🔲 Not started | — |
 | 5 | example/docs/ | 🔲 Not started | — |
 | 6 | example/api/ | 🔲 Not started | — |
@@ -203,7 +203,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 - [x] Step 1 — coverage audit: targeted test additions to reach ≥ 85%; covers `App.RedirectStore`, `TrustedProxy`, `CacheStore.Sweep`, `RedirectStore.Len`, `stripMarkdown`, `forgeLLMSEntries`
 - [x] Step 2 — `benchmarks_test.go`: 7 benchmarks for M5–M8 hot paths (auth sign/verify, consent, redirect lookup ×2, scheduler tick noop, feed build)
-- [ ] Step 3 — godoc pass: `forge.go` `type App` struct comment + all A18–A26 methods; `storage.go` `SQLRepo[T]` method parity with `MemoryRepo[T]`
+- [x] Step 3 — godoc pass: `forge.go` `type App` struct comment + all A18–A26 methods; `storage.go` `SQLRepo[T]` method parity with `MemoryRepo[T]`
 - [ ] Step 4 — `example/blog/`: standalone module with Post type, MemoryRepo, SitemapConfig, Social, FeedConfig, AIIndex, scheduled publishing
 - [ ] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
 - [ ] Step 6 — `example/api/`: standalone module with Article type, BearerHMAC, role-based access, redirects, SecurityHeaders/RateLimit, JSON-only
