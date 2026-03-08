@@ -334,6 +334,77 @@ func TestChain(t *testing.T) {
 	}
 }
 
+// — TrustedProxy ——————————————————————————————————————————————————————————
+
+// TestTrustedProxy_bucketsByForwardedIP verifies that RateLimit with TrustedProxy
+// uses X-Forwarded-For as the per-IP key rather than RemoteAddr.
+func TestTrustedProxy_bucketsByForwardedIP(t *testing.T) {
+	// Allow exactly 1 request per minute per IP.
+	mw := RateLimit(1, time.Minute, TrustedProxy())
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := mw(inner)
+
+	do := func(xff string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", xff)
+		req.RemoteAddr = "10.1.1.1:0" // same proxy address for every request
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	if code := do("192.0.2.1"); code != http.StatusOK {
+		t.Errorf("first 192.0.2.1: got %d, want 200", code)
+	}
+	// Same forwarded IP exhausts its bucket.
+	if code := do("192.0.2.1"); code != http.StatusTooManyRequests {
+		t.Errorf("second 192.0.2.1: got %d, want 429", code)
+	}
+	// Different forwarded IP has an independent bucket — must not be blocked.
+	if code := do("192.0.2.2"); code != http.StatusOK {
+		t.Errorf("first 192.0.2.2 (different IP): got %d, want 200", code)
+	}
+}
+
+// TestTrustedProxy_xRealIP verifies that X-Real-IP is preferred over
+// X-Forwarded-For when both are present.
+func TestTrustedProxy_xRealIP(t *testing.T) {
+	mw := RateLimit(1, time.Minute, TrustedProxy())
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := mw(inner)
+
+	do := func(xri, xff string) int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		if xri != "" {
+			req.Header.Set("X-Real-IP", xri)
+		}
+		if xff != "" {
+			req.Header.Set("X-Forwarded-For", xff)
+		}
+		req.RemoteAddr = "10.1.1.1:0"
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	// First request: X-Real-IP=198.51.100.1, X-Forwarded-For=198.51.100.99.
+	if code := do("198.51.100.1", "198.51.100.99"); code != http.StatusOK {
+		t.Errorf("first with X-Real-IP: got %d, want 200", code)
+	}
+	// Second request with same X-Real-IP must be rate-limited (X-Real-IP is used).
+	if code := do("198.51.100.1", "198.51.100.99"); code != http.StatusTooManyRequests {
+		t.Errorf("second with same X-Real-IP: got %d, want 429", code)
+	}
+	// Request with the X-Forwarded-For IP (different from X-Real-IP) is not limited.
+	if code := do("", "198.51.100.99"); code != http.StatusOK {
+		t.Errorf("request with X-Forwarded-For only: got %d, want 200", code)
+	}
+}
+
 // — Benchmarks ————————————————————————————————————————————————————————————
 
 func BenchmarkInMemoryCacheHIT(b *testing.B) {

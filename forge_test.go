@@ -409,6 +409,19 @@ func TestApp_Run_gracefulShutdown(t *testing.T) {
 	}
 }
 
+// TestApp_RedirectStore verifies that New always initialises the redirect store
+// and that App.RedirectStore returns it (Amendment A20).
+func TestApp_RedirectStore(t *testing.T) {
+	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
+	if store := app.RedirectStore(); store == nil {
+		t.Error("RedirectStore() = nil; want non-nil *RedirectStore")
+	}
+	// Store should be the same pointer on repeated calls.
+	if s1, s2 := app.RedirectStore(), app.RedirectStore(); s1 != s2 {
+		t.Error("RedirectStore() returned different pointers on consecutive calls")
+	}
+}
+
 // ——————————————————————————————————————————————————————————————
 // Benchmark
 // ——————————————————————————————————————————————————————————————

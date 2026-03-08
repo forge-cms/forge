@@ -199,3 +199,16 @@ func TestApp_Redirect_chain_collapsed(t *testing.T) {
 		t.Errorf("expected chain collapsed to /c, got %q", loc)
 	}
 }
+
+func TestRedirectStore_Len(t *testing.T) {
+	s := NewRedirectStore()
+	if n := s.Len(); n != 0 {
+		t.Errorf("Len = %d; want 0 on empty store", n)
+	}
+	s.Add(RedirectEntry{From: "/a", To: "/b", Code: Permanent})
+	s.Add(RedirectEntry{From: "/c", To: "/d", Code: Permanent})
+	s.Add(RedirectEntry{From: "/old/", To: "/new/", Code: Permanent, IsPrefix: true})
+	if n := s.Len(); n != 3 {
+		t.Errorf("Len = %d; want 3", n)
+	}
+}

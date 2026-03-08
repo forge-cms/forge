@@ -189,21 +189,25 @@ Adaptive ticker, Scheduled→Published transition, AfterPublish signal.
 ## Milestone 9 — v1.0.0 stabilisation
 
 Test coverage, benchmarks, godoc audit, example apps.
-**Detail:** Milestone9_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone9_BACKLOG.md](Milestone9_BACKLOG.md)
 
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
-| 1 | test suite | 🔲 Not started | — |
-| 2 | benchmarks | 🔲 Not started | — |
-| 3 | godoc audit | 🔲 Not started | — |
-| 4 | example apps | 🔲 Not started | — |
-| 5 | CHANGELOG.md | 🔲 Not started | — |
+| 1 | coverage audit (test additions) | ✅ Done | 2026-03-08 |
+| 2 | benchmarks_test.go | 🔲 Not started | — |
+| 3 | forge.go + storage.go (godoc) | 🔲 Not started | — |
+| 4 | example/blog/ | 🔲 Not started | — |
+| 5 | example/docs/ | 🔲 Not started | — |
+| 6 | example/api/ | 🔲 Not started | — |
+| 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
 
-- [ ] Step 1 — Full test suite: all packages, minimum 80% coverage
-- [ ] Step 2 — Benchmark suite: request throughput, cache hit rate, template render time
-- [ ] Step 3 — godoc audit: all exported symbols documented
-- [ ] Step 4 — Example apps: example/blog, example/docs, example/api
-- [ ] Step 5 — CHANGELOG.md, semantic versioning policy, API stability promise
+- [x] Step 1 — coverage audit: targeted test additions to reach ≥ 85%; covers `App.RedirectStore`, `TrustedProxy`, `CacheStore.Sweep`, `RedirectStore.Len`, `stripMarkdown`, `forgeLLMSEntries`
+- [ ] Step 2 — `benchmarks_test.go`: 7 benchmarks for M5–M8 hot paths (auth sign/verify, consent, redirect lookup ×2, scheduler tick noop, feed build)
+- [ ] Step 3 — godoc pass: `forge.go` `type App` struct comment + all A18–A26 methods; `storage.go` `SQLRepo[T]` method parity with `MemoryRepo[T]`
+- [ ] Step 4 — `example/blog/`: standalone module with Post type, MemoryRepo, SitemapConfig, Social, FeedConfig, AIIndex, scheduled publishing
+- [ ] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
+- [ ] Step 6 — `example/api/`: standalone module with Article type, BearerHMAC, role-based access, redirects, SecurityHeaders/RateLimit, JSON-only
+- [ ] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
 
 ---
 

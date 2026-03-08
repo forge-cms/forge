@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -512,6 +513,77 @@ func TestModuleSignalAfterCreateFires(t *testing.T) {
 	}
 	if fired.Load() == 0 {
 		t.Error("AfterCreate hook did not fire within 500ms")
+	}
+}
+
+// TestModule_plainText_markdownStripped verifies that a text/plain request
+// served for a [Markdownable] item returns a body with markdown syntax removed
+// (exercises the stripMarkdown helper via the content-negotiation path).
+func TestModule_plainText_markdownStripped(t *testing.T) {
+	repo := NewMemoryRepo[*testMDPost]()
+	p := &testMDPost{
+		Node:  Node{ID: NewID(), Slug: "hello-world", Status: Published},
+		Title: "Hello **World**",
+		Body:  "This is _italic_ and [a link](https://example.com).",
+	}
+	if err := repo.Save(context.Background(), p); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	m := NewModule((*testMDPost)(nil), Repo(repo))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/testmdposts/hello-world", nil)
+	r.Header.Set("Accept", "text/plain")
+	r.SetPathValue("slug", "hello-world")
+	m.showHandler(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "text/plain") {
+		t.Errorf("Content-Type = %q; want text/plain", ct)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "**") || strings.Contains(body, "_italic_") || strings.Contains(body, "](") {
+		t.Errorf("plain-text body still contains markdown syntax: %q", body)
+	}
+	if !strings.Contains(body, "Hello") || !strings.Contains(body, "World") {
+		t.Errorf("plain-text body missing expected words: %q", body)
+	}
+}
+
+// TestModule_cacheStore_Sweep verifies that CacheStore.Sweep evicts expired
+// entries from a module's LRU cache.
+func TestModule_cacheStore_Sweep(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	p := seedPost(t, repo, "sweep-test", Published)
+	m := NewModule((*testPost)(nil), Repo(repo), Cache(time.Millisecond))
+
+	// Warm the module cache via a show request.
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/testposts/"+p.Slug, nil)
+	r.SetPathValue("slug", p.Slug)
+	m.showHandler(w, r)
+
+	if m.cache == nil {
+		t.Fatal("cache is nil after Cache option")
+	}
+	m.cache.mu.Lock()
+	before := len(m.cache.entries)
+	m.cache.mu.Unlock()
+	if before == 0 {
+		t.Fatal("cache should have 1 entry after warmup")
+	}
+
+	// Wait for the 1ms TTL to expire, then sweep.
+	time.Sleep(5 * time.Millisecond)
+	m.cache.Sweep()
+
+	m.cache.mu.Lock()
+	after := len(m.cache.entries)
+	m.cache.mu.Unlock()
+	if after != 0 {
+		t.Errorf("after Sweep: %d entries remain; want 0", after)
 	}
 }
 
