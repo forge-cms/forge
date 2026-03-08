@@ -215,6 +215,44 @@ Scope: the file name without extension (e.g. `errors`, `roles`, `node`)
 
 ---
 
+## Release tagging
+
+Forge uses **annotated tags only** — never lightweight tags. Annotated tags carry a
+date, a tagger, and a message, and appear as formal releases on GitHub.
+
+**Tag format:** `vMAJOR.MINOR.PATCH` — must match the version in `CHANGELOG.md`
+
+**When to tag:**
+- Every milestone that ships a version bump (`v0.x.0`) gets a tag
+- Patch releases (bug fixes, no API change) get a tag
+- Amendments alone do not get a tag unless they ship with a milestone
+
+**Pre-tag checklist — all three must be green before tagging:**
+1. `git status --short` returns nothing (working tree clean)
+2. `go test ./...` is green
+3. `CHANGELOG.md` has an entry for the version being tagged
+
+**Tag and push sequence:**
+```
+git tag -a vX.Y.Z -m "Forge vX.Y.Z — {one line summary}"
+git push origin main
+git push origin vX.Y.Z
+```
+
+Push commits and tag **separately** — never in the same command.
+
+**After pushing:**
+Go to `github.com/forge-cms/forge/releases`, create a GitHub Release from the tag,
+and paste the relevant `CHANGELOG.md` section as release notes.
+
+**Never:**
+- Tag before `go test ./...` is green
+- Tag before `CHANGELOG.md` is updated for the version
+- Use a lightweight tag (`git tag vX.Y.Z` without `-a`) for a release
+- Push the tag in the same command as commits
+
+---
+
 ## Milestone planning process
 
 Before implementing any milestone, a dedicated backlog file must be created and
