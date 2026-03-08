@@ -1,6 +1,8 @@
 *.exe
 *.test
 *.out
+cov
+coverage
 .vscode/
 .idea/
 *.swp
