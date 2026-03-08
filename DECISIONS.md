@@ -2261,3 +2261,44 @@ by `context.Background()` is needed.
 - Scheduler goroutine starts before HTTP server and stops cleanly after graceful shutdown
 - `App` with no content modules: no goroutine spawned
 - `App.Run()` return paths unchanged — defer handles all cleanup paths
+
+---
+
+### Amendment A27 — middleware.go: `forge.Authenticate(AuthFunc)` (Milestone 9, Step 6)
+
+**Date:** 2026-03-08
+**Status:** Agreed
+**Amends:** Decision 15 (Role system), middleware.go, ARCHITECTURE.md
+
+**The gap:** Decision 15 defines `forge.Auth(forge.Read(r), forge.Write(r))` as module options and `BearerHMAC`/`CookieSession`/`BasicAuth` for issuing `AuthFunc` values. However, `AuthFunc` does not implement `Option` and `userContextKey` is unexported — application code outside the `forge` package had no way to inject a `User` into the request context. Module role checks at `ctx.User().HasRole(m.writeRole)` always evaluated against `GuestUser` in production, making `forge.Auth` useless without internal access.
+
+**Change:** Add one exported function to `middleware.go`:
+
+```go
+func Authenticate(auth AuthFunc) func(http.Handler) http.Handler
+```
+
+The implementation calls `auth.authenticate(r)` and, on success, attaches the returned `User` to the request context via `context.WithValue(r.Context(), userContextKey, user)`. Unauthenticated requests pass through, so `ContextFrom` falls back to `GuestUser` — correct for public read endpoints.
+
+**Call-site:**
+
+```go
+app.Use(forge.Authenticate(forge.BearerHMAC(secret)))
+
+m := forge.NewModule[*Resource](&Resource{},
+    forge.Auth(
+        forge.Read(forge.Guest),    // GET list + show — no token required
+        forge.Write(forge.Editor),  // POST/PUT/DELETE — Editor role required
+    ),
+)
+```
+
+**Consequences:**
+- Explicit two-step wiring: `Authenticate` for the request user layer, `Auth(Read/Write)` for the module threshold policy. Separation of concerns is intentional.
+- Identical signature pattern to `CSRF(auth AuthFunc)` — no new API shape.
+- Purely additive: no breaking change to any existing symbol.
+- File boundary: one function added to `middleware.go` only.
+
+**Rejected alternatives:**
+- `forge.Auth(forge.BearerHMAC(secret), forge.Read(Guest), ...)` — mixes authentication (request layer) with authorisation (module threshold layer).
+- Exporting `userContextKey` — breaks encapsulation of `Context`'s internal request state.

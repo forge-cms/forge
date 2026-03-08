@@ -63,7 +63,7 @@ github.com/forge-cms/forge/
 ├── storage.go        DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
 ├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
-│                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, CSRF, Chain
+│                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, Authenticate, CSRF, Chain
 ├── module.go         Module[T], NewModule, Register, At, Cache, Auth,
                       Middleware, Repo, On, SitemapConfig, AIIndex, WithoutID,
                       Feed, FeedDisabled options;
@@ -333,6 +333,9 @@ func (a *App) Run(addr string) error                       // listen; graceful s
 
 // SignToken — ttl=0 means no expiry; ttl>0 embeds exp claim, rejected after expiry
 func SignToken(user User, secret string, ttl time.Duration) (string, error)
+
+// Authenticate — sets Context.User() for every request; pairs with Auth(Read/Write) on modules
+func Authenticate(auth AuthFunc) func(http.Handler) http.Handler
 
 // CSRF — double-submit cookie protection; wrap CookieSession-authenticated routes only
 func CSRF(auth AuthFunc) func(http.Handler) http.Handler

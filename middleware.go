@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"crypto/subtle"
 	"fmt"
 	"log/slog"
@@ -547,6 +548,30 @@ func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.
 		h = middlewares[i](h)
 	}
 	return h
+}
+
+// — Authenticate ————————————————————————————————————————————————————————————
+
+// Authenticate returns middleware that runs auth on every request and stores
+// the resulting [User] in the request context so [Context.User] returns it.
+//
+// Apply it globally before any module that enforces role checks via
+// [Auth], [Read], or [Write]:
+//
+//	app.Use(forge.Authenticate(forge.BearerHMAC(secret)))
+//
+// Unauthenticated requests — where auth returns false — pass through unchanged.
+// [ContextFrom] then falls back to [GuestUser], which is the correct behaviour
+// for public read endpoints protected by forge.Read(forge.Guest).
+func Authenticate(auth AuthFunc) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if user, ok := auth.authenticate(r); ok {
+				r = r.WithContext(context.WithValue(r.Context(), userContextKey, user))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // — CSRF ——————————————————————————————————————————————————————————————————
