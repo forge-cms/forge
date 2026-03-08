@@ -9,7 +9,7 @@ v1.0.0 stabilisation: coverage audit, benchmarks, godoc pass, example apps, CHAN
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | coverage audit (test additions) | ✅ Done | 2026-03-08 |
-| 2 | benchmarks_test.go | 🔲 Not started | — |
+| 2 | benchmarks_test.go | ✅ Done | 2026-03-08 |
 | 3 | forge.go + storage.go (godoc) | 🔲 Not started | — |
 | 4 | example/blog/ | 🔲 Not started | — |
 | 5 | example/docs/ | 🔲 Not started | — |
@@ -104,42 +104,42 @@ supplement existing tested code per M9 one-file exception noted in this backlog)
 
 #### 2.1 — Auth benchmarks
 
-- [ ] `BenchmarkSignToken` — benchmark `SignToken` with a fixed `User` and 1h TTL
-- [ ] `BenchmarkBearerHMAC_verify` — sign a token then benchmark the verify path via
+- [x] `BenchmarkSignToken` — benchmark `SignToken` with a fixed `User` and 1h TTL
+- [x] `BenchmarkBearerHMAC_verify` — sign a token then benchmark the verify path via
   `BearerHMAC(secret)(handler)` with a pre-signed bearer header
 
 #### 2.2 — Cookie benchmarks
 
-- [ ] `BenchmarkConsentFor_granted` — create a `ConsentFor` cookie context and call
+- [x] `BenchmarkConsentFor_granted` — create a `ConsentFor` cookie context and call
   `ConsentFor(ctx, Analytics)` in a tight loop
 
 #### 2.3 — Redirect benchmarks
 
-- [ ] `BenchmarkRedirectStore_Get_exact` — seed 100 exact-match entries, benchmark
+- [x] `BenchmarkRedirectStore_Get_exact` — seed 100 exact-match entries, benchmark
   `Get("/posts/article-50")`
-- [ ] `BenchmarkRedirectStore_Get_prefix` — seed 50 prefix entries, benchmark
+- [x] `BenchmarkRedirectStore_Get_prefix` — seed 50 prefix entries, benchmark
   `Get("/posts/article-50/old-name")`
 
 #### 2.4 — Scheduler benchmarks
 
-- [ ] `BenchmarkScheduler_tick_noop` — call `tick()` on a scheduler backed by an empty
+- [x] `BenchmarkScheduler_tick_noop` — call `tick()` on a scheduler backed by an empty
   `MemoryRepo`; measures overhead of processScheduled with no work to do
 
 #### 2.5 — Feed benchmarks
 
-- [ ] `BenchmarkFeedBuild` — seed a `FeedStore` with 20 published items and call
+- [x] `BenchmarkFeedBuild` — seed a `FeedStore` with 20 published items and call
   `regenerateFeed` or the equivalent internal path to measure RSS generation cost
 
 #### Verification
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -run "^$" -bench "Benchmark" -benchtime=3s ./...` — all benchmarks run
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -run "^$" -bench "Benchmark" -benchtime=3s ./...` — all benchmarks run
   and produce ns/op output (no panics, no failures)
-- [ ] `go test -count=1 ./...` — full suite still green
-- [ ] `BACKLOG.md` — step 2 row updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go test -count=1 ./...` — full suite still green
+- [x] `BACKLOG.md` — step 2 row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---
