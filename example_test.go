@@ -38,7 +38,7 @@ func ExampleNewModule() {
 	secret := []byte("example-secret-key-32-bytes!!!!!")
 
 	repo := NewMemoryRepo[*examplePost]()
-	m := NewModule[*examplePost](&examplePost{},
+	m := NewModule(&examplePost{},
 		At("/posts"),
 		Repo(repo),
 		Auth(
@@ -62,7 +62,7 @@ func ExampleNewModule() {
 // delete operations on a content module.
 func ExampleAuth() {
 	repo := NewMemoryRepo[*examplePost]()
-	m := NewModule[*examplePost](&examplePost{},
+	m := NewModule(&examplePost{},
 		At("/posts"),
 		Repo(repo),
 		Auth(
@@ -103,7 +103,7 @@ func ExampleAuthenticate() {
 // markdown corpus at /llms-full.txt, and AIDoc adds /{slug}/aidoc endpoints.
 func ExampleAIIndex() {
 	repo := NewMemoryRepo[*examplePost]()
-	m := NewModule[*examplePost](&examplePost{},
+	m := NewModule(&examplePost{},
 		At("/posts"),
 		Repo(repo),
 		AIIndex(LLMsTxt, LLMsTxtFull, AIDoc),
@@ -122,7 +122,7 @@ func ExampleAIIndex() {
 // the content type's Head() method automatically (Amendment A28).
 func ExampleSocial() {
 	repo := NewMemoryRepo[*examplePost]()
-	m := NewModule[*examplePost](&examplePost{},
+	m := NewModule(&examplePost{},
 		At("/posts"),
 		Repo(repo),
 		Social(OpenGraph, TwitterCard),
@@ -141,7 +141,7 @@ func ExampleSocial() {
 // full forge.Context and the typed item.
 func ExampleOn() {
 	repo := NewMemoryRepo[*examplePost]()
-	m := NewModule[*examplePost](&examplePost{},
+	m := NewModule(&examplePost{},
 		At("/posts"),
 		Repo(repo),
 		On(AfterPublish, func(_ Context, p *examplePost) error {
