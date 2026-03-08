@@ -150,6 +150,32 @@ When a milestone ships a feature, update its badge from `🔲 Coming in Mileston
 to `✅ **Available**` in the same commit. Never leave a badge pointing to a shipped
 milestone — it becomes a lie the moment the code merges.
 
+**README compile test rule:**
+Forge maintains `example_test.go` in the root package. Every Example function
+in that file is a compile-verified extract of a README code example.
+
+This rule applies at three points:
+
+*Milestone planning:*
+When drafting a `Milestone{N}_BACKLOG.md`, review `example_test.go` and confirm
+that no planned change will break an existing Example function. If a planned
+change will break an Example, the plan must include an update to
+`example_test.go` as an explicit sub-task in the same step.
+
+*Milestone closing:*
+Before a milestone is marked ✅ Done, `go test ./...` must be green — which
+includes all Example functions. A milestone may not be closed with a failing
+Example function.
+
+*Amendment drafting:*
+When drafting an Amendment, explicitly state in the Consequences section
+whether the Amendment will break any existing Example function.
+
+An Amendment may make README syntax more elegant — if it does, update
+`example_test.go` to reflect the improved syntax in the same commit.
+
+An Amendment must never leave `example_test.go` in a failing state.
+
 ### 4. Architecture and decision review
 - After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
 - Ask: does this implementation reveal a gap, ambiguity, or conflict?

@@ -20,7 +20,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M6 | Cookies & Compliance (v0.6.0) | ✅ Done |
 | M7 | Redirects (v0.7.0) | ✅ Done |
 | M8 | Scheduled publishing (v0.8.0) | ✅ Done |
-| M9 | v1.0.0 stabilisation | 🔲 Not started |
+| M9 | v1.0.0 stabilisation | ✅ Done |
 | M10 | MCP support (v2) | 🔲 Not started |
 
 ---
@@ -199,7 +199,8 @@ Test coverage, benchmarks, godoc audit, example apps.
 | 4 | example/blog/ | ✅ Done | 2026-03-08 |
 | 5 | example/docs/ | ✅ Done | 2026-03-08 |
 | 6 | example/api/ | ✅ Done | 2026-03-08 |
-| 7 | CHANGELOG.md + integration_full_test.go G21 | 🔲 Not started | — |
+| 7 | CHANGELOG.md + integration_full_test.go G21 | ✅ Done | 2026-03-08 |
+| 8 | example_test.go | ✅ Done | 2026-03-08 |
 
 - [x] Step 1 — coverage audit: targeted test additions to reach ≥ 85%; covers `App.RedirectStore`, `TrustedProxy`, `CacheStore.Sweep`, `RedirectStore.Len`, `stripMarkdown`, `forgeLLMSEntries`
 - [x] Step 2 — `benchmarks_test.go`: 7 benchmarks for M5–M8 hot paths (auth sign/verify, consent, redirect lookup ×2, scheduler tick noop, feed build)
@@ -207,7 +208,8 @@ Test coverage, benchmarks, godoc audit, example apps.
 - [x] Step 4 — `example/blog/`: standalone module with Post type, MemoryRepo, SitemapConfig, Social, FeedConfig, AIIndex, scheduled publishing
 - [x] Step 5 — `example/docs/`: standalone module with Doc type, AIIndex/LLMsTxtFull/AIDoc, RobotsConfig AskFirst, breadcrumbs
 - [x] Step 6 — `example/api/`: standalone module with Resource type, BearerHMAC+Authenticate, role-based access, BeforeCreate validation, legacy redirects, SecurityHeaders/RateLimit, JSON-only
-- [ ] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
+- [x] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
+- [x] Step 8 — `example_test.go`: 7 compile-verified README Example functions (ExampleNewModule, ExampleAuth, ExampleAuthenticate, ExampleAIIndex, ExampleSocial, ExampleOn, ExampleRobotsConfig); README compile test rule added to copilot-instructions.md
 
 ---
 
