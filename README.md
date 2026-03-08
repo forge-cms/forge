@@ -127,7 +127,11 @@ app := forge.New(forge.Config{
 
 app.Content(&Post{},
     forge.At("/posts"),
-    forge.Auth(forge.Read(forge.Guest), forge.Write(forge.Author)),
+    forge.Auth(
+        forge.Read(forge.Guest),
+        forge.Write(forge.Author),
+        forge.Delete(forge.Editor),
+    ),
 )
 
 app.Run(":8080")
@@ -321,17 +325,17 @@ app.Content(&BlogPost{},
 
 ```go
 // Accept bearer tokens (APIs, mobile clients)
-app.Use(forge.BearerHMAC(secret))
+app.Use(forge.Authenticate(forge.BearerHMAC(secret)))
 
-// Accept cookie sessions (browser apps) — CSRF protection enabled automatically
-app.Use(forge.CookieSession("forge_session", secret))
+// Accept cookie sessions (browser apps)
+app.Use(forge.Authenticate(forge.CookieSession("forge_session", secret)))
 
 // Accept both — first match wins
 // Use this for apps that serve both a browser UI and an API
-app.Use(
+app.Use(forge.Authenticate(forge.AnyAuth(
     forge.BearerHMAC(secret),
     forge.CookieSession("forge_session", secret),
-)
+)))
 
 // Generate a signed token
 token := forge.SignToken(forge.User{
@@ -383,10 +387,15 @@ func (p *BlogPost) Head() forge.Head {
 }
 ```
 
-### Override head at module level
+### Advanced: context-aware head with HeadFunc
+
+When `Head()` on your content type is not enough — for example, you need request
+context like the site name, a per-request user preference, or a database lookup —
+use `HeadFunc`. It receives the full `forge.Context` alongside the item.
+`HeadFunc` takes priority over `Headable` when both are present.
 
 ```go
-// Wins over content-type Head() when set
+// HeadFunc wins over the content type's Head() method when set
 app.Content(&BlogPost{},
     forge.At("/posts"),
     forge.HeadFunc(func(ctx forge.Context, p *BlogPost) forge.Head {
@@ -1124,8 +1133,10 @@ func main() {
         forge.Recoverer(),
         forge.SecurityHeaders(),
         forge.MaxBodySize(1 << 20),
-        forge.BearerHMAC(secret),
-        forge.CookieSession("session", secret),
+        forge.Authenticate(forge.AnyAuth(
+            forge.BearerHMAC(secret),
+            forge.CookieSession("session", secret),
+        )),
     )
 
     app.SEO(forge.SitemapConfig{ChangeFreq: forge.Weekly, Priority: 0.8})
