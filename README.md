@@ -1178,4 +1178,6 @@ Security headers · Graceful shutdown
 
 ## License
 
-MIT
+[AGPL v3](LICENSE) — free for individuals, open source projects, and companies
+building their own sites. A commercial license will be available for organisations
+running Forge as a hosted service. See [COMMERCIAL.md](COMMERCIAL.md).
