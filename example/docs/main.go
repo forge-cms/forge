@@ -23,7 +23,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/forge-cms/forge"
@@ -125,7 +127,17 @@ func main() {
 		Sitemaps:  true,
 	})
 
+	// Welcome page — backed by templates/index.html.
+	indexTpl := template.Must(template.ParseFiles("templates/index.html"))
+	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := indexTpl.ExecuteTemplate(w, "index.html", nil); err != nil {
+			forge.WriteError(w, r, forge.ErrInternal)
+		}
+	}))
+
 	log.Println("Forge Docs — http://localhost:8081")
+	log.Println("  Home:      http://localhost:8081/")
 	log.Println("  Docs:      http://localhost:8081/docs")
 	log.Println("  llms.txt:  http://localhost:8081/llms.txt")
 	log.Println("  llms-full: http://localhost:8081/llms-full.txt")

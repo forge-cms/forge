@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Forge Docs Example</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1a1a1a;line-height:1.6}
+    h1{font-size:2rem;margin-bottom:.25rem}
+    p{color:#555}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:2rem 0}
+    .card{border:1px solid #e5e7eb;border-radius:8px;padding:1.25rem}
+    .card h3{margin:0 0 .5rem;font-size:1rem}
+    .card p{margin:0 0 .75rem;font-size:.9rem;color:#555}
+    .card a{color:#0070f3;text-decoration:none;font-weight:500}
+    .card a:hover{text-decoration:underline}
+    footer{margin-top:3rem;padding-top:1rem;border-top:1px solid #e5e7eb;font-size:.85rem;color:#888;display:flex;gap:1.25rem;flex-wrap:wrap}
+    footer a{color:#0070f3}
+  </style>
+</head>
+<body>
+  <h1>Forge Docs Example</h1>
+  <p>A documentation site built with Forge. Demonstrates AI indexing, structured data, breadcrumbs, and AI-crawler policy.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>📄 Documentation</h3>
+      <p>Browse all published docs.</p>
+      <a href="/docs">View docs →</a>
+    </div>
+    <div class="card">
+      <h3>🤖 AI Index</h3>
+      <p>Compact content index for AI assistants.</p>
+      <a href="/llms.txt">llms.txt →</a>
+    </div>
+    <div class="card">
+      <h3>📚 Full Corpus</h3>
+      <p>Complete markdown corpus for RAG pipelines.</p>
+      <a href="/llms-full.txt">llms-full.txt →</a>
+    </div>
+    <div class="card">
+      <h3>🗺️ Sitemap</h3>
+      <p>XML sitemap for search engines.</p>
+      <a href="/sitemap.xml">sitemap.xml →</a>
+    </div>
+  </div>
+
+  <footer>
+    Built with <a href="https://github.com/forge-cms/forge">Forge</a>
+    · <a href="/robots.txt">robots.txt</a>
+    · <a href="/docs/sitemap.xml">docs sitemap</a>
+    · <a href="/docs/getting-started/aidoc">AIDoc example</a>
+  </footer>
+</body>
+</html>

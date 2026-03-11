@@ -43,7 +43,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -161,11 +163,54 @@ func main() {
 		),
 	)
 
+	// Welcome page — inline HTML so the API example stays template-free.
+	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Forge API Example</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:740px;margin:40px auto;padding:0 24px;color:#1a1a1a}
+h1{font-size:1.8rem;margin-bottom:.25rem}p{color:#555;line-height:1.6}
+h2{margin:2rem 0 .5rem}ul{padding-left:1.2rem}li{margin:.4rem 0}
+code{background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:.9em}
+a{color:#2563eb}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid #e5e7eb;font-size:.85rem;color:#888}
+footer a{color:#2563eb}
+</style>
+</head>
+<body>
+<h1>Forge API Example</h1>
+<p>A headless JSON API built with Forge. Demonstrates authentication, role-based authorisation, validation hooks, and legacy URL redirects.</p>
+<h2>Endpoints</h2>
+<ul>
+  <li><a href="/resources"><code>GET /resources</code></a> — list published resources (public)</li>
+  <li><code>GET /resources/{slug}</code> — single resource (public)</li>
+  <li><code>POST /resources</code> — create resource (Editor+)</li>
+  <li><code>PUT /resources/{slug}</code> — update resource (Editor+)</li>
+  <li><code>DELETE /resources/{slug}</code> — delete resource (Admin)</li>
+  <li><code>GET /resources/go-spec</code> — legacy redirect → <code>/resources/go-language-spec</code></li>
+</ul>
+<h2>AI &amp; Discovery</h2>
+<ul>
+  <li><a href="/llms.txt"><code>GET /llms.txt</code></a> — compact AI index</li>
+  <li><a href="/llms-full.txt"><code>GET /llms-full.txt</code></a> — full AI corpus</li>
+  <li><a href="/resources/sitemap.xml"><code>GET /resources/sitemap.xml</code></a> — sitemap fragment</li>
+  <li><a href="/resources/feed.xml"><code>GET /resources/feed.xml</code></a> — RSS feed</li>
+  <li><a href="/.well-known/redirects.json"><code>GET /.well-known/redirects.json</code></a> — redirect manifest</li>
+</ul>
+<h2>Authentication</h2>
+<p>Send an <code>Authorization: Bearer &lt;token&gt;</code> header. Editor and Author tokens are printed in the server startup log.</p>
+<footer>Built with <a href="https://github.com/forge-cms/forge">Forge</a> · <a href="/robots.txt">robots.txt</a></footer>
+</body></html>`)
+	}))
+
 	log.Println("Forge API — http://localhost:8082")
 	log.Println("")
 	log.Println("  Editor token (Alice):", editorToken)
 	log.Println("  Author token (Bob):  ", authorToken)
 	log.Println("")
+	log.Println("  Home:                http://localhost:8082/")
 	log.Println("  Resources:           http://localhost:8082/resources")
 	log.Println("  Legacy redirect:     http://localhost:8082/resources/go-spec  → 301")
 	log.Println("  Redirects manifest:  http://localhost:8082/.well-known/redirects.json")
