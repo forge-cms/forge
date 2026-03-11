@@ -36,15 +36,22 @@ type contentNegotiator struct {
 // negotiate returns the canonical content-type string to serve for r.
 // The result is used to select the response serialiser. Called once per
 // request on the hot path — allocation-free.
+//
+// Content-type branches are gated on the module's capability flags (A35):
+// text/html is only selected when forge.Templates is registered (n.html),
+// text/markdown only when the content type implements Markdownable (n.md).
+// When an Accept header requests a format the module cannot produce, the
+// negotiator falls through to the next candidate rather than returning a
+// type that will unconditionally 406.
 func (n contentNegotiator) negotiate(r *http.Request) string {
 	a := r.Header.Get("Accept")
 	if a == "" || a == "*/*" || strings.Contains(a, "application/json") {
 		return "application/json"
 	}
-	if strings.Contains(a, "text/html") {
+	if n.html && strings.Contains(a, "text/html") {
 		return "text/html"
 	}
-	if strings.Contains(a, "text/markdown") {
+	if n.md && strings.Contains(a, "text/markdown") {
 		return "text/markdown"
 	}
 	if strings.Contains(a, "text/plain") {
@@ -390,6 +397,27 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 
 	if !repoFound {
 		panic("forge: Module[T] requires a Repository; use forge.Repo(...) or App.Content")
+	}
+
+	// A36: detect capability mismatches at startup — programmer errors caught
+	// before any request is served (consistent with getNodeFields and repoFound).
+	// SitemapConfig requires T to implement SitemapNode (needs Head() forge.Head).
+	if m.sitemapCfg != nil {
+		if _, ok := any(proto).(SitemapNode); !ok {
+			panic(fmt.Sprintf(
+				"forge: %s has SitemapConfig but does not implement SitemapNode "+
+					"(add a Head() forge.Head method); sitemap would be silently empty",
+				typeName,
+			))
+		}
+	}
+	// AIIndex(LLMsTxtFull) requires T to implement Markdownable (Markdown() string).
+	if hasAIFeature(m.aiFeatures, LLMsTxtFull) && !m.neg.md {
+		panic(fmt.Sprintf(
+			"forge: %s has AIIndex(LLMsTxtFull) but does not implement Markdownable "+
+				"(add a Markdown() string method); /llms-full.txt would be silently empty",
+			typeName,
+		))
 	}
 
 	// Background sweep for module cache.

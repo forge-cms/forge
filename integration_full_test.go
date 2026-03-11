@@ -478,7 +478,7 @@ func TestFull_signalCrossModuleIsolation(t *testing.T) {
 // — G4: Content negotiation, two modules (M2 + M4) ————————————————————————
 
 // TestFull_jsonModule_noTemplates verifies that a module without templates
-// returns 406 when the client requests text/html.
+// returns JSON (200) when the client requests text/html -- not 406 (A35).
 func TestFull_jsonModule_noTemplates(t *testing.T) {
 	fa := newFullTestApp(t, nil, nil) // neither module has templates
 	fullSeedPage(t, fa.pageRepo, "about", "About")
@@ -487,8 +487,11 @@ func TestFull_jsonModule_noTemplates(t *testing.T) {
 	r.Header.Set("Accept", "text/html")
 	w := httptest.NewRecorder()
 	fa.handler.ServeHTTP(w, r)
-	if w.Code != 406 {
-		t.Errorf("status = %d; want 406 (no HTML templates)", w.Code)
+	if w.Code != 200 {
+		t.Errorf("status = %d; want 200 (JSON fallback, A35)", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q; want application/json", ct)
 	}
 }
 

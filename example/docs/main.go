@@ -97,6 +97,10 @@ func main() {
 		// Each endpoint is served automatically; no route registration needed.
 		forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull, forge.AIDoc),
 
+		// Forge: SitemapConfig{} opts this module into /docs/sitemap.xml and
+		// contributes an entry to the /sitemap.xml aggregate index.
+		forge.SitemapConfig{},
+
 		// Forge: Templates("templates") parses templates/list.html and
 		// templates/show.html at startup. Run() fails fast if either is missing.
 		forge.Templates("templates"),

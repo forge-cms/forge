@@ -12,7 +12,7 @@ import (
 
 // — Test helpers ——————————————————————————————————————————————————————————
 
-// testAIPost is a content type for AI tests that implements Markdownable.
+// testAIPost is a content type for AI tests that implements Markdownable and SitemapNode.
 type testAIPost struct {
 	Node
 	Title   string `forge:"required"`
@@ -21,6 +21,7 @@ type testAIPost struct {
 }
 
 func (p *testAIPost) Markdown() string { return "# " + p.Title + "\n\n" + p.Body }
+func (p *testAIPost) Head() Head       { return Head{Title: p.Title} }
 func (p *testAIPost) AISummary() string {
 	if p.Summary != "" {
 		return p.Summary

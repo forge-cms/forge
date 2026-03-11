@@ -148,8 +148,12 @@ func TestIntegration_htmlFallback_noTemplates(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 
-	if w.Code != 406 {
-		t.Errorf("status = %d, want 406; body: %s", w.Code, w.Body.String())
+	// No templates → JSON fallback 200, not 406 (A35).
+	if w.Code != 200 {
+		t.Errorf("status = %d, want 200 (JSON fallback, A35); body: %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 }
 
@@ -426,5 +430,53 @@ func TestIntegration_templateData_head(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "HeadFunc: Head Post") {
 		t.Errorf("expected HeadFunc title in rendered output, got:\n%s", w.Body.String())
+	}
+}
+
+// — A35 content negotiation capability gating ————————————————————————————
+
+// TestIntegration_negotiateHTMLFallback verifies that a module with no
+// Templates option returns JSON (not 406) when the Accept header requests
+// text/html. Before A35, negotiate() returned "text/html" regardless of
+// n.html, causing writeContent to unconditionally 406.
+func TestIntegration_negotiateHTMLFallback(t *testing.T) {
+	// Module has no Templates option — n.html is false.
+	_, handler, repo := intSetup(t)
+	intSeed(t, repo, "json-post", "JSON Post")
+
+	r := httptest.NewRequest("GET", "/posts/json-post", nil)
+	r.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("A35: status = %d, want 200 (JSON fallback); body: %s", w.Code, w.Body.String())
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("A35: Content-Type = %q, want application/json", ct)
+	}
+}
+
+// TestIntegration_negotiateMarkdownFallback verifies that a module whose
+// content type does not implement Markdownable returns JSON (not 406) when
+// Accept: text/markdown is sent. Before A35, negotiate() returned
+// "text/markdown" regardless of n.md, causing writeContent to 406.
+func TestIntegration_negotiateMarkdownFallback(t *testing.T) {
+	// testPost does not implement Markdownable — n.md is false.
+	_, handler, repo := intSetup(t)
+	intSeed(t, repo, "md-post", "MD Post")
+
+	r := httptest.NewRequest("GET", "/posts/md-post", nil)
+	r.Header.Set("Accept", "text/markdown")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != 200 {
+		t.Fatalf("A35: status = %d, want 200 (JSON fallback); body: %s", w.Code, w.Body.String())
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("A35: Content-Type = %q, want application/json", ct)
 	}
 }

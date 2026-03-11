@@ -83,6 +83,37 @@ func TestForgeMarkdown_paragraph(t *testing.T) {
 	}
 }
 
+func TestForgeMarkdown_fencedCode(t *testing.T) {
+	input := "intro\n\n```go\nfmt.Println(\"hello\")\n```\n\noutro"
+	got := string(forgeMarkdown(input))
+	if !strings.Contains(got, "<pre><code>") {
+		t.Errorf("fencedCode: missing <pre><code>, got: %s", got)
+	}
+	if !strings.Contains(got, "fmt.Println") {
+		t.Errorf("fencedCode: missing code body, got: %s", got)
+	}
+	if strings.Contains(got, "```") {
+		t.Errorf("fencedCode: raw fence leaked into output, got: %s", got)
+	}
+	if !strings.Contains(got, "<p>intro</p>") {
+		t.Errorf("fencedCode: missing intro paragraph, got: %s", got)
+	}
+	if !strings.Contains(got, "<p>outro</p>") {
+		t.Errorf("fencedCode: missing outro paragraph, got: %s", got)
+	}
+}
+
+func TestForgeMarkdown_fencedCodeHTMLEscape(t *testing.T) {
+	input := "```\n<script>alert(1)</script>\n```"
+	got := string(forgeMarkdown(input))
+	if strings.Contains(got, "<script>") {
+		t.Errorf("fencedCode: raw <script> not escaped, got: %s", got)
+	}
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Errorf("fencedCode: expected escaped &lt;script&gt;, got: %s", got)
+	}
+}
+
 func TestForgeExcerpt_pipeline(t *testing.T) {
 	body := "The quick brown fox jumps over the lazy dog and then some more words follow here"
 	got := string(forgeExcerpt(20, body))

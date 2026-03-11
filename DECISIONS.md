@@ -46,6 +46,8 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A32 | `middleware.go` error handling gaps | Agreed | 2026-03-11 |
 | A33 | `module.go` route mounting order bug (sitemap + feed) | Agreed | 2026-03-11 |
 | A34 | `module.go` + `forge.go` startup rebuild for derived content | Agreed | 2026-03-11 |
+| A35 | `module.go` content negotiation capability gating | Agreed | 2026-03-11 |
+| A36 | `module.go` startup capability mismatch detection | Agreed | 2026-03-11 |
 
 ---
 
@@ -2541,3 +2543,116 @@ exactly once even if `Handler()` is called multiple times.
   output on first page load without needing a manual publish event
 - `example_test.go` unaffected
 - `go test ./...` green with no changes to test files
+---
+
+## Amendment A35 -- `module.go` content negotiation capability gating
+
+**Status:** Agreed
+**Date:** 2026-03-11
+**Amends:** Decision 9 (content negotiation, Milestone 4)
+
+**Problem:** `contentNegotiator.negotiate()` returned `"text/html"` whenever the
+request `Accept` header contained `text/html`, regardless of whether the module
+had an HTML template registered (`n.html`). `writeContent` then unconditionally
+returned 406 for the `"text/html"` case. The result: a browser visiting any
+module without `forge.Templates(...)` -- including every JSON-only API module --
+received `406 Not Acceptable` instead of JSON.
+
+The same flaw existed for `"text/markdown"`: `negotiate()` returned it even when
+`n.md == false` (content type does not implement `Markdownable`), causing a 406
+rather than a JSON fallback.
+
+**Decision:** Gate each content-type branch in `negotiate()` on the corresponding
+capability flag:
+
+```go
+if n.html && strings.Contains(a, "text/html") {
+    return "text/html"
+}
+if n.md && strings.Contains(a, "text/markdown") {
+    return "text/markdown"
+}
+```
+
+`text/plain` is not gated -- it always works (falls back to stripped markdown or JSON).
+
+**Consequences:**
+- A browser visiting a JSON-only module now receives JSON (200) instead of 406
+- Modules with `forge.Templates(...)` are unaffected -- `n.html == true`
+- Modules with `Markdownable` are unaffected -- `n.md == true`
+- The `text/html` branch in `writeContent` is retained as a safety net (only
+  reachable if `n.html == true` but template rendering somehow fails)
+- No public API change; `contentNegotiator` and `negotiate()` are unexported
+- Two new integration tests: `TestIntegration_negotiateHTMLFallback` and
+  `TestIntegration_negotiateMarkdownFallback`
+- `example_test.go` unaffected
+- `go test ./...` green
+
+## Amendment A36 — `module.go` startup capability mismatch detection
+
+**Status:** Agreed
+**Date:** 2026-03-11
+**Amends:** Decision 9 (`module.go` option parsing and startup validation)
+
+**Problem:** Two option combinations silently produced empty outputs at runtime
+with no error or warning:
+
+1. `SitemapConfig{}` given but `T` does not implement `SitemapNode` (missing
+   `Head() forge.Head`). `regenerateSitemap` performs a type assertion on each
+   item and exits the loop on the first failure — `/{prefix}/sitemap.xml` is
+   always served empty. The `example/api` bug required live testing to discover.
+
+2. `AIIndex(LLMsTxtFull)` given but `T` does not implement `Markdownable`
+   (missing `Markdown() string`). `regenerateAI` skips the full-corpus path —
+   `/llms-full.txt` contains no body text. Silent, same root cause.
+
+Both are unambiguous programming errors: the developer requested a feature that
+requires an interface their type does not satisfy. The correct remedy is always
+to add the missing method — there is no valid use-case for a silently empty
+sitemap or AI corpus.
+
+**Decision:** Add two `panic` checks in `NewModule`, immediately after the
+existing `!repoFound` panic, consistent with the `getNodeFields` / `repoFound`
+pattern (programmer errors → panic at startup, never at request time):
+
+```go
+// A36: SitemapConfig requires T to implement SitemapNode.
+if m.sitemapCfg != nil {
+    if _, ok := any(proto).(SitemapNode); !ok {
+        panic(fmt.Sprintf(
+            "forge: %s has SitemapConfig but does not implement SitemapNode "+
+                "(add a Head() forge.Head method); sitemap would be silently empty",
+            typeName,
+        ))
+    }
+}
+// A36: AIIndex(LLMsTxtFull) requires T to implement Markdownable.
+if hasAIFeature(m.aiFeatures, LLMsTxtFull) && !m.neg.md {
+    panic(fmt.Sprintf(
+        "forge: %s has AIIndex(LLMsTxtFull) but does not implement Markdownable "+
+            "(add a Markdown() string method); /llms-full.txt would be silently empty",
+        typeName,
+    ))
+}
+```
+
+The `m.neg.md` flag is already set before option parsing by the existing
+`Markdownable` detection, so no extra type assertion is needed for the second check.
+
+**Consequences:**
+
+1. **Call-site syntax** — unchanged; no public API change. The new panics are
+   unreachable for correctly-written code.
+2. **README / examples** — all documented examples already satisfy the required
+   interfaces; no README change needed.
+3. **AI generation accuracy** — improved; the panic messages state exactly which
+   method to add, making correct code trivially recoverable.
+4. **Consistency** — matches `getNodeFields` and `!repoFound` patterns exactly.
+5. **Existing tests** — three test types used `SitemapConfig{}` without `Head()`:
+   `*testPost` (module_test.go) and `*testAIPost` (ai_test.go). Fixed by adding
+   `func (p *testPost) Head() Head` and `func (p *testAIPost) Head() Head`.
+   A new `testNoHeadPost` type (no `Head()`) serves as the intentional-failure
+   fixture for the A36 panic test.
+6. **New tests** — `TestNewModule_sitemapConfig_panicsWithoutSitemapNode` and
+   `TestNewModule_aiIndexLLMsFull_panicsWithoutMarkdownable` added to `module_test.go`.
+7. **No breaking change** — correctly-written code is unaffected.

@@ -3,7 +3,7 @@
 This document captures the long-term vision for Forge and Forge Cloud.
 It is an internal planning document, not intended for public distribution.
 
-Last updated: 2026-03-09
+Last updated: 2026-03-11
 
 ---
 
@@ -212,13 +212,37 @@ Close the remaining gaps between the open source framework and a hosted
 offering. This phase produces no Cloud product — it produces the
 infrastructure that makes Cloud possible.
 
-- `forge-pgx` integration tests against a real database
-- Webhooks: outbound HTTP calls on content lifecycle events (Signal-based)
-- `forge-admin`: web-based admin UI as a separate package
+Steps are ordered by dependency and practical value for forge-cms.dev,
+which serves as the primary real-world Forge deployment during this phase.
 
-`forge-admin` is the most significant piece of work in this phase. It is
-also the gateway to non-developer users and therefore to commercial viability.
-It is not a small task.
+**`forge-pgx` integration tests against a real database.**
+The foundation everything else rests on. SQLRepo is implemented but
+untested against a real database. This closes that gap.
+
+**Health endpoint + error reporter interface.**
+`GET /_health` for load balancers and uptime monitors. A `forge.ErrorReporter`
+interface that third-party error tracking tools (or custom webhooks) can
+implement and plug in via `app.Use(...)`. Needed for forge-cms.dev from
+day one in production.
+
+**Third-party analytics script on forge-cms.dev.**
+Privacy-first, cookieless, EU-hosted — no consent banner required.
+A practical interim measure while native analytics is not yet built.
+Replaced by `forge.Analytics` when ready.
+
+**Webhooks.**
+Outbound HTTP calls on content lifecycle events, Signal-based. Enables
+search indexing, CDN invalidation, and notification integrations.
+
+**`forge.Analytics` middleware.**
+Native cookieless analytics backed by `forge.DB`. Aggregated page views,
+referrers, and user agent data — no personal data, no consent required.
+Replaces the third-party analytics script on forge-cms.dev when complete.
+
+**`forge-admin`: web-based admin UI.**
+The most significant piece of work in this phase and the gateway to
+non-developer users — and therefore to commercial viability. Not a small
+task. Sequenced last because everything above informs what it needs to do.
 
 ### Phase 3 — Forge Cloud private beta
 

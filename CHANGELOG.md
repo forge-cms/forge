@@ -23,6 +23,53 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.4] — 2026-03-11
+
+Fenced code block rendering, content negotiation capability gating (A35),
+startup capability mismatch detection (A36), and example fixes. `forge_markdown` renders ` ``` `…` ``` ` fences as `<pre><code>`.
+`negotiate()` now falls back to JSON instead of 406 when a client requests
+`text/html` or `text/markdown` but the module lacks templates or `Markdownable`.
+Both examples gain full working links on their welcome pages. No breaking API changes.
+
+### Fixed
+
+- `forge_markdown` / `forgeMarkdown` did not handle fenced code blocks; content
+  between ` ``` ` fences was emitted as plain paragraph text; now rendered as
+  `<pre><code>` with HTML escaping applied (XSS-safe)
+- `module.go` content negotiation (`negotiate()`): returned `text/html` or
+  `text/markdown` even when the module lacked templates / `Markdownable`; browsers
+  and `Accept: text/html` clients received 406 Not Acceptable on JSON-only modules;
+  fixed by gating on `n.html` and `n.md` capability flags instead of falling back
+  to unsupported formats (Amendment A35)
+- `example/docs`: module had no `SitemapConfig` option; `/docs/sitemap.xml` returned
+  404; `forge.SitemapConfig{}` added to the module
+- `example/docs/templates/index.html`: footer linked to `/docs/sitemap.xml`
+  (404); corrected to `/sitemap.xml` (aggregate index)
+- `example/api`: welcome page links to `/llms.txt`, `/llms-full.txt`,
+  `/resources/sitemap.xml`, `/resources/feed.xml`, and `/robots.txt` returned
+  404 or 406; module now includes `SitemapConfig{}`, `Feed(FeedConfig{...})`,
+  `AIIndex(LLMsTxt, LLMsTxtFull)` options and `app.SEO(&RobotsConfig{Sitemaps: true})`
+- `example/api`: `Resource` lacked `Head() Head`, so it did not satisfy
+  `SitemapNode`; `regenerateSitemap` exited early; `/resources/sitemap.xml`
+  returned 404; `Head()` added returning `forge.Head{Title: r.Title}`
+- `example/api`: `Redirects(From("/resources/go-spec"), ...)` was registered as a
+  fallback at `GET /`, but `GET /resources/{slug}` matched first; fixed by adding
+  an explicit `app.Handle("GET /resources/go-spec", http.RedirectHandler(..., 301))`
+  so the fixed-path pattern takes mux priority over the wildcard
+
+### Added
+
+- `module.go` (`NewModule`): two startup panics detect capability mismatches before
+  any request is served (Amendment A36):
+  - `SitemapConfig{}` given but `T` does not implement `SitemapNode` (missing
+    `Head() forge.Head`) → panic with actionable message; previously `regenerateSitemap`
+    exited silently and `/{prefix}/sitemap.xml` was always empty
+  - `AIIndex(LLMsTxtFull)` given but `T` does not implement `Markdownable` (missing
+    `Markdown() string`) → panic with actionable message; previously `/llms-full.txt`
+    contained empty entries silently
+
+---
+
 ## [1.0.3] — 2026-03-11
 
 Startup rebuild for derived content. Sitemap fragments, RSS feeds, and AI index

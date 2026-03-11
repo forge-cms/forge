@@ -16,10 +16,21 @@ import (
 
 // testPost is a minimal content type for Module tests.
 // It embeds Node (providing ID, Slug, Status) and has a required Title field.
+// It implements [Headable] (and therefore [SitemapNode]) so it can be used
+// with SitemapConfig options in integration tests.
 type testPost struct {
 	Node
 	Title string `forge:"required"`
 	Body  string
+}
+
+func (p *testPost) Head() Head { return Head{Title: p.Title} }
+
+// testNoHeadPost is a minimal content type that intentionally does NOT
+// implement [Headable] or [SitemapNode]. Used only in A36 startup panic tests.
+type testNoHeadPost struct {
+	Node
+	Title string `forge:"required"`
 }
 
 // testMDPost is a testPost that also implements [Markdownable].
@@ -339,9 +350,12 @@ func TestModuleContentNegotiationMarkdownUnsupported(t *testing.T) {
 	r.SetPathValue("slug", p.Slug)
 	m.showHandler(w, r)
 
-	// text/markdown unsupported → 406 Not Acceptable.
-	if w.Code != http.StatusNotAcceptable {
-		t.Errorf("status = %d; want 406", w.Code)
+	// text/markdown unsupported (n.md == false) → JSON fallback (A35).
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d; want 200 (JSON fallback, A35)", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q; want application/json", ct)
 	}
 }
 
@@ -356,9 +370,12 @@ func TestModuleContentNegotiationHTML(t *testing.T) {
 	r.SetPathValue("slug", p.Slug)
 	m.showHandler(w, r)
 
-	// No templates registered in Step 10 → 406.
-	if w.Code != http.StatusNotAcceptable {
-		t.Errorf("status = %d; want 406 (no templates registered)", w.Code)
+	// No templates registered → JSON fallback, not 406 (A35).
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d; want 200 (JSON fallback, A35)", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q; want application/json", ct)
 	}
 }
 
@@ -618,4 +635,48 @@ func BenchmarkModuleRequest(b *testing.B) {
 		r.SetPathValue("slug", "bench-post")
 		m.showHandler(w, r)
 	}
+}
+
+// — A36 startup capability mismatch detection —————————————————————————————
+
+// TestNewModule_sitemapConfig_panicsWithoutSitemapNode verifies that NewModule
+// panics at startup when SitemapConfig is given but T does not implement
+// SitemapNode (missing Head() forge.Head method). (Amendment A36)
+func TestNewModule_sitemapConfig_panicsWithoutSitemapNode(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic but NewModule did not panic")
+		}
+		msg, _ := r.(string)
+		if !strings.Contains(msg, "SitemapNode") {
+			t.Errorf("panic message %q missing \"SitemapNode\"", msg)
+		}
+		if !strings.Contains(msg, "testNoHeadPost") {
+			t.Errorf("panic message %q missing type name", msg)
+		}
+	}()
+	repo := NewMemoryRepo[*testNoHeadPost]()
+	NewModule((*testNoHeadPost)(nil), Repo(repo), SitemapConfig{})
+}
+
+// TestNewModule_aiIndexLLMsFull_panicsWithoutMarkdownable verifies that
+// NewModule panics at startup when AIIndex(LLMsTxtFull) is given but T does
+// not implement Markdownable (missing Markdown() string method). (Amendment A36)
+func TestNewModule_aiIndexLLMsFull_panicsWithoutMarkdownable(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic but NewModule did not panic")
+		}
+		msg, _ := r.(string)
+		if !strings.Contains(msg, "Markdownable") {
+			t.Errorf("panic message %q missing \"Markdownable\"", msg)
+		}
+		if !strings.Contains(msg, "testPost") {
+			t.Errorf("panic message %q missing type name", msg)
+		}
+	}()
+	repo := NewMemoryRepo[*testPost]()
+	NewModule((*testPost)(nil), Repo(repo), AIIndex(LLMsTxtFull))
 }

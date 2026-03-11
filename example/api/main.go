@@ -98,6 +98,21 @@ type Resource struct {
 	Tags        []string
 }
 
+// Head implements [forge.Headable] so Resource satisfies [forge.SitemapNode].
+// Forge calls Head() when building the sitemap fragment at /resources/sitemap.xml.
+// Returning a zero Canonical is fine — regenerateSitemap derives it from
+// Config.BaseURL + slug automatically.
+func (r *Resource) Head() forge.Head {
+	return forge.Head{Title: r.Title}
+}
+
+// Markdown returns a plain-text summary of the resource suitable for AI index.
+// Implementing this method makes Resource satisfy [forge.Markdownable], which
+// enables the /llms-full.txt corpus endpoint via AIIndex(LLMsTxtFull).
+func (r *Resource) Markdown() string {
+	return "# " + r.Title + "\n\n" + r.Description + "\n\nURL: " + r.URL
+}
+
 func main() {
 	repo := forge.NewMemoryRepo[*Resource]()
 	seed(repo)
@@ -128,6 +143,18 @@ func main() {
 			}
 			return nil
 		}),
+
+		// Forge: SitemapConfig{} registers a sitemap fragment at /resources/sitemap.xml.
+		// The app-level sitemap index at /sitemap.xml aggregates all module fragments.
+		forge.SitemapConfig{},
+
+		// Forge: Feed(FeedConfig{}) registers an RSS 2.0 feed at /resources/feed.xml.
+		forge.Feed(forge.FeedConfig{Title: "Forge API — Resources", Description: "Curated Go community resources"}),
+
+		// Forge: AIIndex registers AI discovery endpoints.
+		//   /llms.txt          — compact content index (llmstxt.org format)
+		//   /llms-full.txt     — full markdown corpus (requires Markdownable)
+		forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull),
 	)
 
 	app := forge.New(forge.MustConfig(forge.Config{
@@ -153,15 +180,23 @@ func main() {
 	)
 
 	// Forge: Redirects(From("/resources/go-spec"), "/resources/go-language-spec")
-	// registers a 301 prefix redirect so clients that cached the old slug are
-	// forwarded automatically. The redirect lives in the app's RedirectStore and
-	// is also visible at /.well-known/redirects.json for programmatic consumption.
+	// registers the 301 rule in the RedirectStore so it appears in the manifest
+	// at /.well-known/redirects.json. The explicit Handle below registers the same
+	// redirect as a fixed mux route so it takes priority over GET /resources/{slug}.
 	app.Content(m,
 		forge.Redirects(
 			forge.From("/resources/go-spec"),
 			"/resources/go-language-spec",
 		),
 	)
+
+	// Explicit route so the redirect fires before GET /resources/{slug}.
+	// Fixed-path patterns beat wildcard patterns in Go 1.22's mux.
+	app.Handle("GET /resources/go-spec", http.RedirectHandler("/resources/go-language-spec", http.StatusMovedPermanently))
+
+	// Forge: SEO(&RobotsConfig{Sitemaps: true}) registers GET /robots.txt and
+	// appends the sitemap index URL to its Sitemap: directives.
+	app.SEO(&forge.RobotsConfig{Sitemaps: true})
 
 	// Welcome page — inline HTML so the API example stays template-free.
 	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +249,11 @@ footer a{color:#2563eb}
 	log.Println("  Resources:           http://localhost:8082/resources")
 	log.Println("  Legacy redirect:     http://localhost:8082/resources/go-spec  → 301")
 	log.Println("  Redirects manifest:  http://localhost:8082/.well-known/redirects.json")
+	log.Println("  robots.txt:          http://localhost:8082/robots.txt")
+	log.Println("  Sitemap:             http://localhost:8082/resources/sitemap.xml")
+	log.Println("  RSS feed:            http://localhost:8082/resources/feed.xml")
+	log.Println("  AI index:            http://localhost:8082/llms.txt")
+	log.Println("  AI corpus:           http://localhost:8082/llms-full.txt")
 
 	if err := app.Run(":8082"); err != nil {
 		log.Fatal(err)

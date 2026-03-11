@@ -81,6 +81,7 @@ func forgeDate(t time.Time) string {
 //   - " `code` " → <code>code</code>
 //   - `[text](url)` → <a href="url">text</a>
 //   - `- item` or `* item` → <ul><li>item</li></ul>
+//   - ` ```lang ` … ` ``` ` → <pre><code>…</code></pre>
 //   - Blank lines separate paragraphs
 //
 // Template usage:
@@ -92,6 +93,8 @@ func forgeMarkdown(s string) template.HTML {
 	var out strings.Builder
 	var paraLines []string
 	var listItems []string
+	var codeLines []string
+	inCode := false
 
 	flushPara := func() {
 		if len(paraLines) == 0 {
@@ -117,7 +120,36 @@ func forgeMarkdown(s string) template.HTML {
 		listItems = listItems[:0]
 	}
 
+	flushCode := func() {
+		if len(codeLines) == 0 {
+			return
+		}
+		out.WriteString("<pre><code>")
+		out.WriteString(template.HTMLEscapeString(strings.Join(codeLines, "\n")))
+		out.WriteString("</code></pre>\n")
+		codeLines = codeLines[:0]
+	}
+
 	for _, line := range lines {
+		// Fenced code block toggle.
+		if strings.HasPrefix(line, "```") {
+			if inCode {
+				flushCode()
+				inCode = false
+			} else {
+				flushPara()
+				flushList()
+				inCode = true
+			}
+			continue
+		}
+
+		// Inside a code block — buffer verbatim, no inline processing.
+		if inCode {
+			codeLines = append(codeLines, line)
+			continue
+		}
+
 		// Heading.
 		if m := reMdHeading.FindStringSubmatch(line); m != nil {
 			flushPara()
@@ -146,6 +178,10 @@ func forgeMarkdown(s string) template.HTML {
 		paraLines = append(paraLines, line)
 	}
 
+	// Flush anything still open (unterminated fence treated as code).
+	if inCode {
+		flushCode()
+	}
 	flushList()
 	flushPara()
 
