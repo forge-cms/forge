@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+// — rebuilder ———————————————————————————————————————————————————————————
+
+// rebuilder is implemented by [Module][T] to support startup regeneration of
+// all derived content (sitemap fragment, AI index, RSS feed) from the current
+// repository state. [App.Handler] calls rebuildAll once so that items inserted
+// directly into the repository (e.g. seed data, fixtures) appear in sitemaps
+// and feeds without requiring a manual publish event.
+type rebuilder interface {
+	rebuildAll(ctx Context)
+}
+
 // — contentNegotiator —————————————————————————————————————————————————————
 
 // contentNegotiator carries the pre-compiled content-type capabilities for a
@@ -816,7 +827,18 @@ func isVisible(item any, user User) bool {
 	return user.HasRole(Author)
 }
 
-// — debounce helper ———————————————————————————————————————————————————————
+// — rebuild + debounce helpers ————————————————————————————————————————————
+
+// rebuildAll triggers immediate regeneration of the sitemap fragment, AI index,
+// and RSS feed for this module from the current repository state. Called once at
+// startup by [App.Handler] so that items already present in the repository
+// (seed data, pre-loaded fixtures) are reflected in all derived content before
+// the server begins accepting requests. Implements [rebuilder].
+func (m *Module[T]) rebuildAll(ctx Context) {
+	m.regenerateSitemap(ctx)
+	m.regenerateAI(ctx)
+	m.regenerateFeed(ctx)
+}
 
 func (m *Module[T]) triggerSitemap(ctx Context) {
 	m.debounceMu.Lock()

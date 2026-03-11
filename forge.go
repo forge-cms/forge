@@ -143,6 +143,8 @@ type App struct {
 	redirectManifestReg    bool                // true once GET /.well-known/redirects.json is registered
 	redirectManifestOpts   []Option            // options for the redirect manifest handler (e.g. ManifestAuth)
 	schedulerModules       []schedulableModule // modules that implement scheduled publishing
+	rebuilderModules       []rebuilder         // modules with derived content (sitemap, feed, AI)
+	rebuildDone            bool                // true once startup rebuildAll goroutine is launched
 }
 
 // New creates a new [App] from cfg.
@@ -250,6 +252,9 @@ func (a *App) Content(v any, opts ...Option) {
 		if sm, ok := r.(schedulableModule); ok {
 			a.schedulerModules = append(a.schedulerModules, sm)
 		}
+		if rb, ok := r.(rebuilder); ok {
+			a.rebuilderModules = append(a.rebuilderModules, rb)
+		}
 		return
 	}
 	m := NewModule(v, opts...)
@@ -325,6 +330,20 @@ func (a *App) Handler() http.Handler {
 	}
 	if len(a.templateModules) > 0 {
 		bindErrorTemplates(a.templateModules)
+	}
+	// A34: trigger a one-shot startup rebuild of all derived content (sitemap,
+	// feed, AI index) so that items already in the repository at server start
+	// (seed data, pre-loaded fixtures) are reflected before the first request.
+	if !a.rebuildDone && len(a.rebuilderModules) > 0 {
+		a.rebuildDone = true
+		u, _ := url.Parse(a.cfg.BaseURL)
+		ctx := NewBackgroundContext(u.Hostname())
+		modules := a.rebuilderModules
+		go func() {
+			for _, rb := range modules {
+				rb.rebuildAll(ctx)
+			}
+		}()
 	}
 	mws := a.middleware
 	if a.cfg.HTTPS {

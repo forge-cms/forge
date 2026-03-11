@@ -45,6 +45,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A31 | `templates.go` error handling gaps | Agreed | 2026-03-11 |
 | A32 | `middleware.go` error handling gaps | Agreed | 2026-03-11 |
 | A33 | `module.go` route mounting order bug (sitemap + feed) | Agreed | 2026-03-11 |
+| A34 | `module.go` + `forge.go` startup rebuild for derived content | Agreed | 2026-03-11 |
 
 ---
 
@@ -2498,3 +2499,45 @@ always evaluate to `false`. Neither `GET /{prefix}/sitemap.xml` nor `GET /{prefi
 - No public API change; all module options unchanged
 - `example_test.go` unaffected
 - AI routes (`/{prefix}/{slug}/aidoc`) are not affected -- `aiFeatures` is set at `NewModule` time, not via a post-Register injection
+
+
+---
+
+## Amendment A34 -- `module.go` + `forge.go` startup rebuild for derived content
+
+**Status:** Agreed
+**Date:** 2026-03-11
+**Amends:** Decision 9 (sitemap), Decision 16 (module lifecycle)
+
+**Problem:** Sitemap fragments, RSS feeds, and AI index entries are generated
+by the module debouncer, which fires only when a content item transitions through
+the create/update/publish signal pipeline. Items inserted directly into a
+Repository (seed data, pre-loaded fixtures, SQLRepo data from a previous run)
+are never signalled, so sitemaps and feeds are empty until the first real publish
+event after server start. This makes the example apps and any real app with
+existing data appear broken on first run.
+
+**Decision:** Add startup regeneration:
+
+1. `module.go`: define internal `rebuilder` interface with `rebuildAll(ctx Context)`
+2. `module.go`: implement `rebuildAll` on `Module[T]` -- calls
+   `regenerateSitemap`, `regenerateAI`, `regenerateFeed` in sequence
+3. `forge.go`: collect `rebuilder` modules in `App.Content` alongside existing
+   interface checks; add `rebuilderModules []rebuilder` + `rebuildDone bool` to
+   `App`
+4. `forge.go`: in `App.Handler()`, after all stores are set, launch a single
+   goroutine that calls `rebuildAll` on each module (guarded by `rebuildDone`)
+
+The goroutine is used so that `App.Handler()` is not blocked by repository
+queries at startup. The `rebuildDone` guard ensures the goroutine is launched
+exactly once even if `Handler()` is called multiple times.
+
+**Consequences:**
+- Sitemap fragments, feeds, and AI index are populated from existing repository
+  data before the server accepts its first request (in practice -- the goroutine
+  races with the first request, but sitemaps are populated within milliseconds)
+- No public API change; `rebuildAll` / `rebuilder` are unexported
+- Any app that seeds data before `app.Run()` now gets correct sitemap + feed
+  output on first page load without needing a manual publish event
+- `example_test.go` unaffected
+- `go test ./...` green with no changes to test files

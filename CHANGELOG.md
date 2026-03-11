@@ -23,6 +23,23 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.3] — 2026-03-11
+
+Startup rebuild for derived content. Sitemap fragments, RSS feeds, and AI index
+entries are now populated from existing repository data at server start, so apps
+with seed data or pre-loaded fixtures no longer require a manual publish event
+to see correct output. No breaking API changes. (Amendment A34)
+
+### Fixed
+
+- `Module[T]` sitemap, feed, and AI index were only populated by the debouncer
+  after a create/update/publish signal; items inserted directly into the
+  repository (seed data, fixtures) never triggered regeneration; `App.Handler`
+  now launches a one-shot goroutine that calls `rebuildAll` on every module
+  after all stores are wired up (A34)
+
+---
+
 ## [1.0.2] — 2026-03-11
 
 Route mounting order fix. `GET /{prefix}/sitemap.xml` and `GET /{prefix}/feed.xml`
