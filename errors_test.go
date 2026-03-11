@@ -155,8 +155,9 @@ func TestWriteError(t *testing.T) {
 		err            error
 		wantStatus     int
 		wantCode       string
-		wantFields     int  // expected number of field errors in response
-		wantNoInternal bool // body must not expose the raw error message
+		wantFields     int    // expected number of field errors in response
+		wantNoInternal bool   // body must not expose the raw error message
+		wantNoMessage  string // body message must not contain this substring
 	}{
 		{
 			name:       "ErrNotFound",
@@ -209,6 +210,26 @@ func TestWriteError(t *testing.T) {
 			wantCode:       "internal_error",
 			wantNoInternal: true,
 		},
+		{
+			name:       "wrapped_sentinel_errors_as_unwraps",
+			err:        fmt.Errorf("storage: %w", ErrNotFound),
+			wantStatus: 404,
+			wantCode:   "not_found",
+		},
+		{
+			name:          "5xx_forge_error_suppresses_public_message",
+			err:           newSentinel(500, "custom_5xx", "custom five-hundred detail"),
+			wantStatus:    500,
+			wantCode:      "internal_error",
+			wantNoMessage: "custom five-hundred detail",
+		},
+		{
+			name:       "wrapped_validation_error_includes_fields",
+			err:        fmt.Errorf("hook: %w", Err("email", "invalid format")),
+			wantStatus: 422,
+			wantCode:   "validation_failed",
+			wantFields: 1,
+		},
 	}
 
 	for _, tc := range tests {
@@ -237,6 +258,9 @@ func TestWriteError(t *testing.T) {
 			}
 			if tc.wantNoInternal && strings.Contains(b.Error.Message, "database") {
 				t.Errorf("internal error detail leaked in message: %q", b.Error.Message)
+			}
+			if tc.wantNoMessage != "" && strings.Contains(b.Error.Message, tc.wantNoMessage) {
+				t.Errorf("suppressed message leaked in response: %q", b.Error.Message)
 			}
 		})
 	}
@@ -289,5 +313,67 @@ func TestWriteError_HTML(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Not found") {
 		t.Errorf("HTML body missing public message: %q", rec.Body.String())
+	}
+}
+
+// TestWriteError_RequestID_responseHeader verifies that the X-Request-ID
+// already present on the response header takes priority over the value
+// in the request header. This mirrors the RequestLogger+ContextFrom path
+// where the ID is set on the response before any handler runs.
+func TestWriteError_RequestID_responseHeader(t *testing.T) {
+	const responseID = "from-response-header"
+	const requestID = "from-request-header"
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Request-ID", requestID)
+	rec := httptest.NewRecorder()
+
+	// Simulate what ContextFrom/RequestLogger sets on the response writer.
+	rec.Header().Set("X-Request-ID", responseID)
+
+	WriteError(rec, req, ErrNotFound)
+
+	if got := rec.Header().Get("X-Request-ID"); got != responseID {
+		t.Errorf("X-Request-ID = %q, want response-header value %q", got, responseID)
+	}
+
+	var b struct {
+		Error struct {
+			RequestID string `json:"request_id"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.Error.RequestID != responseID {
+		t.Errorf("body request_id = %q, want %q", b.Error.RequestID, responseID)
+	}
+}
+
+// TestSentinels_new verifies the four sentinels added in Amendment A29.
+func TestSentinels_new(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    Error
+		status int
+		code   string
+	}{
+		{"ErrBadRequest", ErrBadRequest, 400, "bad_request"},
+		{"ErrNotAcceptable", ErrNotAcceptable, 406, "not_acceptable"},
+		{"ErrRequestTooLarge", ErrRequestTooLarge, 413, "request_too_large"},
+		{"ErrTooManyRequests", ErrTooManyRequests, 429, "too_many_requests"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.err.HTTPStatus(); got != tc.status {
+				t.Errorf("HTTPStatus() = %d, want %d", got, tc.status)
+			}
+			if got := tc.err.Code(); got != tc.code {
+				t.Errorf("Code() = %q, want %q", got, tc.code)
+			}
+			if tc.err.Public() == "" {
+				t.Error("Public() must not be empty")
+			}
+		})
 	}
 }

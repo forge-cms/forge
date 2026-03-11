@@ -74,7 +74,7 @@ func Recoverer() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					buf := make([]byte, 4096)
+					buf := make([]byte, 32*1024)
 					n := runtime.Stack(buf, false)
 					slog.ErrorContext(r.Context(), "forge: panic recovered",
 						"panic", fmt.Sprintf("%v", rec),
@@ -286,7 +286,7 @@ func RateLimit(n int, d time.Duration, opts ...Option) func(http.Handler) http.H
 			ok, wait := rl.allow(ip)
 			if !ok {
 				w.Header().Set("Retry-After", fmt.Sprintf("%d", int(wait.Seconds())+1))
-				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				WriteError(w, r, ErrTooManyRequests)
 				return
 			}
 			next.ServeHTTP(w, r)

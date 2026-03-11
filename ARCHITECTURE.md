@@ -40,6 +40,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-07 | Milestone 8 Step 1: `scheduler.go` implemented — `schedulableModule` interface, `Scheduler` struct, `newScheduler`, `Start(ctx)`, `Wait()`, `tick()` (aggregates min next across modules), `run(ctx)` adaptive timer with 60s fallback, `nextDur` helper. Amendment A23 (`node.go`): `db` struct tags added to `PublishedAt`, `ScheduledAt`, `CreatedAt`, `UpdatedAt` fixing `SQLRepo` column mapping. Amendment A24 (`context.go`): `NewBackgroundContext(siteName string) Context` for long-lived goroutine use. Amendment A25 (`module.go`): `setNodeStatus`/`setNodeTime`/`setNodeTimePtr` reflection helpers + `Module[T].processScheduled` — queries Scheduled items, publishes overdue, fires `AfterPublish`, triggers sitemap/feed debounce. Amendment A26 (`forge.go`): `schedulerModules []schedulableModule` field, `Content()` appends modules, `Run()` starts scheduler before `ListenAndServe` and stops it (via `defer`) after `srv.Shutdown`. `scheduler_test.go`: 7 tests covering overdue publish, skip-not-yet-due, AfterPublish signal, mixed items, adaptive next, start/stop lifecycle, and `NewBackgroundContext`. |
 | 2026-03-07 | Milestone 8 Step 2: `integration_full_test.go` extended — G19–20 cross-milestone groups appended: G19 (M8 + M1) `TestFull_scheduler_publishesOverdue` — direct `processScheduled` call on a `MemoryRepo`-backed module, verifies past-due item → Published (Status, PublishedAt, ScheduledAt nil), future item unchanged, returned `next` == future ScheduledAt, AfterPublish signal fires once within 500ms; G20 (M8 + M2 + M3) `TestFull_scheduler_appWiring` — `App.Content()` wires module into `schedulerModules` (A26), `newScheduler` + `tick()` publishes overdue item, future item stays Scheduled, adaptive `next` returned correctly. README: Scheduled publishing badge → ✅ Available. Milestone 8 complete. |
 | 2026-03-08 | Amendment A28: `resolveHead(ctx Context, item T) Head` added to `Module[T]` in `module.go` — priority: HeadFunc > Headable > zero Head. Four duplicated `headFunc` blocks replaced in `regenerateFeed`, `regenerateAI`, `aiDocHandler` (`module.go`), and `renderShowHTML` (`templates.go`). `Headable` godoc in `head.go` updated — `Module[T]` now calls `Head()` automatically in HTML rendering, sitemaps, RSS feeds, and AI endpoints without requiring an explicit `HeadFunc` option. |
+| 2026-03-11 | Error handling audit and hardening (Amendments A29–A32, v1.0.1): `ERROR_HANDLING.md` created as authoritative strategy document. New sentinels `ErrBadRequest`, `ErrNotAcceptable`, `ErrRequestTooLarge`, `ErrTooManyRequests` added to `errors.go`. `errorTemplateLookup` protected with `sync.RWMutex` via `setErrorTemplateLookup`/`runErrorTemplateLookup` helpers. Direct type assertion in `respond()` replaced with `errors.As`. `writeContent` in `module.go` receives `r *http.Request`; 406 and 400/413 error paths use `WriteError`. `renderListHTML`/`renderShowHTML` in `templates.go` use `WriteError` for nil-template 406. `RateLimit` in `middleware.go` uses `WriteError` for 429. `Recoverer` stack buffer increased from 4096 to 32 KB. All `http.Error` bypass sites eliminated. Four missing test cases added to `errors_test.go`. `ARCHITECTURE.md` — "Error handling pipeline" section added. `copilot-instructions.md` — error handling rule added to non-negotiable rules. |
 | 2026-03-08 | Milestone 9: v1.0.0 stabilisation complete. Coverage raised to 87.5% (target ≥85%). `benchmarks_test.go`: 17 benchmarks across M1–M8 hot paths (see BENCHMARKS.md). Godoc pass on `type App` + all `App.*` methods (A18–A26) and `SQLRepo[T]` parity. `example/blog/`, `example/docs/`, `example/api/` standalone runnable examples added (`go.work` updated). Amendment A27: `Authenticate(auth AuthFunc) func(http.Handler) http.Handler` added to `middleware.go` — populates `Context.User()` via request context; pairs with `BearerHMAC`/`CookieSession`/`AnyAuth`. `CHANGELOG.md`: Keep a Changelog format, v0.1.0–v1.0.0, API stability promise + version policy. `integration_full_test.go`: G21 (M1+M2+M3+M5+M7+M8) full v1.0.0 smoke test — scheduler promotes overdue item, aggregate sitemap + feed + AI index + redirects all verified. Known gap: `App.Content()` calls `r.Register(mux)` before `setFeedStore`/`setSitemap`, so per-module `/posts/feed.xml` and `/posts/sitemap.xml` are not registered via the App path (Amendment A28 candidate); per-module feed tested directly in G11/G12. Milestone 9 complete — v1.0.0 released. |
 
 ---
@@ -241,6 +242,62 @@ HTTP Request
     ▼
 HTTP Response  (X-Request-ID always set)
 ```
+
+---
+
+## Error handling pipeline
+
+See `ERROR_HANDLING.md` for the full strategy. This section summarises the
+architectural contracts that are enforced across all files.
+
+### The single pipeline rule
+
+Every error-to-HTTP translation goes through `WriteError(w, r, err)`. No file
+may call `http.Error`, write a raw status, or format an error response by hand.
+This includes middleware and helpers that have access to `http.ResponseWriter`
+and `*http.Request`.
+
+### Error type dispatch (inside `WriteError`)
+
+```
+err
+ ├── errors.As(*ValidationError)  →  422 + fields array
+ ├── errors.As(forge.Error) 4xx   →  status from error, public message
+ ├── errors.As(forge.Error) 5xx   →  logged + generic 500
+ └── anything else                →  logged + generic 500
+```
+
+`errors.As` is required at every inspection point — never direct type assertions.
+
+### Sentinel registry
+
+All sentinels live in `errors.go`. Call sites reference the package-level variable.
+`newSentinel` must never be called outside `errors.go`.
+
+| Variable | Status | Code |
+|----------|--------|------|
+| `ErrBadRequest` | 400 | `bad_request` |
+| `ErrUnauth` | 401 | `unauthorized` |
+| `ErrForbidden` | 403 | `forbidden` |
+| `ErrNotFound` | 404 | `not_found` |
+| `ErrNotAcceptable` | 406 | `not_acceptable` |
+| `ErrConflict` | 409 | `conflict` |
+| `ErrGone` | 410 | `gone` |
+| `ErrRequestTooLarge` | 413 | `request_too_large` |
+| `ErrTooManyRequests` | 429 | `too_many_requests` |
+
+### `errorTemplateLookup` — one-shot initialisation
+
+`errorTemplateLookup` is guarded by `sync.Once`. It is set exactly once by
+`App.Handler()`. Subsequent calls to `App.Handler()` are no-ops for this
+variable. Reads in `respond()` are safe with no additional locking.
+
+### X-Request-ID contract
+
+- Set by `ContextFrom` on every request (UUID v7 if absent from inbound header)
+- `RequestLogger` must be the outermost middleware to ensure it is set before any handler runs
+- `WriteError` reads from the response header first, then falls back to the request header
+- Appears in: response header, JSON error body, every `slog.Error` call
 
 ---
 

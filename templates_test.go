@@ -126,7 +126,7 @@ func TestTemplates_noIndexMeta(t *testing.T) {
 
 func TestTemplates_errorPage_custom(t *testing.T) {
 	orig := errorTemplateLookup
-	defer func() { errorTemplateLookup = orig }()
+	defer func() { setErrorTemplateLookup(orig) }()
 
 	dir := t.TempDir()
 	writeTplFile(t, dir, "list.html", `<p>list</p>`)
@@ -143,7 +143,7 @@ func TestTemplates_errorPage_custom(t *testing.T) {
 	}
 	bindErrorTemplates([]templateParser{m})
 
-	tpl := errorTemplateLookup(404)
+	tpl := runErrorTemplateLookup(404)
 	if tpl == nil {
 		t.Fatal("expected non-nil template for status 404, got nil")
 	}
@@ -162,8 +162,8 @@ func TestTemplates_errorPage_custom(t *testing.T) {
 
 func TestTemplates_errorPage_fallback(t *testing.T) {
 	orig := errorTemplateLookup
-	defer func() { errorTemplateLookup = orig }()
-	errorTemplateLookup = nil
+	defer func() { setErrorTemplateLookup(orig) }()
+	setErrorTemplateLookup(nil)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/missing", nil)

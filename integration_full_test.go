@@ -704,7 +704,7 @@ func TestFull_sitemapAppendsInRobots(t *testing.T) {
 // errors/404.html, the first registered module's template is used.
 func TestFull_errorTemplate_firstMatch(t *testing.T) {
 	origLookup := errorTemplateLookup
-	t.Cleanup(func() { errorTemplateLookup = origLookup })
+	t.Cleanup(func() { setErrorTemplateLookup(origLookup) })
 
 	postDir := intTmpDir(t, `<p>list</p>`, `<p>show</p>`)
 	pageDir := intTmpDir(t, `<p>list</p>`, `<p>show</p>`)
@@ -737,7 +737,7 @@ func TestFull_errorTemplate_firstMatch(t *testing.T) {
 // no errors/ directory, the second module's error template is used.
 func TestFull_errorTemplate_fallsThrough(t *testing.T) {
 	origLookup := errorTemplateLookup
-	t.Cleanup(func() { errorTemplateLookup = origLookup })
+	t.Cleanup(func() { setErrorTemplateLookup(origLookup) })
 
 	postDir := intTmpDir(t, `<p>list</p>`, `<p>show</p>`)
 	// postDir intentionally has no errors/ subdirectory.

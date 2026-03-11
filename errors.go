@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // Error is implemented by all Forge errors. Callers should use errors.As to
@@ -57,6 +58,18 @@ var (
 
 	// ErrConflict indicates a state conflict (e.g. duplicate slug). → 409
 	ErrConflict = newSentinel(http.StatusConflict, "conflict", "Conflict")
+
+	// ErrBadRequest indicates the request is malformed or unparseable. → 400
+	ErrBadRequest = newSentinel(http.StatusBadRequest, "bad_request", "Bad request")
+
+	// ErrNotAcceptable indicates the requested content type is not supported. → 406
+	ErrNotAcceptable = newSentinel(http.StatusNotAcceptable, "not_acceptable", "Not acceptable")
+
+	// ErrRequestTooLarge indicates the request body exceeds the allowed size. → 413
+	ErrRequestTooLarge = newSentinel(http.StatusRequestEntityTooLarge, "request_too_large", "Request too large")
+
+	// ErrTooManyRequests indicates the client has exceeded the rate limit. → 429
+	ErrTooManyRequests = newSentinel(http.StatusTooManyRequests, "too_many_requests", "Too many requests")
 )
 
 // fieldError holds a single field-level validation failure. Unexported — only
@@ -180,26 +193,51 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// errorTemplateLookup is set by [App.Handler] when modules with template
-// directories are registered. It searches for errors/{status}.html in each
-// registered module's template directory and returns the first match.
+// errorTemplateLookup is set by [bindErrorTemplates] when modules with
+// template directories are registered. It searches for errors/{status}.html
+// in each registered module's template directory and returns the first match.
 // When nil or returning nil, respond falls back to [htmlErrorPage].
-var errorTemplateLookup func(status int) *template.Template
+//
+// errorTemplateLookupMu guards concurrent reads (request goroutines) against
+// the single write (App.Handler start-up). Use setErrorTemplateLookup to
+// write and runErrorTemplateLookup to read.
+var (
+	errorTemplateLookupMu sync.RWMutex
+	errorTemplateLookup   func(status int) *template.Template
+)
+
+// setErrorTemplateLookup stores fn under the write lock. Called once by
+// [bindErrorTemplates] during [App.Handler] start-up.
+func setErrorTemplateLookup(fn func(int) *template.Template) {
+	errorTemplateLookupMu.Lock()
+	errorTemplateLookup = fn
+	errorTemplateLookupMu.Unlock()
+}
+
+// runErrorTemplateLookup executes the lookup function (if set) under the
+// read lock and returns the matching template, or nil.
+func runErrorTemplateLookup(status int) *template.Template {
+	errorTemplateLookupMu.RLock()
+	fn := errorTemplateLookup
+	errorTemplateLookupMu.RUnlock()
+	if fn == nil {
+		return nil
+	}
+	return fn(status)
+}
 
 // respond writes a JSON or minimal HTML error response.
 func respond(w http.ResponseWriter, _ *http.Request, status int, requestID string, err Error, wantsHTML bool) {
 	if wantsHTML {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(status)
-		if errorTemplateLookup != nil {
-			if tpl := errorTemplateLookup(status); tpl != nil {
-				_ = tpl.Execute(w, struct {
-					Status    int
-					Message   string
-					RequestID string
-				}{status, err.Public(), requestID})
-				return
-			}
+		if tpl := runErrorTemplateLookup(status); tpl != nil {
+			_ = tpl.Execute(w, struct {
+				Status    int
+				Message   string
+				RequestID string
+			}{status, err.Public(), requestID})
+			return
 		}
 		fmt.Fprintf(w, htmlErrorPage, status, err.Public(), requestID)
 		return
@@ -213,9 +251,10 @@ func respond(w http.ResponseWriter, _ *http.Request, status int, requestID strin
 		},
 	}
 
-	if ve, ok := err.(*ValidationError); ok {
-		body.Error.Fields = make([]fieldJSON, len(ve.fields))
-		for i, f := range ve.fields {
+	var veFields *ValidationError
+	if errors.As(err, &veFields) {
+		body.Error.Fields = make([]fieldJSON, len(veFields.fields))
+		for i, f := range veFields.fields {
 			body.Error.Fields[i] = fieldJSON{Field: f.field, Message: f.message}
 		}
 	}

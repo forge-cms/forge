@@ -17,6 +17,9 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
 
 - Zero third-party dependencies in the `forge` core package
 - All errors implement `forge.Error` — never raw `errors.New`
+- **Read `ERROR_HANDLING.md` before writing any code that handles or returns errors,**
+  **calls `WriteError`, adds a sentinel, uses `errors.As`/`errors.Is`, or writes**
+  **an HTTP response in an error path. The single pipeline rule is non-negotiable.**
 - `forge.Context` is an interface, not a struct (Decision 21)
 - `forge.DB` is an interface, not `*sql.DB` (Decision 22)
 - Go 1.22 minimum — do not use features introduced after 1.22

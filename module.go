@@ -3,6 +3,7 @@ package forge
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -744,18 +745,18 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // writeContent serialises v to w using ct content-type.
 // Sets Vary: Accept and Content-Type on every response.
-func writeContent(w http.ResponseWriter, ct string, v any) {
+func writeContent(w http.ResponseWriter, r *http.Request, ct string, v any) {
 	w.Header().Set("Vary", "Accept")
 	switch ct {
 	case "text/html":
-		http.Error(w, "HTML templates not registered", http.StatusNotAcceptable)
+		WriteError(w, r, ErrNotAcceptable)
 	case "text/markdown":
 		if md, ok := v.(Markdownable); ok {
 			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(md.Markdown())) //nolint:errcheck
 		} else {
-			http.Error(w, "text/markdown not supported for this content type", http.StatusNotAcceptable)
+			WriteError(w, r, ErrNotAcceptable)
 		}
 	case "text/plain":
 		var body string
@@ -779,10 +780,10 @@ func (m *Module[T]) writeContentCached(w http.ResponseWriter, r *http.Request, c
 	if m.cache != nil {
 		w.Header().Set("X-Cache", "MISS")
 		rec := newCacheRecorder(w)
-		writeContent(rec, ct, v)
+		writeContent(rec, r, ct, v)
 		m.storeCache(r, rec)
 	} else {
-		writeContent(w, ct, v)
+		writeContent(w, r, ct, v)
 	}
 }
 
@@ -1004,7 +1005,12 @@ func (m *Module[T]) createHandler(w http.ResponseWriter, r *http.Request) {
 
 	pv, elemType := m.newItemPtr()
 	if err := json.NewDecoder(r.Body).Decode(pv.Interface()); err != nil {
-		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			WriteError(w, r, ErrRequestTooLarge)
+		} else {
+			WriteError(w, r, ErrBadRequest)
+		}
 		return
 	}
 
@@ -1077,7 +1083,12 @@ func (m *Module[T]) updateHandler(w http.ResponseWriter, r *http.Request) {
 	// Allocate a new item and decode the request body into it.
 	pv, elemType := m.newItemPtr()
 	if err := json.NewDecoder(r.Body).Decode(pv.Interface()); err != nil {
-		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			WriteError(w, r, ErrRequestTooLarge)
+		} else {
+			WriteError(w, r, ErrBadRequest)
+		}
 		return
 	}
 

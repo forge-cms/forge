@@ -202,7 +202,7 @@ func (m *Module[T]) renderListHTML(w http.ResponseWriter, r *http.Request, ctx C
 	m.tplMu.RUnlock()
 
 	if tpl == nil {
-		http.Error(w, "HTML templates not registered", http.StatusNotAcceptable)
+		WriteError(w, r, ErrNotAcceptable)
 		return
 	}
 
@@ -226,7 +226,7 @@ func (m *Module[T]) renderShowHTML(w http.ResponseWriter, r *http.Request, ctx C
 	m.tplMu.RUnlock()
 
 	if tpl == nil {
-		http.Error(w, "HTML templates not registered", http.StatusNotAcceptable)
+		WriteError(w, r, ErrNotAcceptable)
 		return
 	}
 
@@ -269,7 +269,7 @@ func (m *Module[T]) errorTemplate(status int) *template.Template {
 // Called once by [App.Handler] when at least one module has a template
 // directory registered.
 func bindErrorTemplates(modules []templateParser) {
-	errorTemplateLookup = func(status int) *template.Template {
+	setErrorTemplateLookup(func(status int) *template.Template {
 		for _, tp := range modules {
 			type errorTemplater interface {
 				errorTemplate(int) *template.Template
@@ -281,5 +281,5 @@ func bindErrorTemplates(modules []templateParser) {
 			}
 		}
 		return nil
-	}
+	})
 }

@@ -241,7 +241,7 @@ func TestIntegration_forgeHead_jsonLD(t *testing.T) {
 func TestIntegration_errorPage_custom(t *testing.T) {
 	// Reset errorTemplateLookup after test to avoid cross-test pollution.
 	origLookup := errorTemplateLookup
-	t.Cleanup(func() { errorTemplateLookup = origLookup })
+	t.Cleanup(func() { setErrorTemplateLookup(origLookup) })
 
 	dir := intTmpDir(t, `<p>list</p>`, `<p>show</p>`)
 	errDir := filepath.Join(dir, "errors")
@@ -271,8 +271,8 @@ func TestIntegration_errorPage_custom(t *testing.T) {
 
 func TestIntegration_errorPage_fallback(t *testing.T) {
 	origLookup := errorTemplateLookup
-	t.Cleanup(func() { errorTemplateLookup = origLookup })
-	errorTemplateLookup = nil
+	t.Cleanup(func() { setErrorTemplateLookup(origLookup) })
+	setErrorTemplateLookup(nil)
 
 	// Module without templates — no error template directory.
 	_, handler, _ := intSetup(t)

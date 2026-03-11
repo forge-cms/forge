@@ -23,6 +23,45 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.1] — 2026-03-11
+
+Error handling pipeline hardening. All six `http.Error` bypass sites removed;
+four missing sentinels added; `errorTemplateLookup` race fixed; `Recoverer`
+stack buffer increased. No breaking API changes. (Amendments A29–A32)
+
+### Added
+
+- `ErrBadRequest` (400 `bad_request`), `ErrNotAcceptable` (406 `not_acceptable`),
+  `ErrRequestTooLarge` (413 `request_too_large`), `ErrTooManyRequests`
+  (429 `too_many_requests`) sentinel errors — complete the framework's own
+  HTTP status vocabulary (A29)
+- `setErrorTemplateLookup` / `runErrorTemplateLookup` internal helpers that
+  wrap `errorTemplateLookup` in a `sync.RWMutex`, eliminating the data race
+  between `App.Handler()` start-up and in-flight requests (A29)
+- `ERROR_HANDLING.md` — authoritative strategy document for error handling;
+  required reading before any code that calls `WriteError` or adds a sentinel
+
+### Fixed
+
+- `respond()` used a direct type assertion `err.(*ValidationError)` instead of
+  `errors.As`; a wrapped `*ValidationError` would have silently produced a 422
+  response without field details (A29)
+- `writeContent` had no `*http.Request`, forcing 406 responses via `http.Error`
+  (plain text, no `X-Request-ID`); now receives `r *http.Request` and calls
+  `WriteError(w, r, ErrNotAcceptable)` (A30)
+- JSON decode failures in `createHandler` and `updateHandler` called
+  `http.Error` (plain text, no `X-Request-ID`, always 400); now calls
+  `WriteError` with `ErrRequestTooLarge` (413) when `*http.MaxBytesError` is
+  detected, otherwise `ErrBadRequest` (400) (A30)
+- `renderListHTML` and `renderShowHTML` called `http.Error` for nil template;
+  now calls `WriteError(w, r, ErrNotAcceptable)` (A31)
+- `RateLimit` called `http.Error` for 429 rate-limit responses (plain text, no
+  `X-Request-ID`); now calls `WriteError(w, r, ErrTooManyRequests)` (A32)
+- `Recoverer` stack capture buffer was 4096 bytes; deep stacks (recursive
+  templates, chained middleware) were silently truncated; increased to 32 KB (A32)
+
+---
+
 ## [1.0.0] — 2026-03-08
 
 v1.0.0 stabilisation: test coverage audit, benchmarks, godoc pass, and three

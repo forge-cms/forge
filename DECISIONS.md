@@ -40,6 +40,10 @@ Revisions to existing decisions require a new entry that supersedes the original
 | 21 | forge.Context is an interface | Locked | 2025-06-01 |
 | 22 | Storage interface and database drivers | Locked | 2025-06-01 |
 | A28 | Auto-detect `Headable` in `Module[T]` | Agreed | 2026-03-08 |
+| A29 | `errors.go` error handling gaps | Agreed | 2026-03-11 |
+| A30 | `module.go` error handling gaps | Agreed | 2026-03-11 |
+| A31 | `templates.go` error handling gaps | Agreed | 2026-03-11 |
+| A32 | `middleware.go` error handling gaps | Agreed | 2026-03-11 |
 
 ---
 
@@ -2374,3 +2378,95 @@ forge.NewModule[*Article](&Article{},
 - `forge.DefaultHead()` option — requires an extra call-site token; still leaves `Headable` decorative
 - Reflection on struct field names — fragile, no compile-time contract, inconsistent with codebase patterns
 - Exporting a head-resolution function — adds surface area with no benefit over an interface
+
+---
+
+## Amendment A29 — `errors.go` error handling gaps
+
+**Status:** Agreed  
+**Date:** 2026-03-11  
+**Amends:** Decision 16
+
+**Problem:** A post-v1.0.0 audit of the error handling pipeline found four gaps in `errors.go`:
+
+1. `respond()` uses a direct type assertion `err.(*ValidationError)` instead of `errors.As`. A wrapped `*ValidationError` passed to `respond` from any future non-`WriteError` call path would silently produce a response without field details.
+2. `errorTemplateLookup` is an unprotected package-level `var func(int) *template.Template`. The Go race detector flags concurrent reads (in-flight requests) against the single write (in `App.Handler()`). It should be protected by `sync.Once` since `App.Handler()` is a one-shot call in the expected lifecycle.
+3. Four sentinels actively produced by the framework have no named constant: 400 (`ErrBadRequest`), 406 (`ErrNotAcceptable`), 413 (`ErrRequestTooLarge`), 429 (`ErrTooManyRequests`). Handlers producing those status codes currently `newSentinel(...)` inline, violating the rule that `newSentinel` must only be used in `errors.go`.
+4. `errors_test.go` is missing: wrapped-sentinel unwrapping, 5xx `forge.Error` suppression, wrapped `*ValidationError` field propagation, and the response-header `X-Request-ID` priority path.
+
+**Decision:** Fix all four in `errors.go` / `errors_test.go` as Amendment A29:
+- Replace direct type assertion in `respond` with `errors.As`
+- Protect `errorTemplateLookup` with `sync.Once` (write path in `App.Handler`, read path in `respond`)
+- Add `ErrBadRequest`, `ErrNotAcceptable`, `ErrRequestTooLarge`, `ErrTooManyRequests` sentinels
+- Extend `errors_test.go` with the four missing cases
+
+**Consequences:**
+- No public API change — new sentinels are additive
+- `example_test.go` unaffected
+- `respond` is now safe to call from paths other than `WriteError` without risking silent field omission
+- `errorTemplateLookup` write is guarded; second call to `App.Handler()` is silently a no-op (consistent with existing behaviour — `App.Handler()` is documented as one-shot)
+
+---
+
+## Amendment A30 — `module.go` error handling gaps
+
+**Status:** Agreed  
+**Date:** 2026-03-11  
+**Amends:** Decision 16
+
+**Problem:** Three `http.Error` calls in `module.go` bypass `WriteError`:
+
+1. `writeContent(w, ct, v)` calls `http.Error(w, "HTML templates not registered", 406)` and `http.Error(w, "text/markdown not supported", 406)`. Because `writeContent` takes no `*http.Request`, it cannot call `WriteError`. This forces content-negotiation failures to emit plain text with no `X-Request-ID`.
+2. `createHandler` and `updateHandler` call `http.Error(w, "invalid JSON body", http.StatusBadRequest)` on `json.Decode` failure. This has a correctness bug: when `MaxBodySize` middleware is in use and the client exceeds the limit, `json.Decode` returns `*http.MaxBytesError` (Go 1.19+). The current code maps this silently to 400 instead of 413.
+
+**Decision:**
+- Add `r *http.Request` parameter to `writeContent` and `writeContentCached`; update all call sites within `module.go`
+- Replace both `http.Error(w, "HTML templates not registered", ...)` calls with `WriteError(w, r, ErrNotAcceptable)`
+- Replace both `http.Error(w, "text/markdown not supported", ...)` calls with `WriteError(w, r, ErrNotAcceptable)`
+- Replace both JSON decode error paths with `errors.As(*http.MaxBytesError)` → `ErrRequestTooLarge` (413), else `ErrBadRequest` (400), both via `WriteError`
+
+**Consequences:**
+- `writeContent` and `writeContentCached` gain a `r *http.Request` parameter — internal functions only, no public API change
+- Content-negotiation 406 responses now carry `X-Request-ID` and JSON/HTML format
+- Clients that exceed `MaxBodySize` receive 413 instead of 400
+- `example_test.go` unaffected
+
+---
+
+## Amendment A31 — `templates.go` error handling gaps
+
+**Status:** Agreed  
+**Date:** 2026-03-11  
+**Amends:** Decision 16
+
+**Problem:** `renderListHTML` and `renderShowHTML` in `templates.go` call `http.Error(w, "HTML templates not registered", http.StatusNotAcceptable)` when `tplList` / `tplShow` is nil. Both functions have `r *http.Request` available, so `WriteError` can be called directly.
+
+**Decision:** Replace both `http.Error` calls with `WriteError(w, r, ErrNotAcceptable)`.
+
+**Consequences:**
+- 406 responses from the HTML render path now carry `X-Request-ID` and correct format
+- No public API change
+- `example_test.go` unaffected
+
+---
+
+## Amendment A32 — `middleware.go` error handling gaps
+
+**Status:** Agreed  
+**Date:** 2026-03-11  
+**Amends:** Decision 16
+
+**Problem:** Two error paths in `middleware.go` bypass `WriteError`:
+
+1. `RateLimit` calls `http.Error(w, "Too Many Requests", http.StatusTooManyRequests)`. JSON API clients receive `text/plain` with no `X-Request-ID`.
+2. `Recoverer` allocates a 4096-byte buffer for `runtime.Stack`. Deep call stacks (e.g. recursive template rendering, deeply chained middleware) truncate silently. The conventional Go allocation for stack captures is 32 KB (`32 * 1024`).
+
+**Decision:**
+- Replace `http.Error` in `RateLimit` with `WriteError(w, r, ErrTooManyRequests)`
+- Increase `Recoverer` stack buffer from 4096 to `32 * 1024` bytes
+
+**Consequences:**
+- 429 responses now carry `X-Request-ID` and are JSON or HTML per `Accept`
+- Panic stack traces are no longer silently truncated for deep stacks
+- No public API change
+- `example_test.go` unaffected
