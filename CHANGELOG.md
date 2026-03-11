@@ -23,6 +23,22 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.2] — 2026-03-11
+
+Route mounting order fix. `GET /{prefix}/sitemap.xml` and `GET /{prefix}/feed.xml`
+were never mounted because the guards in `Module.Register` checked the store pointer,
+which is injected *after* `Register` returns. No breaking API changes. (Amendment A33)
+
+### Fixed
+
+- `Module[T].Register` guarded sitemap and feed route mounting on `m.sitemapStore != nil`
+  and `m.feedStore != nil` respectively; both stores are always `nil` at registration
+  time because `App.Content` calls `Register` before `setSitemap`/`setFeedStore`; routes
+  are now mounted when the *config* is present and the store is read lazily at request
+  time (A33)
+
+---
+
 ## [1.0.1] — 2026-03-11
 
 Error handling pipeline hardening. All six `http.Error` bypass sites removed;

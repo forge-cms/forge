@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Forge Devlog</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 740px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; }
+    header { border-bottom: 1px solid #e5e5e5; margin-bottom: 2.5rem; padding-bottom: 1rem; }
+    h1 { margin: 0 0 0.25rem; }
+    .lead { margin: 0 0 1.5rem; color: #444; }
+    .cta { display: inline-block; background: #0070f3; color: #fff; text-decoration: none; padding: 0.6rem 1.4rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; }
+    .cta:hover { background: #0058c4; }
+    h2 { margin: 2.5rem 0 1rem; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; color: #666; }
+    .features { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .features li { border: 1px solid #e5e5e5; border-radius: 8px; padding: 1rem 1.25rem; }
+    .features li a { font-weight: 600; color: #0070f3; text-decoration: none; display: block; margin-bottom: 0.25rem; }
+    .features li a:hover { text-decoration: underline; }
+    .features li p { margin: 0; font-size: 0.875rem; color: #555; }
+    .note { margin-top: 2.5rem; padding: 0.75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 0.875rem; color: #92400e; }
+    footer { border-top: 1px solid #e5e5e5; margin-top: 2.5rem; padding-top: 1rem; font-size: 0.875rem; color: #666; }
+    footer a { color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Forge Devlog</h1>
+    <p class="lead">Engineering notes and release announcements from the Forge team.<br>
+    A self-contained example demonstrating the full Forge v1.0.0 feature set.</p>
+    <a class="cta" href="/posts">Read the posts →</a>
+  </header>
+  <main>
+    <h2>What's included</h2>
+    <ul class="features">
+      <li>
+        <a href="/posts">Posts list</a>
+        <p>Published devlog entries with dates, tags, and excerpts. HTML rendered via forge:head.</p>
+      </li>
+      <li>
+        <a href="/posts/feed.xml">RSS Feed</a>
+        <p>RSS 2.0 feed for all published posts. Regenerates automatically on publish.</p>
+      </li>
+      <li>
+        <a href="/feed.xml">Aggregate feed</a>
+        <p>Top-level /feed.xml merging all module feeds (in a multi-module app).</p>
+      </li>
+      <li>
+        <a href="/sitemap.xml">Sitemap index</a>
+        <p>Sitemap index linking to /posts/sitemap.xml. Empty until first publish event.</p>
+      </li>
+      <li>
+        <a href="/llms.txt">llms.txt</a>
+        <p>Compact AI index: one line per published post for LLM context windows.</p>
+      </li>
+      <li>
+        <a href="/llms-full.txt">llms-full.txt</a>
+        <p>Full markdown corpus — all post bodies concatenated for AI assistants.</p>
+      </li>
+      <li>
+        <a href="/robots.txt">robots.txt</a>
+        <p>Auto-generated with sitemap link. AskFirst AI crawler policy enabled.</p>
+      </li>
+      <li>
+        <a href="/.well-known/redirects.json">Redirects manifest</a>
+        <p>Live JSON manifest of all registered redirect rules.</p>
+      </li>
+    </ul>
+    <p class="note">
+      ⏱ One post is <strong>Scheduled</strong> and will publish automatically in ~2 minutes.
+      The sitemap at <a href="/posts/sitemap.xml">/posts/sitemap.xml</a> updates when it does.
+    </p>
+  </main>
+  <footer>
+    <p>
+      <a href="/posts">Posts</a> ·
+      <a href="/posts/feed.xml">RSS</a> ·
+      <a href="/llms.txt">llms.txt</a> ·
+      <a href="/sitemap.xml">Sitemap</a>
+    </p>
+  </footer>
+</body>
+</html>

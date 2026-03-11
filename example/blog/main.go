@@ -14,13 +14,15 @@
 //
 //	cd example/blog && go run .
 //
-// Then visit http://localhost:8080/posts
+// Then visit http://localhost:8080
 package main
 
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/forge-cms/forge"
@@ -123,7 +125,19 @@ func main() {
 	// crawlers discover it automatically. No manual robots.txt file required.
 	app.SEO(&forge.RobotsConfig{Sitemaps: true})
 
+	// Mount a welcome page at the root so http://localhost:8080 shows
+	// an overview instead of a 404. The template is a plain html/template
+	// file — it does not go through Forge's module rendering pipeline.
+	indexTpl := template.Must(template.ParseFiles("templates/index.html"))
+	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := indexTpl.ExecuteTemplate(w, "index.html", nil); err != nil {
+			http.Error(w, "template error", http.StatusInternalServerError)
+		}
+	}))
+
 	log.Println("Forge Devlog — http://localhost:8080")
+	log.Println("  Home:       http://localhost:8080/")
 	log.Println("  Posts:      http://localhost:8080/posts")
 	log.Println("  Feed:       http://localhost:8080/posts/feed.xml")
 	log.Println("  Sitemap:    http://localhost:8080/sitemap.xml")

@@ -437,8 +437,17 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 	mux.Handle("POST "+m.prefix, create)
 	mux.Handle("PUT "+m.prefix+"/{slug}", update)
 	mux.Handle("DELETE "+m.prefix+"/{slug}", del)
-	if m.sitemapCfg != nil && m.sitemapStore != nil {
-		mux.Handle("GET "+m.prefix+"/sitemap.xml", m.sitemapStore.Handler())
+	// A33: guard on sitemapCfg only — sitemapStore is injected by App.Content
+	// after Register returns, so the store is always nil at mount time.
+	// The handler reads m.sitemapStore lazily at request time.
+	if m.sitemapCfg != nil {
+		mux.Handle("GET "+m.prefix+"/sitemap.xml", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if m.sitemapStore == nil {
+				WriteError(w, r, ErrInternal)
+				return
+			}
+			m.sitemapStore.Handler().ServeHTTP(w, r)
+		}))
 	}
 	if hasAIFeature(m.aiFeatures, AIDoc) {
 		aidoc := http.HandlerFunc(m.aiDocHandler)
@@ -447,8 +456,17 @@ func (m *Module[T]) Register(mux *http.ServeMux) {
 		}
 		mux.Handle("GET "+m.prefix+"/{slug}/aidoc", aidoc)
 	}
-	if m.feedCfg != nil && m.feedStore != nil {
-		mux.Handle("GET "+m.prefix+"/feed.xml", m.feedStore.ModuleHandler(m.prefix))
+	// A33: guard on feedCfg only — feedStore is injected by App.Content after
+	// Register returns, so the store is always nil at mount time.
+	// The handler reads m.feedStore lazily at request time.
+	if m.feedCfg != nil {
+		mux.Handle("GET "+m.prefix+"/feed.xml", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if m.feedStore == nil {
+				WriteError(w, r, ErrInternal)
+				return
+			}
+			m.feedStore.ModuleHandler(m.prefix).ServeHTTP(w, r)
+		}))
 	}
 }
 

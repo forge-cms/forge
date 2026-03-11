@@ -70,6 +70,10 @@ var (
 
 	// ErrTooManyRequests indicates the client has exceeded the rate limit. → 429
 	ErrTooManyRequests = newSentinel(http.StatusTooManyRequests, "too_many_requests", "Too many requests")
+
+	// ErrInternal indicates an unexpected server-side error. → 500
+	// The public message is intentionally generic; details are logged, not exposed.
+	ErrInternal = newSentinel(http.StatusInternalServerError, "internal_server_error", "Internal server error")
 )
 
 // fieldError holds a single field-level validation failure. Unexported — only

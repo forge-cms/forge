@@ -44,6 +44,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A30 | `module.go` error handling gaps | Agreed | 2026-03-11 |
 | A31 | `templates.go` error handling gaps | Agreed | 2026-03-11 |
 | A32 | `middleware.go` error handling gaps | Agreed | 2026-03-11 |
+| A33 | `module.go` route mounting order bug (sitemap + feed) | Agreed | 2026-03-11 |
 
 ---
 
@@ -2470,3 +2471,30 @@ forge.NewModule[*Article](&Article{},
 - Panic stack traces are no longer silently truncated for deep stacks
 - No public API change
 - `example_test.go` unaffected
+
+
+---
+
+## Amendment A33 -- `module.go` route mounting order bug (sitemap + feed)
+
+**Status:** Agreed
+**Date:** 2026-03-11
+**Amends:** Decision 16 (module registration), Decision 9 (sitemap)
+
+**Problem:** `Module[T].Register(mux)` is called by `App.Content()` before `setSitemap` and `setFeedStore` are called. Both methods inject the shared `*SitemapStore` and `*FeedStore` into the module. As a result, the route-mounting guards inside `Register`:
+
+```go
+if m.sitemapCfg != nil && m.sitemapStore != nil { /* never true -- store not yet set */ }
+if m.feedCfg   != nil && m.feedStore   != nil { /* never true -- store not yet set */ }
+```
+
+always evaluate to `false`. Neither `GET /{prefix}/sitemap.xml` nor `GET /{prefix}/feed.xml` is ever mounted, regardless of module configuration.
+
+**Decision:** Change both guards to check only the config (always known at `NewModule` time), and read the store lazily inside the handler via a closure over `m`. A nil-store guard in each handler is a safety net for the theoretical startup race window; in practice the stores are always set before the server begins accepting connections.
+
+**Consequences:**
+- `GET /{prefix}/sitemap.xml` and `GET /{prefix}/feed.xml` are now correctly mounted for any module that opts in via `SitemapConfig{}` or `Feed(FeedConfig{...})`
+- `/posts/feed.xml` in the example blog now returns RSS instead of 404
+- No public API change; all module options unchanged
+- `example_test.go` unaffected
+- AI routes (`/{prefix}/{slug}/aidoc`) are not affected -- `aiFeatures` is set at `NewModule` time, not via a post-Register injection
