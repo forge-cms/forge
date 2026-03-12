@@ -35,6 +35,10 @@ type Config struct {
 	// [SignToken]. It must be at least 16 bytes. Required.
 	Secret []byte
 
+	// Version is the application version string. When non-empty, it is included
+	// in the GET /_health response.
+	Version string
+
 	// DB is the database connection used by content modules.
 	// It accepts *sql.DB, *sql.Tx, or any value that satisfies [DB].
 	// Optional — leave nil to use in-memory repositories only.
@@ -437,6 +441,31 @@ func (a *App) RedirectStore() *RedirectStore {
 //	app.RedirectManifestAuth(forge.BearerHMAC(secret, forge.Editor))
 func (a *App) RedirectManifestAuth(auth AuthFunc) {
 	a.redirectManifestOpts = append(a.redirectManifestOpts, ManifestAuth(auth))
+}
+
+// Health mounts GET /_health on the App's mux.
+//
+// The endpoint always returns HTTP 200 with Content-Type application/json.
+// The response body is {"status":"ok"} when Config.Version is empty, or
+// {"status":"ok","version":"X.Y.Z"} when Config.Version is set.
+//
+// Call Health before [App.Handler] or [App.Run]:
+//
+//	app.Health()
+//	if err := app.Run(":8080"); err != nil {
+//	    log.Fatal(err)
+//	}
+func (a *App) Health() {
+	version := a.cfg.Version
+	a.mux.Handle("GET /_health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if version != "" {
+			fmt.Fprintf(w, `{"status":"ok","version":%q}`, version)
+			return
+		}
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
 }
 
 // Run starts the HTTP server on addr (e.g. ":8080") and blocks until

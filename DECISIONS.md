@@ -62,6 +62,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A39 | `Module[T]`: cache sweep goroutine lifecycle and `Stop()` method | Agreed | 2026-03-12 |
 | A40 | Rename `FeedDisabled()` → `DisableFeed()` and `forgeLLMSEntries` → `forgeLLMsEntries` | Agreed | 2026-03-12 |
 | A41 | `Module[T]`: debounce callback must use `NewBackgroundContext`, not stashed request context | Agreed | 2026-03-12 |
+| A42 | `forge.go`: `Config.Version` field and `App.Health()` endpoint | Agreed | 2026-03-12 |
 
 ---
 
@@ -2802,3 +2803,49 @@ Amendment A24 added `NewBackgroundContext` precisely to solve this class of prob
 3. **Simpler struct** — `debounceMu` and `debounceCtx` removed; no lock needed for the debounce path.
 4. **`siteName` at fire time** — may be empty string if module is used without `App.Content`; `NewBackgroundContext("")` is valid and safe.
 5. **No exported API change** — `triggerRebuild` is unexported; `Module[T]`'s public surface is unchanged.
+
+---
+
+## Amendment A42 — `forge.go`: `Config.Version` field and `App.Health()` endpoint
+
+**Status:** Agreed
+**Date:** 2026-03-12
+**Amends:** Decision 2 (App bootstrap)
+
+**Problem:** Forge apps running in Kubernetes, Docker, or behind a load balancer need a dedicated liveness/readiness endpoint. Developers currently use `app.Handle("GET /healthz", ...)` by hand — a repetitive, error-prone pattern with no standard response shape. The version string has no first-class home in the framework; developers hard-code it in separate handler closures.
+
+**Decision:**
+
+1. Add `Version string` field to `Config`, immediately after `Secret []byte`.
+   Godoc: "Version is the application version string. When non-empty, it is
+   included in the GET /_health response."
+2. Add `func (a *App) Health()` to `forge.go`. Mounts `GET /_health` on the App mux.
+   - `Content-Type: application/json`, status 200 always.
+   - Body: `{"status":"ok"}` when `Config.Version` is empty.
+   - Body: `{"status":"ok","version":"X.Y.Z"}` when `Config.Version` is set
+     (version string JSON-quoted via `fmt.Fprintf`).
+   - `Health()` is explicit opt-in — not mounted automatically by `New` or `Run`.
+     Callers who prefer a custom path continue to use `app.Handle`.
+3. Three tests added to `forge_test.go`:
+   - `TestApp_health_ok` — no version, body is `{"status":"ok"}`
+   - `TestApp_health_version` — version `"1.2.3"`, body is `{"status":"ok","version":"1.2.3"}`
+   - `TestApp_health_notMounted` — `Health()` not called, `/_health` returns 404
+
+**Call-site syntax:**
+```go
+app := forge.New(forge.MustConfig(forge.Config{
+    BaseURL: os.Getenv("BASE_URL"),
+    Secret:  []byte(os.Getenv("SECRET")),
+    Version: "1.2.3",
+}))
+app.Health()
+```
+
+**Consequences:**
+
+1. **Call-site syntax** — `Config.Version` is a zero-value string; all existing `Config` literals are backward-compatible.
+2. **No forced mount** — the endpoint is not registered unless `Health()` is called. Apps that already use `app.Handle("GET /_health", ...)` are unaffected.
+3. **Response shape** — fixed JSON schema; serialisation uses `fmt.Fprintf` with `%q` for the version field to ensure correct JSON string escaping.
+4. **No middleware** — `/_health` bypasses rate limiting and authentication by design. Liveness probes must not be auth-gated.
+5. **Consistency** — matches `Cookies()`, `Redirect()`, `RedirectManifestAuth()` as an explicit opt-in method on `App`.
+6. **No breaking change** — existing code is unaffected.

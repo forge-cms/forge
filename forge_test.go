@@ -423,6 +423,70 @@ func TestApp_RedirectStore(t *testing.T) {
 }
 
 // ——————————————————————————————————————————————————————————————
+// Health endpoint (Amendment A42)
+// ——————————————————————————————————————————————————————————————
+
+// TestApp_health_ok verifies that GET /_health returns 200 application/json
+// {"status":"ok"} when Config.Version is empty.
+func TestApp_health_ok(t *testing.T) {
+	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
+	app.Health()
+
+	req := httptest.NewRequest("GET", "/_health", nil)
+	w := httptest.NewRecorder()
+	app.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type: got %q, want %q", ct, "application/json")
+	}
+	if body := w.Body.String(); body != `{"status":"ok"}` {
+		t.Fatalf("body: got %q, want %q", body, `{"status":"ok"}`)
+	}
+}
+
+// TestApp_health_version verifies that GET /_health includes the version field
+// when Config.Version is set.
+func TestApp_health_version(t *testing.T) {
+	app := New(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("supersecretkey16"),
+		Version: "1.2.3",
+	})
+	app.Health()
+
+	req := httptest.NewRequest("GET", "/_health", nil)
+	w := httptest.NewRecorder()
+	app.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", w.Code)
+	}
+	body := w.Body.String()
+	want := `{"status":"ok","version":"1.2.3"}`
+	if body != want {
+		t.Fatalf("body: got %q, want %q", body, want)
+	}
+}
+
+// TestApp_health_notMounted verifies that GET /_health returns 404 when
+// app.Health() has not been called.
+func TestApp_health_notMounted(t *testing.T) {
+	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
+	// Health() is intentionally NOT called here.
+
+	req := httptest.NewRequest("GET", "/_health", nil)
+	w := httptest.NewRecorder()
+	app.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("got status %d, want 404 when Health() not mounted", w.Code)
+	}
+}
+
+// ——————————————————————————————————————————————————————————————
 // Benchmark
 // ——————————————————————————————————————————————————————————————
 

@@ -211,6 +211,8 @@ Test coverage, benchmarks, godoc audit, example apps.
 - [x] Step 7 — `CHANGELOG.md` (Keep a Changelog, v0.1.0–v1.0.0) + `integration_full_test.go` G21 (full v1.0.0 stack: M1+M2+M3+M5+M7+M8)
 - [x] Step 8 — `example_test.go`: 7 compile-verified README Example functions (ExampleNewModule, ExampleAuth, ExampleAuthenticate, ExampleAIIndex, ExampleSocial, ExampleOn, ExampleRobotsConfig); README compile test rule added to copilot-instructions.md
 
+**Amendment A42** — `Config.Version` field + `App.Health()` endpoint — ✅ Done 2026-03-12
+
 ---
 
 ## Milestone 10 — MCP support (v2)
