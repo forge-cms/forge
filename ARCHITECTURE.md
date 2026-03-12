@@ -137,21 +137,21 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
 ```
 
-### Planned (future milestones)
+### Shipped (Milestones 7–8)
 
 ```
 ├── storage.go (extend) SQLRepo[T] — production Repository[T] backed by forge.DB;
 │                     Table() SQLRepoOption; auto-derived table names (snake_case plural);
 │                     FindByID/FindBySlug/FindAll/Save/Delete; reuses dbFields cache;
-│                     $N SQL placeholders (Decision 23); Amendment A19       (Milestone 7)
+│                     $N SQL placeholders (Amendment A19)                      ✅ Milestone 7
 ├── redirects.go      RedirectCode (MovedPermanently/Gone), RedirectEntry (+IsPrefix),
 │                     From type, Redirects() option, RedirectStore (exact + prefix
 │                     lookup, chain collapse, DB persistence via Load/Save/Remove),
-│                     App.Redirect(), "/" fallback wiring (Amendment A20)      (Milestone 7)
+│                     App.Redirect(), "/" fallback wiring (Amendment A20)      ✅ Milestone 7
 ├── redirectmanifest.go  buildRedirectManifest, newRedirectManifestHandler;
 │                     GET /.well-known/redirects.json (always mounted, live JSON);
-│                     reuses ManifestAuth option (Amendment A21)               (Milestone 7)
-└── scheduler.go      Adaptive ticker, scheduled publishing loop            (Milestone 8)
+│                     reuses ManifestAuth option (Amendment A21)               ✅ Milestone 7
+└── scheduler.go      Adaptive ticker, scheduled publishing loop               ✅ Milestone 8
 ```
 
 ---
@@ -167,7 +167,7 @@ HTTP Request
     ▼
 ┌─────────────────────────────────┐
 │  Global middleware chain        │  RequestLogger, Recoverer, SecurityHeaders,
-│  (app.Use order, planned)       │  CORS, MaxBodySize, RateLimit, CSRF
+│  (app.Use order)                │  CORS, MaxBodySize, RateLimit, CSRF
 └────────────────┬────────────────┘
                  │
     ▼
@@ -419,20 +419,21 @@ type ListOptions struct {
 }
 ```
 
-### Planned (future milestones)
+### Shipped (Milestones 3–5)
 
 ```go
-// Headable — implement to control SEO, social, and AI metadata  (head.go, Milestone 3)
+// Headable — implement to control SEO, social, and AI metadata  (head.go) ✅ Milestone 3
 type Headable interface {
     Head() Head
 }
 
-// AIDocSummary — optional; custom AIDoc summary field           (ai.go, Milestone 5)
+// AIDocSummary — optional; custom AIDoc summary field           (ai.go)   ✅ Milestone 5
+// NOTE: the method is AISummary(), not AIDocSummary()
 type AIDocSummary interface {
-    AIDocSummary() string
+    AISummary() string
 }
 
-// SitemapPrioritiser — optional; per-item sitemap priority   (sitemap.go, Milestone 3)
+// SitemapPrioritiser — optional; per-item sitemap priority (sitemap.go)  ✅ Milestone 3
 type SitemapPrioritiser interface {
     SitemapPriority() float64
 }
@@ -443,7 +444,7 @@ type SitemapPrioritiser interface {
 ## Internal dependency rules
 
 To prevent circular imports and keep the package coherent, these rules apply.
-Files marked *planned* do not exist yet.
+All files listed below are implemented.
 
 ```
 errors.go       — no internal dependencies (foundation layer)
@@ -457,19 +458,19 @@ storage.go      — depends on: node, errors
 middleware.go   — depends on: errors, context, auth, node
 module.go       — depends on: node, context, signals, storage, errors, middleware
 
-── planned ──────────────────────────────────────────────────────────────────
-head.go         — no internal dependencies                              (Milestone 3)
-forge.go        — depends on: all of the above                          (Milestone 2)
-templates.go    — depends on: head, context, node                       (Milestone 4)
-cookies.go      — depends on: errors (none — stdlib net/http only)
-├── cookiemanifest.go — depends on: cookies, forge.go (Amendment A18)
-redirects.go    — depends on: errors, storage (forge.DB), forge.go (A20)       (Milestone 7)
-├── redirectmanifest.go — depends on: redirects, cookiemanifest (manifestAuthOption), forge.go (A21)
-sitemap.go      — depends on: node, signals                             (Milestone 3)
-rss.go          — depends on: node, signals, head                       (Milestone 5)
-ai.go           — depends on: node, head                                (Milestone 5)
-social.go       — depends on: head                                      (Milestone 5)
-scheduler.go    — depends on: node, signals, storage                    (Milestone 8)
+── shipped (Milestones 2–8) ─────────────────────────────────────────────────
+head.go         — no internal dependencies                              ✅ Milestone 3
+forge.go        — depends on: all of the above                          ✅ Milestone 2
+templates.go    — depends on: head, context, node                       ✅ Milestone 4
+cookies.go      — depends on: errors (none — stdlib net/http only)      ✅ Milestone 6
+├── cookiemanifest.go — depends on: cookies, forge.go (Amendment A18)  ✅ Milestone 6
+redirects.go    — depends on: errors, storage (forge.DB), forge.go (A20)       ✅ Milestone 7
+├── redirectmanifest.go — depends on: redirects, cookiemanifest (manifestAuthOption), forge.go (A21) ✅ Milestone 7
+sitemap.go      — depends on: node, signals                             ✅ Milestone 3
+rss.go          — depends on: node, signals, head                       ✅ Milestone 5
+ai.go           — depends on: node, head                                ✅ Milestone 5
+social.go       — depends on: head                                      ✅ Milestone 5
+scheduler.go    — depends on: node, signals, storage                    ✅ Milestone 8
 ```
 
 The dependency graph has no cycles. `errors.go` and `roles.go` are the only
@@ -562,7 +563,7 @@ not string comparison on every request.
 
 ---
 
-## Redirect table *(planned — Milestone 7)*
+## Redirect table
 
 The redirect table is a flat key-value store keyed by `FromPath`.
 It lives alongside the content — in the same database, same transaction.
@@ -625,7 +626,7 @@ module. It imports both `forge` and `pgx/v5`. Forge core never imports pgx.
 
 ---
 
-## Template data shape *(planned — Milestone 4)*
+## Template data shape
 
 ```go
 // show handler

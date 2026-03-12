@@ -39,6 +39,15 @@ Revisions to existing decisions require a new entry that supersedes the original
 | 20 | Configuration model | Locked | 2025-06-01 |
 | 21 | forge.Context is an interface | Locked | 2025-06-01 |
 | 22 | Storage interface and database drivers | Locked | 2025-06-01 |
+| A19 | `storage.go`: `SQLRepo[T]` production repository | Agreed | 2026-03-07 |
+| A20 | `forge.go`: `RedirectStore`, `App.Redirect()`, fallback handler | Agreed | 2026-03-07 |
+| A21 | `forge.go`: `/.well-known/redirects.json` handler | Agreed | 2026-03-07 |
+| A22 | `forge.go`: `App.RedirectManifestAuth()` | Agreed | 2026-03-07 |
+| A23 | `node.go`: `db` struct tags on `Node` time fields | Agreed | 2026-03-07 |
+| A24 | `context.go`: `NewBackgroundContext` | Agreed | 2026-03-07 |
+| A25 | `module.go`: `processScheduled` + helpers | Agreed | 2026-03-07 |
+| A26 | `forge.go`: scheduler wiring | Agreed | 2026-03-07 |
+| A27 | `middleware.go`: `forge.Authenticate(AuthFunc)` | Agreed | 2026-03-08 |
 | A28 | Auto-detect `Headable` in `Module[T]` | Agreed | 2026-03-08 |
 | A29 | `errors.go` error handling gaps | Agreed | 2026-03-11 |
 | A30 | `module.go` error handling gaps | Agreed | 2026-03-11 |
