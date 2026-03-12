@@ -287,7 +287,7 @@ func (s *SitemapStore) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, ok := s.Get(r.URL.Path)
 		if !ok {
-			http.NotFound(w, r)
+			WriteError(w, r, ErrNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
@@ -310,7 +310,7 @@ func (s *SitemapStore) IndexHandler(baseURL string) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		if err := WriteSitemapIndex(w, urls, time.Time{}); err != nil {
-			http.Error(w, "sitemap index error", http.StatusInternalServerError)
+			WriteError(w, r, ErrInternal)
 		}
 	})
 }

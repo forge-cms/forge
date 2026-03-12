@@ -126,11 +126,15 @@ func TestRedirectStore_handler_410(t *testing.T) {
 	s.Add(RedirectEntry{From: "/removed", To: "", Code: Gone})
 
 	req := httptest.NewRequest(http.MethodGet, "/removed", nil)
+	req.Header.Set("X-Request-ID", "test-rid")
 	w := httptest.NewRecorder()
 	s.handler().ServeHTTP(w, req)
 
 	if w.Code != http.StatusGone {
 		t.Errorf("expected 410, got %d", w.Code)
+	}
+	if got := w.Header().Get("X-Request-ID"); got != "test-rid" {
+		t.Errorf("expected X-Request-ID 'test-rid', got %q", got)
 	}
 }
 
@@ -138,11 +142,15 @@ func TestRedirectStore_handler_404(t *testing.T) {
 	s := NewRedirectStore()
 
 	req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
+	req.Header.Set("X-Request-ID", "test-rid")
 	w := httptest.NewRecorder()
 	s.handler().ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+	if got := w.Header().Get("X-Request-ID"); got != "test-rid" {
+		t.Errorf("expected X-Request-ID 'test-rid', got %q", got)
 	}
 }
 

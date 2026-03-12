@@ -201,12 +201,16 @@ func TestCookieManifest_manifestAuth_401(t *testing.T) {
 	h := newCookieManifestHandler("test.com", nil, ManifestAuth(auth))
 
 	r := httptest.NewRequest(http.MethodGet, "/.well-known/cookies.json", nil)
+	r.Header.Set("X-Request-ID", "test-rid")
 	// No Authorization header.
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d; want 401 for unauthenticated request", w.Code)
+	}
+	if got := w.Header().Get("X-Request-ID"); got != "test-rid" {
+		t.Errorf("expected X-Request-ID 'test-rid', got %q", got)
 	}
 }
 

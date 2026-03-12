@@ -241,10 +241,14 @@ func TestSitemapStore_SetGet(t *testing.T) {
 func TestSitemapStore_Handler_notFound(t *testing.T) {
 	s := NewSitemapStore()
 	req := httptest.NewRequest(http.MethodGet, "/missing/sitemap.xml", nil)
+	req.Header.Set("X-Request-ID", "test-rid")
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
+	}
+	if got := w.Header().Get("X-Request-ID"); got != "test-rid" {
+		t.Errorf("expected X-Request-ID 'test-rid', got %q", got)
 	}
 }
 

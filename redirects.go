@@ -260,11 +260,11 @@ func (s *RedirectStore) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e, ok := s.Get(r.URL.Path)
 		if !ok {
-			http.NotFound(w, r)
+			WriteError(w, r, ErrNotFound)
 			return
 		}
 		if e.To == "" {
-			http.Error(w, "Gone", http.StatusGone)
+			WriteError(w, r, ErrGone)
 			return
 		}
 		dest := e.To

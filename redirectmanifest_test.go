@@ -135,11 +135,15 @@ func TestRedirectManifest_manifestAuth_401(t *testing.T) {
 	h := newRedirectManifestHandler("test.com", store, ManifestAuth(auth))
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/redirects.json", nil)
+	req.Header.Set("X-Request-ID", "test-rid")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
+	}
+	if got := w.Header().Get("X-Request-ID"); got != "test-rid" {
+		t.Errorf("expected X-Request-ID 'test-rid', got %q", got)
 	}
 }
 

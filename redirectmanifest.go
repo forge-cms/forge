@@ -70,7 +70,7 @@ func newRedirectManifestHandler(site string, store *RedirectStore, opts ...Optio
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if auth != nil {
 			if _, ok := auth.authenticate(r); !ok {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				WriteError(w, r, ErrUnauth)
 				return
 			}
 		}

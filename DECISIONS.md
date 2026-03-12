@@ -57,6 +57,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A34 | `module.go` + `forge.go` startup rebuild for derived content | Agreed | 2026-03-11 |
 | A35 | `module.go` content negotiation capability gating | Agreed | 2026-03-11 |
 | A36 | `module.go` startup capability mismatch detection | Agreed | 2026-03-11 |
+| A37 | `WriteError` pipeline — replace `http.Error`/`http.NotFound` bypasses | Agreed | 2026-03-12 |
 
 ---
 
@@ -2665,3 +2666,38 @@ The `m.neg.md` flag is already set before option parsing by the existing
 6. **New tests** — `TestNewModule_sitemapConfig_panicsWithoutSitemapNode` and
    `TestNewModule_aiIndexLLMsFull_panicsWithoutMarkdownable` added to `module_test.go`.
 7. **No breaking change** — correctly-written code is unaffected.
+
+## Amendment A37 — `WriteError` pipeline: replace `http.Error`/`http.NotFound` bypasses
+
+**Status:** Agreed  
+**Date:** 2026-03-12  
+**Amends:** Decision 16 (`errors.go` error handling model) and `ERROR_HANDLING.md` single-pipeline rule
+
+**Problem:** Five call sites in framework code bypassed `WriteError`, violating the single-pipeline rule from `ERROR_HANDLING.md`:
+
+1. `redirects.go` `handler()`: `http.NotFound(w, r)` (no-match path) and `http.Error(w, "Gone", 410)` (Gone path)
+2. `redirectmanifest.go` `newRedirectManifestHandler`: `http.Error(w, "Unauthorized", 401)` (auth gate)
+3. `cookiemanifest.go` `newCookieManifestHandler`: `http.Error(w, "Unauthorized", 401)` (auth gate)
+4. `sitemap.go` `SitemapStore.Handler()`: `http.NotFound(w, r)` (unknown path)
+5. `sitemap.go` `SitemapStore.IndexHandler()`: `http.Error(w, "sitemap index error", 500)` (XML encode failure)
+
+All five bypass `WriteError`, so these responses:
+- Carry no `X-Request-ID` header (breaks distributed tracing)
+- Ignore the `Accept` header (always plain text, even for JSON clients)
+- Produce no structured log entry
+
+**Decision:** Replace all five call sites with `WriteError(w, r, ...)` using the matching sentinel:
+- `http.NotFound` → `WriteError(w, r, ErrNotFound)`
+- `http.Error(..., 401)` → `WriteError(w, r, ErrUnauth)`
+- `http.Error(..., 410)` → `WriteError(w, r, ErrGone)`
+- `http.Error(..., 500)` → `WriteError(w, r, ErrInternal)` (underlying XML encode error is extremely rare—ResponseWriter wrapping an in-memory buffer—and is logged via `slog.Error` inside `WriteError`)
+
+All are in handler closures that already receive `*http.Request`, so no signature change is needed.
+
+**Consequences:**
+
+1. **Call-site syntax** — unchanged; no public API change.
+2. **Response shape** — 404, 410, 401, and 500 responses from these handlers now include `X-Request-ID` and respect `Accept: application/json`.
+3. **Logging** — 500 responses from `IndexHandler` are now logged via `slog.Error` in `WriteError`.
+4. **Tests** — existing test assertions on status code are unaffected. New assertions added for `X-Request-ID` presence.
+5. **No breaking change** — clients that parse only the status code see no difference.
