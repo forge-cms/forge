@@ -23,6 +23,20 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.6] — 2026-03-12
+
+Health endpoint and application version field.
+
+### Added
+
+- `forge.go`: `Config.Version string` field — when non-empty, included in the
+  `GET /_health` response as `{"status":"ok","version":"X.Y.Z"}`
+- `forge.go`: `App.Health()` method — mounts `GET /_health`; explicit opt-in,
+  not auto-mounted; returns `200 application/json`; no authentication required
+  (Amendment A42)
+
+---
+
 ## [1.0.5] — 2026-03-12
 
 Hardening sweep: WriteError pipeline, SignToken error type, goroutine lifecycle,
