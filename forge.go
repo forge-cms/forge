@@ -144,6 +144,7 @@ type App struct {
 	redirectManifestOpts   []Option            // options for the redirect manifest handler (e.g. ManifestAuth)
 	schedulerModules       []schedulableModule // modules that implement scheduled publishing
 	rebuilderModules       []rebuilder         // modules with derived content (sitemap, feed, AI)
+	stoppableModules       []stoppable         // modules with background goroutines to stop at shutdown
 	rebuildDone            bool                // true once startup rebuildAll goroutine is launched
 }
 
@@ -254,6 +255,9 @@ func (a *App) Content(v any, opts ...Option) {
 		}
 		if rb, ok := r.(rebuilder); ok {
 			a.rebuilderModules = append(a.rebuilderModules, rb)
+		}
+		if sp, ok := r.(stoppable); ok {
+			a.stoppableModules = append(a.stoppableModules, sp)
 		}
 		return
 	}
@@ -503,6 +507,9 @@ func (a *App) Run(addr string) error {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return err
+	}
+	for _, sp := range a.stoppableModules {
+		sp.Stop()
 	}
 	return nil
 }

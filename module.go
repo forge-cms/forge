@@ -24,6 +24,12 @@ type rebuilder interface {
 	rebuildAll(ctx Context)
 }
 
+// stoppable is implemented by [Module][T] to allow [App.Run] to stop background
+// goroutines (cache sweep, pending debounce timer) during graceful shutdown.
+type stoppable interface {
+	Stop()
+}
+
 // — contentNegotiator —————————————————————————————————————————————————————
 
 // contentNegotiator carries the pre-compiled content-type capabilities for a
@@ -274,8 +280,6 @@ type Module[T any] struct {
 	middlewares []func(http.Handler) http.Handler
 	neg         contentNegotiator
 	debounce    *debouncer
-	debounceMu  sync.Mutex
-	debounceCtx Context // last Context seen; used by debounced dispatch
 	proto       reflect.Type
 	headFunc    any // nil, or func(Context, T) Head set via HeadFunc option
 
@@ -295,8 +299,10 @@ type Module[T any] struct {
 	llmsStore  *LLMsStore  // set by App.Content via setAIRegistry
 	withoutID  bool        // true when WithoutID() option was given
 
-	feedCfg   *FeedConfig // nil when no Feed option, or when FeedDisabled was called
+	feedCfg   *FeedConfig // nil when no Feed option, or when DisableFeed was called
 	feedStore *FeedStore  // set by App.Content via setFeedStore
+
+	stopCh chan struct{} // closed by Stop() to terminate the cache sweep goroutine
 }
 
 // NewModule constructs a [Module] for content type T.
@@ -420,25 +426,32 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 		))
 	}
 
+	// A39: stopCh is always initialised so Stop() is safe to call on any module.
+	m.stopCh = make(chan struct{})
+
 	// Background sweep for module cache.
 	if m.cache != nil {
 		go func() {
 			ticker := time.NewTicker(60 * time.Second)
 			defer ticker.Stop()
-			for range ticker.C {
-				m.cache.Sweep()
+			for {
+				select {
+				case <-ticker.C:
+					m.cache.Sweep()
+				case <-m.stopCh:
+					return
+				}
 			}
 		}()
 	}
 
 	// Debouncer for sitemap regeneration (Decision 9: event-driven, 2-second delay).
+	// A41: use NewBackgroundContext at fire time so the debounce callback always
+	// runs with a live context. Stashing the request Context is unsafe — its
+	// underlying context.Context is cancelled as soon as the handler returns,
+	// causing SQLRepo queries to fail silently 2 seconds later.
 	m.debounce = newDebouncer(2*time.Second, func() {
-		m.debounceMu.Lock()
-		ctx := m.debounceCtx
-		m.debounceMu.Unlock()
-		if ctx == nil {
-			return
-		}
+		ctx := NewBackgroundContext(m.siteName)
 		dispatchAfter(ctx, m.signals[SitemapRegenerate], nil)
 		m.regenerateSitemap(ctx)
 		m.regenerateAI(ctx)
@@ -446,6 +459,20 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 	})
 
 	return m
+}
+
+// Stop terminates background goroutines started by this module (cache sweep
+// ticker and any pending debounce timer). It is called automatically by
+// [App.Run] during graceful shutdown. Stop is idempotent — calling it more
+// than once is safe.
+func (m *Module[T]) Stop() {
+	select {
+	case <-m.stopCh:
+		// already closed — no-op
+	default:
+		close(m.stopCh)
+	}
+	m.debounce.Stop()
 }
 
 // Register mounts the five standard routes for this module onto mux.
@@ -868,10 +895,11 @@ func (m *Module[T]) rebuildAll(ctx Context) {
 	m.regenerateFeed(ctx)
 }
 
-func (m *Module[T]) triggerSitemap(ctx Context) {
-	m.debounceMu.Lock()
-	m.debounceCtx = ctx
-	m.debounceMu.Unlock()
+// triggerRebuild schedules a debounced regeneration of all derived content
+// (sitemap, AI index, RSS feed). The debounce callback always runs with a
+// background context — it must not use the triggering request context, which
+// will be cancelled by the time the callback fires. (Amendment A41)
+func (m *Module[T]) triggerRebuild() {
 	m.debounce.Trigger()
 }
 
@@ -973,7 +1001,7 @@ func (m *Module[T]) processScheduled(ctx Context, now time.Time) (int, *time.Tim
 
 	if published > 0 {
 		m.invalidateCache()
-		m.triggerSitemap(ctx)
+		m.triggerRebuild()
 	}
 	return published, next, nil
 }
@@ -1127,7 +1155,7 @@ func (m *Module[T]) createHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.invalidateCache()
-	m.triggerSitemap(ctx)
+	m.triggerRebuild()
 
 	writeJSON(w, http.StatusCreated, item)
 }
@@ -1199,7 +1227,7 @@ func (m *Module[T]) updateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.invalidateCache()
-	m.triggerSitemap(ctx)
+	m.triggerRebuild()
 
 	writeJSON(w, http.StatusOK, item)
 }
@@ -1234,7 +1262,7 @@ func (m *Module[T]) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	dispatchAfter(ctx, m.signals[AfterDelete], existing)
 
 	m.invalidateCache()
-	m.triggerSitemap(ctx)
+	m.triggerRebuild()
 
 	w.WriteHeader(http.StatusNoContent)
 }

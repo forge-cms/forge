@@ -159,3 +159,12 @@ func (d *debouncer) Trigger() {
 	}
 	d.timer = time.AfterFunc(d.delay, d.fn)
 }
+
+// Stop cancels any pending debounce timer. Safe to call multiple times.
+func (d *debouncer) Stop() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.timer != nil {
+		d.timer.Stop()
+	}
+}

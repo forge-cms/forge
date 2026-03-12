@@ -59,6 +59,9 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A36 | `module.go` startup capability mismatch detection | Agreed | 2026-03-11 |
 | A37 | `WriteError` pipeline — replace `http.Error`/`http.NotFound` bypasses | Agreed | 2026-03-12 |
 | A38 | `auth.go`: `SignToken` error return implements `forge.Error` | Agreed | 2026-03-12 |
+| A39 | `Module[T]`: cache sweep goroutine lifecycle and `Stop()` method | Agreed | 2026-03-12 |
+| A40 | Rename `FeedDisabled()` → `DisableFeed()` and `forgeLLMSEntries` → `forgeLLMsEntries` | Agreed | 2026-03-12 |
+| A41 | `Module[T]`: debounce callback must use `NewBackgroundContext`, not stashed request context | Agreed | 2026-03-12 |
 
 ---
 
@@ -2720,3 +2723,82 @@ A compile-time assertion `var _ Error = ErrInternal` is added to `auth_test.go` 
 1. **Call-site syntax** — `SignToken` signature is unchanged; only the error type improves.
 2. **Error inspectability** — callers using `errors.As(err, new(forge.Error))` now correctly identify the error.
 3. **No breaking change** — the error path was already unreachable; no caller in production can observe the difference.
+
+---
+
+## Amendment A39 — `Module[T]`: cache sweep goroutine lifecycle and `Stop()` method
+
+**Status:** Agreed  
+**Date:** 2026-03-12  
+**Amends:** Decision 1 (zero-dependency, production-ready defaults)
+
+**Problem:** When `Cache(ttl)` is used with a module, `NewModule` spawns a `time.Ticker` goroutine that calls `CacheStore.Sweep()` every 60 seconds. The goroutine had no exit path — it ran until the process terminated, leaking across test runs and preventing clean graceful shutdown.
+
+**Decision:**
+
+1. Add `stopCh chan struct{}` to `Module[T]`. Initialised unconditionally in `NewModule` via `make(chan struct{})` so `Stop()` is always safe to call regardless of options.
+2. The cache sweep goroutine uses `select { case <-ticker.C: ... case <-m.stopCh: return }` instead of `for range ticker.C`.
+3. Add exported `Stop()` method on `Module[T]`. Idempotent — closing an already-closed channel is guarded by a non-blocking select. Also calls `debounce.Stop()` to cancel any pending `time.AfterFunc` timer.
+4. Add `Stop()` method to `debouncer` in `signals.go` (cancels pending `time.Timer` under the mutex).
+5. Add `stoppable` interface (unexported, matching the `rebuilder`/`schedulableModule` pattern) and `stoppableModules []stoppable` field on `App`.
+6. `App.Content` appends every registered module that implements `stoppable` to `stoppableModules`.
+7. `App.Run` calls `sp.Stop()` for every stoppable module after `srv.Shutdown` returns.
+
+**Consequences:**
+
+1. **No API change** — `Module[T]` gains one exported method (`Stop()`). No existing call sites break.
+2. **Test isolation** — modules created in unit tests no longer leak goroutines between test cases.
+3. **Graceful shutdown** — the cache sweep ticker and any pending debounce timer are cancelled within the 5-second shutdown window.
+4. **Debouncer** — `debouncer.Stop()` is safe to call even before `Trigger()` has been called (`d.timer == nil` guard).
+
+---
+
+## Amendment A40 — Rename `FeedDisabled()` → `DisableFeed()` and `forgeLLMSEntries` → `forgeLLMsEntries`
+
+**Status:** Agreed  
+**Date:** 2026-03-12  
+**Amends:** Decision 1 (API readability) and Amendment A16 (`feed.go` initial naming)
+
+**Problem:** Two symbol names violated the `forge.Verb(Noun)` / `forge.Noun` naming convention:
+
+1. `FeedDisabled()` reads as an adjective predicate rather than a command. Option constructors follow the imperative verb pattern (`Feed`, `Cache`, `Auth`, `On`, `Redirect`). The consistent name is `DisableFeed()` — verb first, noun second.
+2. `forgeLLMSEntries` used the all-caps acronym `LLMS`. Go convention (and the rest of the codebase: `LLMsStore`, `LLMsEntry`, `LLMsTxt`) uses mixed-case `LLMs`. The correct unexported name is `forgeLLMsEntries`.
+
+**Decision:**
+
+1. Rename exported `FeedDisabled() Option` → `DisableFeed() Option` in `feed.go`. Godoc updated. `feedDisabledOption` struct and `feedDisabledOption` case in `module.go` are internal and unchanged.
+2. Rename unexported `forgeLLMSEntries` → `forgeLLMsEntries` in `templatehelpers.go`. The map key `"forge_llms_entries"` is unchanged — no template call sites break.
+3. All call sites updated: `feed_test.go`, `templatehelpers_test.go`, `module.go` comment.
+
+**Consequences:**
+
+1. **Breaking change for `FeedDisabled()`** — any application code calling `FeedDisabled()` must be updated to `DisableFeed()`. Since Forge is pre-v1.1.0 and this is a cosmetic rename of a rarely-used option, the breakage is acceptable and preferable to locking in the wrong name.
+2. **No template break** — `{{forge_llms_entries .}}` in user templates is unaffected; the Go function name is unexported.
+3. **AI generation accuracy** — `DisableFeed()` is immediately parseable as an imperative option; `forgeLLMsEntries` matches the casing of all other `LLMs*` symbols.
+
+---
+
+## Amendment A41 — `Module[T]`: debounce callback must use `NewBackgroundContext`, not stashed request context
+
+**Status:** Agreed
+**Date:** 2026-03-12
+**Amends:** Amendment A24 (`NewBackgroundContext`) — missed application; Decision 9 (event-driven regeneration)
+
+**Problem:** `triggerSitemap(ctx Context)` stashed the triggering HTTP request's `forge.Context` in `m.debounceCtx` (protected by `debounceMu`) and the debounce callback read it back 2 seconds later. `forge.Context` embeds `context.Context`, and the request's underlying context is cancelled as soon as the HTTP handler returns — typically well within the 2-second debounce window. When `SQLRepo.FindAll` or `SQLRepo.Save` received this cancelled context, they returned a context error. All three regeneration paths (`regenerateSitemap`, `regenerateAI`, `regenerateFeed`) and `dispatchAfter(SitemapRegenerate)` silently swallowed the error via `if err != nil { return }`, so every write event in production caused a silent no-op rebuild. `MemoryRepo` ignores its context argument, which is why tests never caught this.
+
+Amendment A24 added `NewBackgroundContext` precisely to solve this class of problem — it was not applied here when the debouncer was first implemented.
+
+**Decision:**
+
+1. Remove `debounceMu sync.Mutex` and `debounceCtx Context` fields from `Module[T]`.
+2. The debounce callback builds its own `Context` at fire time via `NewBackgroundContext(m.siteName)` — `m.siteName` is a plain string field, safe to read from a goroutine after module construction.
+3. Rename `triggerSitemap(ctx Context)` to `triggerRebuild()` — no ctx parameter needed; the callback is fully self-contained.
+4. Update all four call sites (create, update, delete handlers and `processScheduled`).
+
+**Consequences:**
+
+1. **Correctness** — `SQLRepo` users: `regenerateSitemap/AI/Feed` now execute with a live `context.Background()`-backed context; database queries succeed.
+2. **Signal handlers** — `dispatchAfter(SitemapRegenerate)` receives a non-cancelled context; any repo calls inside signal handlers also succeed.
+3. **Simpler struct** — `debounceMu` and `debounceCtx` removed; no lock needed for the debounce path.
+4. **`siteName` at fire time** — may be empty string if module is used without `App.Content`; `NewBackgroundContext("")` is valid and safe.
+5. **No exported API change** — `triggerRebuild` is unexported; `Module[T]`'s public surface is unchanged.

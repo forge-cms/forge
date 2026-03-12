@@ -184,3 +184,20 @@ func TestDebouncerResetsOnTrigger(t *testing.T) {
 		t.Errorf("expected 1 fn invocation, got %d", got)
 	}
 }
+
+// TestDebouncerStop verifies that Stop cancels a pending timer so fn does
+// not fire after the module has been torn down. (Amendment A39)
+func TestDebouncerStop(t *testing.T) {
+	var count atomic.Int32
+	d := newDebouncer(40*time.Millisecond, func() {
+		count.Add(1)
+	})
+	d.Trigger() // schedule fn in 40 ms
+	d.Stop()    // cancel before it fires
+	time.Sleep(60 * time.Millisecond)
+	if got := count.Load(); got != 0 {
+		t.Errorf("fn fired after Stop: %d calls; want 0", got)
+	}
+	// Second Stop must not panic.
+	d.Stop()
+}

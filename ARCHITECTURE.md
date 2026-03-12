@@ -43,9 +43,9 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-11 | Error handling audit and hardening (Amendments A29–A32, v1.0.1): `ERROR_HANDLING.md` created as authoritative strategy document. New sentinels `ErrBadRequest`, `ErrNotAcceptable`, `ErrRequestTooLarge`, `ErrTooManyRequests` added to `errors.go`. `errorTemplateLookup` protected with `sync.RWMutex` via `setErrorTemplateLookup`/`runErrorTemplateLookup` helpers. Direct type assertion in `respond()` replaced with `errors.As`. `writeContent` in `module.go` receives `r *http.Request`; 406 and 400/413 error paths use `WriteError`. `renderListHTML`/`renderShowHTML` in `templates.go` use `WriteError` for nil-template 406. `RateLimit` in `middleware.go` uses `WriteError` for 429. `Recoverer` stack buffer increased from 4096 to 32 KB. All `http.Error` bypass sites eliminated. Four missing test cases added to `errors_test.go`. `ARCHITECTURE.md` — "Error handling pipeline" section added. `copilot-instructions.md` — error handling rule added to non-negotiable rules. |
 | 2026-03-08 | Milestone 9: v1.0.0 stabilisation complete. Coverage raised to 87.5% (target ≥85%). `benchmarks_test.go`: 17 benchmarks across M1–M8 hot paths (see BENCHMARKS.md). Godoc pass on `type App` + all `App.*` methods (A18–A26) and `SQLRepo[T]` parity. `example/blog/`, `example/docs/`, `example/api/` standalone runnable examples added (`go.work` updated). Amendment A27: `Authenticate(auth AuthFunc) func(http.Handler) http.Handler` added to `middleware.go` — populates `Context.User()` via request context; pairs with `BearerHMAC`/`CookieSession`/`AnyAuth`. `CHANGELOG.md`: Keep a Changelog format, v0.1.0–v1.0.0, API stability promise + version policy. `integration_full_test.go`: G21 (M1+M2+M3+M5+M7+M8) full v1.0.0 smoke test — scheduler promotes overdue item, aggregate sitemap + feed + AI index + redirects all verified. Known gap: `App.Content()` calls `r.Register(mux)` before `setFeedStore`/`setSitemap`, so per-module `/posts/feed.xml` and `/posts/sitemap.xml` are not registered via the App path (Amendment A28 candidate); per-module feed tested directly in G11/G12. Milestone 9 complete — v1.0.0 released. |
 
----
+| 2026-03-12 | Hardening sweep (Amendments A37–A41, v1.0.5): A37 — all `http.NotFound`/`http.Error` bypasses replaced with `WriteError(w, r, sentinel)`. A38 — `auth.go` `encodeToken` returns `ErrInternal` instead of raw `fmt.Errorf`. A39 — `Module[T]` goroutine lifecycle: `stopCh` field + `Stop()` method; cache sweep exits on `stopCh`; `debouncer.Stop()` added; `stoppable` interface + `App.stoppableModules`; `App.Run()` calls `Stop()` on all modules after `srv.Shutdown`. A40 — `FeedDisabled()` → `DisableFeed()`; `forgeLLMSEntries` → `forgeLLMsEntries`. A41 — debounce callback used stashed request context (cancelled before 2-second delay fires); replaced with `NewBackgroundContext(m.siteName)` at fire time; `debounceMu`/`debounceCtx` fields removed; `triggerSitemap(ctx)` → `triggerRebuild()`. |
 
-## Package structure
+---
 
 All files are in a single package: `forge`. There are no sub-packages.
 This is intentional — it eliminates circular import issues and keeps
@@ -62,17 +62,20 @@ github.com/forge-cms/forge/
 ├── node.go           Node, Status, lifecycle constants, NewID(), GenerateSlug(), UniqueSlug(), ValidateStruct()
 │                     GetSlug(), GetPublishedAt(), GetStatus() getter methods (Amendment A2)
 ├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser
-├── signals.go        Signal type, On[T]() option, dispatchBefore(), dispatchAfter(), debouncer
+├── signals.go        Signal type, On[T]() option, dispatchBefore(), dispatchAfter(), debouncer,
+│                     debouncer.Stop() (Amendment A39)
 ├── storage.go        DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
 ├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, Authenticate, CSRF, Chain
-├── module.go         Module[T], NewModule, Register, At, Cache, Auth,
+├── module.go         Module[T], NewModule, Register, Stop, At, Cache, Auth,
                       Middleware, Repo, On, SitemapConfig, AIIndex, WithoutID,
-                      Feed, FeedDisabled options;
+                      Feed, DisableFeed options;
                       setSitemap, regenerateSitemap, setAIRegistry, regenerateAI, aiDocHandler;
-                      setFeedStore, regenerateFeed;
-                      aiFeatures, llmsStore, withoutID, feedCfg, feedStore fields
+                      setFeedStore, regenerateFeed; triggerRebuild();
+                      aiFeatures, llmsStore, withoutID, feedCfg, feedStore fields;
+                      stoppable interface, stopCh field (Amendment A39);
+                      debounce callback uses NewBackgroundContext (Amendment A41)
 │                     (Markdownable migrated to ai.go — Amendment A11)
 ├── forge.go          Config, MustConfig, New, App (Use/Content/Handle/Run/Handler/SEO),
 │                     Registrator, SEOOption, seoState, httpsRedirect,
@@ -87,7 +90,9 @@ github.com/forge-cms/forge/
                       redirectStore field, App.Redirect()/RedirectStore(), "/" fallback
                       mount (Amendment A20); redirectManifestReg, /.well-known/redirects.json
                       always mounted (Amendment A21); redirectManifestOpts field,
-                      App.RedirectManifestAuth() (Amendment A22)
+                      App.RedirectManifestAuth() (Amendment A22);
+                      stoppableModules []stoppable field, Stop() wired after srv.Shutdown
+                      (Amendment A39)
 └── head.go           Head (Title, Description, Author, Published, Modified, Image, Type,
                       Canonical, Tags, Breadcrumbs, Alternates, Social, NoIndex),
                       Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
@@ -120,7 +125,7 @@ github.com/forge-cms/forge/
                       AIIndex() option, WithoutID() option,
                       LLMsEntry, LLMsTemplateData, LLMsStore, NewLLMsStore,
                       extractNode, renderAIDoc, hasAIFeature
-└── feed.go           FeedConfig, Feed() option (opt-in, A16), FeedDisabled() option,
+└── feed.go           FeedConfig, Feed() option (opt-in, A16), DisableFeed() option,
                       FeedStore, NewFeedStore, buildRSSItem, capitalisePrefixTitle,
                       guessMIMEType, writeRSSFeed;
                       ModuleHandler → /{prefix}/feed.xml;

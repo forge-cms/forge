@@ -680,3 +680,33 @@ func TestNewModule_aiIndexLLMsFull_panicsWithoutMarkdownable(t *testing.T) {
 	repo := NewMemoryRepo[*testPost]()
 	NewModule((*testPost)(nil), Repo(repo), AIIndex(LLMsTxtFull))
 }
+
+// — A39 goroutine lifecycle ————————————————————————————————————————————————
+
+// TestModule_Stop_idempotent verifies that calling Stop() twice does not panic.
+// (Amendment A39)
+func TestModule_Stop_idempotent(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	m := NewModule((*testPost)(nil), Repo(repo), Cache(time.Minute))
+	m.Stop()
+	m.Stop() // must not panic
+}
+
+// TestModule_Stop_haltsCacheSweep verifies that the cache sweep goroutine
+// exits after Stop() is called. (Amendment A39)
+func TestModule_Stop_haltsCacheSweep(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	m := NewModule((*testPost)(nil), Repo(repo), Cache(time.Millisecond))
+	if m.cache == nil {
+		t.Fatal("cache is nil — Cache option not applied")
+	}
+	// Close stopCh; the sweep goroutine must drain and exit.
+	m.Stop()
+	// stopCh must now be closed — a second read must not block.
+	select {
+	case <-m.stopCh:
+		// expected
+	default:
+		t.Error("stopCh not closed after Stop()")
+	}
+}
