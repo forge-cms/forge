@@ -60,6 +60,9 @@ func TestUserIs(t *testing.T) {
 
 // — SignToken / decodeToken —————————————————————————————————————————————
 
+// compile-time: signToken's error return must satisfy forge.Error
+var _ Error = ErrInternal
+
 func TestSignTokenRoundTrip(t *testing.T) {
 	secret := "test-secret-that-is-long-enough-32x"
 	original := User{ID: "u1", Name: "Alice", Roles: []Role{Editor}}

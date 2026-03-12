@@ -58,6 +58,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A35 | `module.go` content negotiation capability gating | Agreed | 2026-03-11 |
 | A36 | `module.go` startup capability mismatch detection | Agreed | 2026-03-11 |
 | A37 | `WriteError` pipeline — replace `http.Error`/`http.NotFound` bypasses | Agreed | 2026-03-12 |
+| A38 | `auth.go`: `SignToken` error return implements `forge.Error` | Agreed | 2026-03-12 |
 
 ---
 
@@ -2701,3 +2702,21 @@ All are in handler closures that already receive `*http.Request`, so no signatur
 3. **Logging** — 500 responses from `IndexHandler` are now logged via `slog.Error` in `WriteError`.
 4. **Tests** — existing test assertions on status code are unaffected. New assertions added for `X-Request-ID` presence.
 5. **No breaking change** — clients that parse only the status code see no difference.
+
+## Amendment A38 — `auth.go`: `SignToken` error return implements `forge.Error`
+
+**Status:** Agreed  
+**Date:** 2026-03-12  
+**Amends:** Decision 16 (`errors.go` error handling model)
+
+**Problem:** `encodeToken` (called by the public `SignToken`) returned a raw `fmt.Errorf` value on `json.Marshal` failure. This is the only non-`forge.Error` error return from a public API function, violating Decision 16.
+
+**Decision:** Replace `fmt.Errorf("forge: encodeToken marshal: %w", err)` with `ErrInternal`. The `json.Marshal` call serialises `tokenPayload{string, string, []string, int64}` — none of those types can fail JSON serialisation, so this path is unreachable in practice. Returning `ErrInternal` is the correct defensive choice: it satisfies `forge.Error`, is already imported, and requires no new types.
+
+A compile-time assertion `var _ Error = ErrInternal` is added to `auth_test.go` to document the contract explicitly.
+
+**Consequences:**
+
+1. **Call-site syntax** — `SignToken` signature is unchanged; only the error type improves.
+2. **Error inspectability** — callers using `errors.As(err, new(forge.Error))` now correctly identify the error.
+3. **No breaking change** — the error path was already unreachable; no caller in production can observe the difference.

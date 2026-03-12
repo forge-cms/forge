@@ -91,7 +91,9 @@ func encodeToken(user User, secret string, ttl time.Duration) (string, error) {
 
 	raw, err := json.Marshal(tokenPayload{ID: user.ID, Name: user.Name, Roles: roles, Exp: exp})
 	if err != nil {
-		return "", fmt.Errorf("forge: encodeToken marshal: %w", err)
+		// json.Marshal on tokenPayload (string/[]string/int64 fields) is
+		// unreachable in practice; return a forge.Error per Decision 16.
+		return "", ErrInternal
 	}
 
 	payload := base64.RawURLEncoding.EncodeToString(raw)
