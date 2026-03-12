@@ -195,6 +195,20 @@ An Amendment may make README syntax more elegant — if it does, update
 
 An Amendment must never leave `example_test.go` in a failing state.
 
+**Amendment DECISIONS.md completeness rule:**
+Every commit that implements an Amendment must contain **both** of the following
+edits to `DECISIONS.md` — neither is optional:
+
+1. **Index table row** — a new row added to the Amendment index table at the top
+   of `DECISIONS.md` (columns: ID, description, status, date).
+2. **Body section** — the full Amendment text appended after the previous
+   Amendment's body.
+
+A commit that adds a body without an index row (or an index row without a body)
+is incomplete and must not be proposed. Treat these as a single atomic unit:
+write both in the same edit pass, verify with `Select-String` or `grep_search`
+that both exist, then stage the file.
+
 ### 4. Architecture and decision review
 - After verification passes, review `ARCHITECTURE.md` and `DECISIONS.md`.
 - Ask: does this implementation reveal a gap, ambiguity, or conflict?

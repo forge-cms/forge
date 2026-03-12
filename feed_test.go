@@ -81,16 +81,16 @@ func TestFeedOption(t *testing.T) {
 
 	t.Run("feed_disabled_clears_config", func(t *testing.T) {
 		repo := NewMemoryRepo[*testFeedPost]()
-		m := NewModule((*testFeedPost)(nil), Repo(repo), Feed(FeedConfig{Title: "Blog"}), FeedDisabled())
+		m := NewModule((*testFeedPost)(nil), Repo(repo), Feed(FeedConfig{Title: "Blog"}), DisableFeed())
 		if m.feedCfg != nil {
-			t.Error("m.feedCfg should be nil after FeedDisabled() option")
+			t.Error("m.feedCfg should be nil after DisableFeed() option")
 		}
 	})
 
 	t.Run("feed_disabled_option_type", func(t *testing.T) {
-		opt := FeedDisabled()
+		opt := DisableFeed()
 		if _, ok := opt.(feedDisabledOption); !ok {
-			t.Fatalf("FeedDisabled() returned %T, want feedDisabledOption", opt)
+			t.Fatalf("DisableFeed() returned %T, want feedDisabledOption", opt)
 		}
 	})
 

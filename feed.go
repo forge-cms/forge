@@ -51,10 +51,10 @@ type feedDisabledOption struct{}
 
 func (feedDisabledOption) isOption() {}
 
-// FeedDisabled returns an Option that explicitly opts a module out of RSS feed
+// DisableFeed returns an Option that explicitly opts a module out of RSS feed
 // generation. This is a defensive marker for modules where a feed endpoint
 // would be inappropriate (e.g. admin-only or API-only modules).
-func FeedDisabled() Option { return feedDisabledOption{} }
+func DisableFeed() Option { return feedDisabledOption{} }
 
 // — RSS 2.0 XML types ————————————————————————————————————————————————————
 

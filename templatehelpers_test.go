@@ -172,7 +172,7 @@ func TestTemplateFuncMap_keys(t *testing.T) {
 
 // TestForgeLLMSEntries verifies that the forge_llms_entries template function
 // renders LLMsTemplateData into a markdown link list and returns empty for
-// unknown or nil inputs (exercises the forgeLLMSEntries helper directly).
+// unknown or nil inputs (exercises the forgeLLMsEntries helper directly).
 func TestForgeLLMSEntries(t *testing.T) {
 	td := LLMsTemplateData{
 		Entries: []LLMsEntry{
@@ -180,7 +180,7 @@ func TestForgeLLMSEntries(t *testing.T) {
 			{Title: "Post Two", URL: "/posts/two"}, // no summary
 		},
 	}
-	got := forgeLLMSEntries(td)
+	got := forgeLLMsEntries(td)
 	if !strings.Contains(string(got), "Post One") {
 		t.Errorf("output missing 'Post One': %q", got)
 	}
@@ -194,16 +194,16 @@ func TestForgeLLMSEntries(t *testing.T) {
 		t.Errorf("output missing 'Post Two' (no-summary entry): %q", got)
 	}
 	// Pointer form should also work.
-	gotPtr := forgeLLMSEntries(&td)
+	gotPtr := forgeLLMsEntries(&td)
 	if got != gotPtr {
 		t.Errorf("pointer form produced different output: %q vs %q", got, gotPtr)
 	}
 	// Unknown type returns empty.
-	if got2 := forgeLLMSEntries("not-a-td"); got2 != "" {
+	if got2 := forgeLLMsEntries("not-a-td"); got2 != "" {
 		t.Errorf("unknown type: got %q; want empty string", got2)
 	}
 	// Nil pointer returns empty.
-	if got3 := forgeLLMSEntries((*LLMsTemplateData)(nil)); got3 != "" {
+	if got3 := forgeLLMsEntries((*LLMsTemplateData)(nil)); got3 != "" {
 		t.Errorf("nil pointer: got %q; want empty string", got3)
 	}
 }

@@ -23,6 +23,57 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.5] — 2026-03-12
+
+Hardening sweep: WriteError pipeline, SignToken error type, goroutine lifecycle,
+debounce context correctness, and API naming consistency. All `http.Error`/`http.NotFound`
+bypasses replaced, cache sweep goroutine terminates on graceful shutdown, debounce
+callback no longer uses a cancelled request context, and two API symbols renamed for
+convention consistency. No breaking changes except `FeedDisabled()` →
+`DisableFeed()` (Amendment A40).
+
+### Fixed
+
+- `redirects.go`: `http.NotFound` and `http.Error(410)` bypasses replaced with
+  `WriteError(w, r, ErrNotFound)` / `WriteError(w, r, ErrGone)` (Amendment A37)
+- `redirectmanifest.go`: `http.Error(401)` bypass replaced with
+  `WriteError(w, r, ErrUnauth)` (Amendment A37)
+- `cookiemanifest.go`: `http.Error(401)` bypass replaced with
+  `WriteError(w, r, ErrUnauth)` (Amendment A37)
+- `sitemap.go`: `http.NotFound` and `http.Error(500)` bypasses replaced with
+  `WriteError(w, r, ErrNotFound)` / `WriteError(w, r, ErrInternal)` (Amendment A37)
+- `auth.go` (`encodeToken`): unreachable `json.Marshal` error path returned raw
+  `fmt.Errorf`; returns `ErrInternal` (satisfies `forge.Error`, Amendment A38)
+- `module.go` (cache sweep goroutine): goroutine spawned by `NewModule` had no
+  exit path and leaked across graceful shutdown and test runs; now exits via
+  `stopCh` select branch (Amendment A39)
+- `module.go` (debounce callback): stashed request `Context` was cancelled before
+  the 2-second debounce fired; `SQLRepo` queries silently failed on every write
+  event in production; callback now builds `NewBackgroundContext(m.siteName)` at
+  fire time; `debounceMu`/`debounceCtx` fields removed; `triggerSitemap(ctx)`
+  renamed to `triggerRebuild()` (Amendment A41)
+- `example/blog/main.go`: index template error handler used `http.Error`;
+  corrected to `forge.WriteError(w, r, forge.ErrInternal)`
+
+### Added
+
+- `Module[T].Stop()`: exported idempotent method that closes `stopCh` (halts
+  cache sweep goroutine) and calls `debounce.Stop()` (Amendment A39)
+- `debouncer.Stop()`: cancels any pending `time.AfterFunc` timer (Amendment A39)
+- `App.Run()` calls `Stop()` on all registered modules after `srv.Shutdown`
+  returns; `stoppable` interface added (Amendment A39)
+
+### Changed
+
+- `FeedDisabled()` renamed to `DisableFeed()` for naming convention consistency
+  (`forge.Verb(Noun)` pattern); `feedDisabledOption` internal type unchanged
+  (Amendment A40)
+- `forgeLLMSEntries` (unexported) renamed to `forgeLLMsEntries` to match
+  `LLMsStore`/`LLMsEntry` casing convention; template tag `forge_llms_entries`
+  is unchanged (Amendment A40)
+
+---
+
 ## [1.0.4] — 2026-03-11
 
 Fenced code block rendering, content negotiation capability gating (A35),

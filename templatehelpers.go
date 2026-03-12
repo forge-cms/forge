@@ -217,7 +217,7 @@ func forgeCSRFToken(r *http.Request) template.HTML {
 	))
 }
 
-// forgeLLMSEntries formats the entries from data for use in custom llms.txt
+// forgeLLMsEntries formats the entries from data for use in custom llms.txt
 // templates. data must be a [LLMsTemplateData] value or pointer; returns an
 // empty string for any other type.
 //
@@ -228,7 +228,7 @@ func forgeCSRFToken(r *http.Request) template.HTML {
 // Template usage:
 //
 //	{{forge_llms_entries .}}
-func forgeLLMSEntries(data any) template.HTML {
+func forgeLLMsEntries(data any) template.HTML {
 	var td LLMsTemplateData
 	switch v := data.(type) {
 	case LLMsTemplateData:
@@ -276,6 +276,6 @@ func TemplateFuncMap() template.FuncMap {
 		"forge_markdown":     forgeMarkdown,
 		"forge_excerpt":      forgeExcerpt,
 		"forge_csrf_token":   forgeCSRFToken,
-		"forge_llms_entries": forgeLLMSEntries,
+		"forge_llms_entries": forgeLLMsEntries,
 	}
 }

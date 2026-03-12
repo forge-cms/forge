@@ -132,7 +132,7 @@ func main() {
 	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := indexTpl.ExecuteTemplate(w, "index.html", nil); err != nil {
-			http.Error(w, "template error", http.StatusInternalServerError)
+			forge.WriteError(w, r, forge.ErrInternal)
 		}
 	}))
 
