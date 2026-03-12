@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go Resources</title>
+  {{/* forge:head emits <title>, <meta description>, Open Graph, Twitter Card,
+       and JSON-LD tags derived from the module's Head() method. */}}
+  {{template "forge:head" .Head}}
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 740px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; color: #1a1a1a; }
+    header { border-bottom: 1px solid #e5e5e5; margin-bottom: 2rem; padding-bottom: 1rem; }
+    header h1 a { text-decoration: none; color: inherit; }
+    header p { color: #555; margin: 0.25rem 0 0; }
+    article { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 1px solid #f0f0f0; }
+    article:last-child { border-bottom: none; }
+    article h2 { margin: 0 0 0.25rem; }
+    article h2 a { color: #1a1a1a; text-decoration: none; }
+    article h2 a:hover { color: #2563eb; }
+    article p { margin: 0.25rem 0 0.5rem; color: #444; }
+    .tags { list-style: none; padding: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 0; }
+    .tags li { background: #f0f0f0; border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.8rem; }
+    footer { border-top: 1px solid #e5e5e5; margin-top: 2rem; padding-top: 1rem; font-size: 0.875rem; color: #666; }
+    footer a { color: #666; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/resources">Go Resources</a></h1>
+    <p>A curated list of Go programming resources.</p>
+  </header>
+  <main>
+    {{range .Content}}
+    <article>
+      <h2><a href="/resources/{{.Slug}}">{{.Title}}</a></h2>
+      {{if .Description}}<p>{{.Description}}</p>{{end}}
+      {{if .Tags}}
+      <ul class="tags">{{range .Tags}}<li>{{.}}</li>{{end}}</ul>
+      {{end}}
+    </article>
+    {{else}}
+    <p>No resources yet.</p>
+    {{end}}
+  </main>
+  <footer>
+    <p>
+      <a href="/resources/feed.xml">RSS</a> ·
+      <a href="/llms.txt">llms.txt</a> ·
+      <a href="/llms-full.txt">llms-full.txt</a> ·
+      <a href="/resources/sitemap.xml">Sitemap</a>
+    </p>
+  </footer>
+</body>
+</html>

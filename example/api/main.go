@@ -2,39 +2,21 @@
 // demonstrating authentication, role-based authorisation, validation hooks,
 // and legacy URL redirects with no HTML templates.
 //
-// All responses are JSON (content negotiation is automatic; no Accept header
-// required). There are no templates — the module serves JSON natively.
+// The binary runs in two modes:
 //
-// # Authentication
+//   - Server mode (default): starts a JSON API on :8082.
+//   - CLI mode: when a sub-command is provided the binary acts as a client,
+//     sending authenticated requests to the running server and printing results.
 //
-// Two roles are pre-seeded so the role hierarchy is visible:
+// # CLI Usage
 //
-//	Author (forge.Author)  — can read Published resources (GET list + show)
-//	Editor (forge.Editor)  — can also create and update resources (POST / PUT)
-//
-// NOTE: tokens are hardcoded for demonstration only.
-// In production use forge.SignToken to issue signed HMAC tokens.
-//
-// Tokens are printed at server startup. Use them with curl:
-//
-//	# Public read — no token required
-//	curl http://localhost:8082/resources
-//	curl http://localhost:8082/resources/go-language-spec
-//
-//	# Legacy redirect (301 → /resources/go-language-spec)
-//	curl -L http://localhost:8082/resources/go-spec
-//
-//	# Create — requires Editor token
-//	curl -X POST http://localhost:8082/resources \
-//	  -H "Authorization: Bearer <editor-token>" \
-//	  -H "Content-Type: application/json" \
-//	  -d '{"title":"My Resource","url":"https://example.com","description":"A great Go resource"}'
-//
-//	# Update — requires Editor token
-//	curl -X PUT http://localhost:8082/resources/my-resource \
-//	  -H "Authorization: Bearer <editor-token>" \
-//	  -H "Content-Type: application/json" \
-//	  -d '{"title":"My Resource","url":"https://example.com","description":"Updated description"}'
+//	./api                                                  start the JSON API server (default)
+//	./api html                                             start the HTML site server — browsable pages
+//	./api list                                             list resources (public)
+//	./api get <slug>                                       fetch one resource (public)
+//	./api create <title> <url> <description>               create a resource (Editor)
+//	./api update <slug> <title> <url> <description>        update a resource (Editor)
+//	./api delete <slug>                                    delete a resource (Editor)
 //
 // Run with:
 //
@@ -42,10 +24,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -100,10 +86,12 @@ type Resource struct {
 
 // Head implements [forge.Headable] so Resource satisfies [forge.SitemapNode].
 // Forge calls Head() when building the sitemap fragment at /resources/sitemap.xml.
-// Returning a zero Canonical is fine — regenerateSitemap derives it from
-// Config.BaseURL + slug automatically.
+// In HTML mode the Description field populates the <meta name="description"> tag.
 func (r *Resource) Head() forge.Head {
-	return forge.Head{Title: r.Title}
+	return forge.Head{
+		Title:       r.Title,
+		Description: r.Description,
+	}
 }
 
 // Markdown returns a plain-text summary of the resource suitable for AI index.
@@ -114,6 +102,22 @@ func (r *Resource) Markdown() string {
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		if os.Args[1] == "html" {
+			runServer(true)
+			return
+		}
+		runCLI(os.Args[1:])
+		return
+	}
+	runServer(false)
+}
+
+// runServer starts the API on :8082.
+// When withHTML is true, forge.Templates is added to the module so every
+// resource is rendered as a browsable HTML page at /resources/{slug}.
+// Without it the server runs as a headless JSON API (the default).
+func runServer(withHTML bool) {
 	repo := forge.NewMemoryRepo[*Resource]()
 	seed(repo)
 
@@ -122,7 +126,9 @@ func main() {
 	// Context.User() so module role checks (forge.Auth) evaluate correctly.
 	auth := forge.BearerHMAC(secret)
 
-	m := forge.NewModule((*Resource)(nil),
+	// Build module options. forge.Templates is appended when running in HTML mode,
+	// turning the JSON API into a rendered website with no other code change.
+	opts := []forge.Option{
 		forge.At("/resources"),
 		forge.Repo(repo),
 
@@ -155,7 +161,15 @@ func main() {
 		//   /llms.txt          — compact content index (llmstxt.org format)
 		//   /llms-full.txt     — full markdown corpus (requires Markdownable)
 		forge.AIIndex(forge.LLMsTxt, forge.LLMsTxtFull),
-	)
+	}
+	if withHTML {
+		// Forge: Templates("templates") enables HTML rendering. Forge parses
+		// templates/list.html (GET /resources) and templates/show.html
+		// (GET /resources/{slug}) at startup. The JSON API routes continue to
+		// work — clients sending Accept: application/json still get JSON.
+		opts = append(opts, forge.Templates("templates"))
+	}
+	m := forge.NewModule((*Resource)(nil), opts...)
 
 	app := forge.New(forge.MustConfig(forge.Config{
 		BaseURL: "http://localhost:8082",
@@ -198,17 +212,18 @@ func main() {
 	// appends the sitemap index URL to its Sitemap: directives.
 	app.SEO(&forge.RobotsConfig{Sitemaps: true})
 
-	// Welcome page — inline HTML so the API example stays template-free.
+	// Welcome page — real links for all GET endpoints; CLI commands for write ops.
 	app.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Forge API Example</title>
 <style>
-body{font-family:system-ui,sans-serif;max-width:740px;margin:40px auto;padding:0 24px;color:#1a1a1a}
+body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 24px;color:#1a1a1a}
 h1{font-size:1.8rem;margin-bottom:.25rem}p{color:#555;line-height:1.6}
 h2{margin:2rem 0 .5rem}ul{padding-left:1.2rem}li{margin:.4rem 0}
 code{background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:.9em}
+pre{background:#f4f4f4;padding:12px 16px;border-radius:6px;overflow-x:auto;font-size:.85em;line-height:1.7}
 a{color:#2563eb}
 footer{margin-top:3rem;padding-top:1rem;border-top:1px solid #e5e7eb;font-size:.85rem;color:#888}
 footer a{color:#2563eb}
@@ -217,43 +232,60 @@ footer a{color:#2563eb}
 <body>
 <h1>Forge API Example</h1>
 <p>A headless JSON API built with Forge. Demonstrates authentication, role-based authorisation, validation hooks, and legacy URL redirects.</p>
-<h2>Endpoints</h2>
+<h2>Read endpoints (public)</h2>
 <ul>
-  <li><a href="/resources"><code>GET /resources</code></a> — list published resources (public)</li>
-  <li><code>GET /resources/{slug}</code> — single resource (public)</li>
-  <li><code>POST /resources</code> — create resource (Editor+)</li>
-  <li><code>PUT /resources/{slug}</code> — update resource (Editor+)</li>
-  <li><code>DELETE /resources/{slug}</code> — delete resource (Admin)</li>
-  <li><code>GET /resources/go-spec</code> — legacy redirect → <code>/resources/go-language-spec</code></li>
+  <li><a href="/resources"><code>GET /resources</code></a> &#8212; list published resources</li>
+  <li><a href="/resources/go-language-spec"><code>GET /resources/go-language-spec</code></a> &#8212; single resource</li>
+  <li><a href="/resources/go-spec"><code>GET /resources/go-spec</code></a> &#8212; legacy redirect &#8594; <code>/resources/go-language-spec</code></li>
 </ul>
+<h2>HTML site mode</h2>
+<p>Restart the server with <code>./api html</code> to enable server-rendered HTML pages. The same resources are available as browsable pages:</p>
+<pre>./api html</pre>
+<ul>
+  <li><a href="/resources"><code>GET /resources</code></a> &#8212; rendered list page (in HTML mode)</li>
+  <li><a href="/resources/go-language-spec"><code>GET /resources/go-language-spec</code></a> &#8212; rendered detail page (in HTML mode)</li>
+</ul>
+<h2>Write endpoints &#8212; CLI</h2>
+<p>Write operations require an Editor token. Use the built-in CLI from the same binary:</p>
+<pre>./api list
+./api get go-language-spec
+./api create "My Resource" "https://example.com" "A great Go resource."
+./api update my-resource "Updated Title" "https://example.com" "Better description."
+./api delete my-resource</pre>
 <h2>AI &amp; Discovery</h2>
 <ul>
-  <li><a href="/llms.txt"><code>GET /llms.txt</code></a> — compact AI index</li>
-  <li><a href="/llms-full.txt"><code>GET /llms-full.txt</code></a> — full AI corpus</li>
-  <li><a href="/resources/sitemap.xml"><code>GET /resources/sitemap.xml</code></a> — sitemap fragment</li>
-  <li><a href="/resources/feed.xml"><code>GET /resources/feed.xml</code></a> — RSS feed</li>
-  <li><a href="/.well-known/redirects.json"><code>GET /.well-known/redirects.json</code></a> — redirect manifest</li>
+  <li><a href="/llms.txt"><code>GET /llms.txt</code></a> &#8212; compact AI index</li>
+  <li><a href="/llms-full.txt"><code>GET /llms-full.txt</code></a> &#8212; full AI corpus</li>
+  <li><a href="/resources/sitemap.xml"><code>GET /resources/sitemap.xml</code></a> &#8212; sitemap fragment</li>
+  <li><a href="/resources/feed.xml"><code>GET /resources/feed.xml</code></a> &#8212; RSS feed</li>
+  <li><a href="/.well-known/redirects.json"><code>GET /.well-known/redirects.json</code></a> &#8212; redirect manifest</li>
 </ul>
-<h2>Authentication</h2>
-<p>Send an <code>Authorization: Bearer &lt;token&gt;</code> header. Editor and Author tokens are printed in the server startup log.</p>
-<footer>Built with <a href="https://github.com/forge-cms/forge">Forge</a> · <a href="/robots.txt">robots.txt</a></footer>
+<footer>Built with <a href="https://github.com/forge-cms/forge">Forge</a> &#183; <a href="/robots.txt">robots.txt</a></footer>
 </body></html>`)
 	}))
 
-	log.Println("Forge API — http://localhost:8082")
-	log.Println("")
-	log.Println("  Editor token (Alice):", editorToken)
-	log.Println("  Author token (Bob):  ", authorToken)
-	log.Println("")
-	log.Println("  Home:                http://localhost:8082/")
-	log.Println("  Resources:           http://localhost:8082/resources")
-	log.Println("  Legacy redirect:     http://localhost:8082/resources/go-spec  → 301")
-	log.Println("  Redirects manifest:  http://localhost:8082/.well-known/redirects.json")
-	log.Println("  robots.txt:          http://localhost:8082/robots.txt")
-	log.Println("  Sitemap:             http://localhost:8082/resources/sitemap.xml")
-	log.Println("  RSS feed:            http://localhost:8082/resources/feed.xml")
-	log.Println("  AI index:            http://localhost:8082/llms.txt")
-	log.Println("  AI corpus:           http://localhost:8082/llms-full.txt")
+	if withHTML {
+		log.Println("Forge API (HTML mode) -- http://localhost:8082")
+		log.Println("")
+		log.Println("  HTML pages:")
+		log.Println("    http://localhost:8082/resources")
+		log.Println("    http://localhost:8082/resources/go-language-spec")
+		log.Println("")
+		log.Println("  JSON API still works (send Accept: application/json)")
+		log.Println("")
+		log.Println("  Editor token (Alice):", editorToken)
+	} else {
+		log.Println("Forge API -- http://localhost:8082")
+		log.Println("")
+		log.Println("  Editor token (Alice):", editorToken)
+		log.Println("  Author token (Bob):  ", authorToken)
+		log.Println("")
+		log.Println("  ./api list                                     GET /resources  (public)")
+		log.Println("  ./api get go-language-spec                     GET /resources/go-language-spec  (public)")
+		log.Println("  ./api create \"My Resource\" \"https://…\" \"Desc\"  POST /resources  (Editor)")
+		log.Println("  ./api update <slug> <title> <url> <desc>       PUT /resources/<slug>  (Editor)")
+		log.Println("  ./api delete <slug>                            DELETE /resources/<slug>  (Editor)")
+	}
 
 	if err := app.Run(":8082"); err != nil {
 		log.Fatal(err)
@@ -398,4 +430,124 @@ func seed(repo forge.Repository[*Resource]) {
 			log.Fatalf("seed %q: %v", r.slug, err)
 		}
 	}
+}
+
+// runCLI dispatches CLI sub-commands to the running server at http://localhost:8082.
+// The Editor token (signed in init) is used for write operations automatically —
+// no --token flag or copy-pasting from the server log required.
+func runCLI(args []string) {
+	if len(args) == 0 {
+		printUsage()
+		return
+	}
+	switch args[0] {
+	case "list":
+		apiRequest(http.MethodGet, "/resources", "", nil)
+	case "get":
+		if len(args) < 2 {
+			die("usage: api get <slug>")
+		}
+		apiRequest(http.MethodGet, "/resources/"+args[1], "", nil)
+	case "create":
+		if len(args) < 4 {
+			die("usage: api create <title> <url> <description>")
+		}
+		apiRequest(http.MethodPost, "/resources", editorToken, map[string]any{
+			"title":       args[1],
+			"url":         args[2],
+			"description": args[3],
+			"status":      "published",
+		})
+	case "update":
+		if len(args) < 5 {
+			die("usage: api update <slug> <title> <url> <description>")
+		}
+		apiRequest(http.MethodPut, "/resources/"+args[1], editorToken, map[string]any{
+			"title":       args[2],
+			"url":         args[3],
+			"description": args[4],
+		})
+	case "delete":
+		if len(args) < 2 {
+			die("usage: api delete <slug>")
+		}
+		apiRequest(http.MethodDelete, "/resources/"+args[1], editorToken, nil)
+	case "html":
+		die("'html' is a server flag, not a CLI command.\nUsage: api html    (start server with HTML templates)")
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+// apiRequest sends an HTTP request to the local server and prints the JSON
+// response to stdout. It exits 1 on network failure or a 4xx/5xx response.
+func apiRequest(method, path, token string, body any) {
+	const base = "http://localhost:8082"
+
+	var r io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "encode:", err)
+			os.Exit(1)
+		}
+		r = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequest(method, base+path, r)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "build request:", err)
+		os.Exit(1)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "http:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	out, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		fmt.Fprintf(os.Stderr, "error %d: %s\n", resp.StatusCode, strings.TrimSpace(string(out)))
+		os.Exit(1)
+	}
+
+	if len(out) == 0 {
+		fmt.Printf("%s %s %d\n", method, path, resp.StatusCode)
+		return
+	}
+
+	var pretty bytes.Buffer
+	if json.Indent(&pretty, out, "", "  ") == nil {
+		fmt.Println(pretty.String())
+	} else {
+		fmt.Println(string(out))
+	}
+}
+
+func printUsage() {
+	fmt.Fprintln(os.Stderr, `Usage: api [command]
+
+  (no command)                              start the JSON API server on :8082
+  html                                      start the server with HTML templates
+  list                                      GET /resources  (public)
+  get <slug>                                GET /resources/<slug>  (public)
+  create <title> <url> <desc>               POST /resources  (Editor)
+  update <slug> <title> <url> <desc>        PUT /resources/<slug>  (Editor)
+  delete <slug>                             DELETE /resources/<slug>  (Editor)`)
+}
+
+func die(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
+	os.Exit(1)
 }
