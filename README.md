@@ -4,7 +4,7 @@
 Built for developers. Optimized for AI. Zero compromises on readability.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/forge-cms/forge.svg)](https://pkg.go.dev/github.com/forge-cms/forge)
-**v1.0.0 — stable.** All exported symbols are stable. No breaking changes without a major version bump. See [CHANGELOG.md](CHANGELOG.md).
+**v1.0.4 — stable.** All exported symbols are stable. No breaking changes without a major version bump. See [CHANGELOG.md](CHANGELOG.md).
 
 ```go
 app := forge.New(forge.Config{
@@ -26,8 +26,8 @@ app.Content(&BlogPost{},
         forge.Delete(forge.Editor),
     ),
     forge.Cache(5*time.Minute),
-    forge.Social(forge.OpenGraph, forge.TwitterCard), // — Milestone 5
-    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),        // — Milestone 5
+    forge.Social(forge.OpenGraph, forge.TwitterCard),
+    forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
     forge.Templates("templates/posts"),
 )
 
@@ -1151,8 +1151,8 @@ func main() {
             forge.Delete(forge.Editor),
         ),
         forge.Cache(10*time.Minute),
-        forge.Social(forge.OpenGraph, forge.TwitterCard), // — Milestone 5
-        forge.AIIndex(forge.LLMsTxt, forge.AIDoc),        // — Milestone 5
+        forge.Social(forge.OpenGraph, forge.TwitterCard),
+        forge.AIIndex(forge.LLMsTxt, forge.AIDoc),
         forge.Templates("templates/articles"),
         forge.On(forge.BeforeCreate, func(ctx forge.Context, a *Article) error {
             a.Author = ctx.User().Name
@@ -1168,11 +1168,9 @@ func main() {
 
 Full CRUD · Role-based auth · Draft-safe lifecycle  
 Structured data (JSON-LD) · Event-driven sitemap · Content negotiation  
-Security headers · Graceful shutdown
-
-*(Open Graph · Twitter Cards · AI indexing · RSS feed — Milestone 5)*  
-*(Cookie compliance manifest — Milestone 6)*  
-*(Scheduled publishing — Milestone 8)*
+Open Graph · Twitter Cards · AI indexing · RSS feed  
+Security headers · Graceful shutdown · Cookie compliance manifest  
+Scheduled publishing
 
 ---
 

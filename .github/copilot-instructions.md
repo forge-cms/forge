@@ -153,6 +153,22 @@ When a milestone ships a feature, update its badge from `🔲 Coming in Mileston
 to `✅ **Available**` in the same commit. Never leave a badge pointing to a shipped
 milestone — it becomes a lie the moment the code merges.
 
+**README version and consistency rule:**
+Before proposing any commit, review `README.md` for:
+- **Version number** — the `**vX.Y.Z — stable.**` line on line 7 must match the
+  latest tag in `CHANGELOG.md`. Update it if behind.
+- **Milestone comments** — code examples that say `// — Milestone N` or
+  `*(feature — Milestone N)*` must be updated when that milestone ships:
+  remove the comment (feature is now always available), or update the badge.
+- **Section consistency** — any section that documents a feature shipped in this
+  commit must reflect the current behaviour (signatures, option names, endpoint
+  paths). A README that misrepresents the API is a documentation bug.
+- **No ✅ badge may claim a feature is available if it is not yet implemented.**
+  No `🔲 Coming in Milestone N` badge may remain for a milestone that has shipped.
+
+This review is part of every commit preparation, not only milestone commits.
+Do not propose a commit message until README has been checked and updated.
+
 **README compile test rule:**
 Forge maintains `example_test.go` in the root package. Every Example function
 in that file is a compile-verified extract of a README code example.
