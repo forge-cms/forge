@@ -225,6 +225,20 @@ interface that third-party error tracking tools (or custom webhooks) can
 implement and plug in via `app.Use(...)`. Needed for forge-cms.dev from
 day one in production.
 
+**Shared template partials.**
+`forge.Templates` currently parses a single file; nav/footer must be duplicated
+across list.html and show.html. Add partial directory support or a
+`{{template "include"}}` mechanism. Discovered during forge-site templates sprint.
+
+**`forge:head` public helper.**
+`forgeHeadTmpl` is package-private; `forge.Handle` home handlers cannot use
+`forge:head` and must duplicate meta tags manually. Expose as
+`forge.HeadPartial(head Head) template.HTML` or equivalent.
+
+**`forge.New` MustConfig enforcement.**
+`forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid
+config. Make `New` call `MustConfig` internally so validation is not opt-in.
+
 **Third-party analytics script on forge-cms.dev.**
 Privacy-first, cookieless, EU-hosted — no consent banner required.
 A practical interim measure while native analytics is not yet built.

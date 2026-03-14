@@ -228,6 +228,18 @@ Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
 
 ---
 
+## Phase 2 — Production foundation
+
+See [VISION.md](VISION.md) for context. Steps are ordered by dependency
+and practical value for forge-cms.dev.
+
+- **Health endpoint + error reporter interface** — `GET /_health` ✅ Done (Amendment A42); `forge.ErrorReporter` interface (plug in third-party error tracking or custom webhooks via `app.Use(...)`) still pending
+- **Shared template partials** — `forge.Templates` currently parses a single file; nav/footer must be duplicated across list.html and show.html; add partial directory support or `{{template "include"}}` mechanism; discovered during forge-site templates sprint
+- **`forge:head` public helper** — `forgeHeadTmpl` is package-private; `forge.Handle` home handlers cannot use `forge:head`; expose as `forge.HeadPartial(head Head) template.HTML` or equivalent
+- **`forge.New` MustConfig enforcement** — `forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid config; make `New` call `MustConfig` internally so validation is not opt-in
+
+---
+
 ## v2+ Roadmap (not yet planned)
 
 These topics require a new Tier 1 decision round before planning begins.
@@ -245,5 +257,3 @@ These topics require a new Tier 1 decision round before planning begins.
 - **Database migrations** — `forge migrate` CLI or migration interface
 - **Publish-time validation** — `forge:"required_when=published"` tag or `OnPublish` interface; enforces field requirements on `Published` transition without requiring manual `Validate()` implementation; needed before forge-admin
 - **Token revocation** — `forge.SignToken` TTL=0 is permanent; only revocation is rotating `Config.Secret` (invalidates all tokens); needs per-token revocation list backed by `forge.DB` or short default TTL + refresh; required before Forge Cloud
-- **Shared template partials** — module templates currently require duplicating nav/footer across list.html and show.html; a `{{template "include"}}` mechanism or partial directory support would eliminate this; discovered during forge-site templates sprint
-- **Home page forge:head access** — `forgeHeadTmpl` is package-private; home handlers that use `forge.Handle` cannot use `forge:head` and must duplicate meta tags manually; expose as a public helper or document the workaround explicitly
