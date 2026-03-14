@@ -243,5 +243,7 @@ These topics require a new Tier 1 decision round before planning begins.
 - **Image resizing** — `forge-images` as a separate package
 - **Forge Cloud** — managed hosting, dual-license introduction
 - **Database migrations** — `forge migrate` CLI or migration interface
-
-
+- **Publish-time validation** — `forge:"required_when=published"` tag or `OnPublish` interface; enforces field requirements on `Published` transition without requiring manual `Validate()` implementation; needed before forge-admin
+- **Token revocation** — `forge.SignToken` TTL=0 is permanent; only revocation is rotating `Config.Secret` (invalidates all tokens); needs per-token revocation list backed by `forge.DB` or short default TTL + refresh; required before Forge Cloud
+- **Shared template partials** — module templates currently require duplicating nav/footer across list.html and show.html; a `{{template "include"}}` mechanism or partial directory support would eliminate this; discovered during forge-site templates sprint
+- **Home page forge:head access** — `forgeHeadTmpl` is package-private; home handlers that use `forge.Handle` cannot use `forge:head` and must duplicate meta tags manually; expose as a public helper or document the workaround explicitly
