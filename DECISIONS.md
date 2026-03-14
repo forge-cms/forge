@@ -63,6 +63,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A40 | Rename `FeedDisabled()` → `DisableFeed()` and `forgeLLMSEntries` → `forgeLLMsEntries` | Agreed | 2026-03-12 |
 | A41 | `Module[T]`: debounce callback must use `NewBackgroundContext`, not stashed request context | Agreed | 2026-03-12 |
 | A42 | `forge.go`: `Config.Version` field and `App.Health()` endpoint | Agreed | 2026-03-12 |
+| A43 | `NewSQLRepo` pointer type documentation (amends Decision 22) | Agreed | 2026-03-14 |
 
 ---
 
@@ -2849,3 +2850,17 @@ app.Health()
 4. **No middleware** — `/_health` bypasses rate limiting and authentication by design. Liveness probes must not be auth-gated.
 5. **Consistency** — matches `Cookies()`, `Redirect()`, `RedirectManifestAuth()` as an explicit opt-in method on `App`.
 6. **No breaking change** — existing code is unaffected.
+
+---
+
+## Amendment A43 — NewSQLRepo pointer type documentation (amends Decision 22)
+
+**Date:** 2026-03-14  
+**Status:** Agreed
+
+**Change:** Added explicit pointer-type guidance to `NewSQLRepo` godoc and
+README wiring example. T must be a pointer type and must match the proto
+passed to `NewModule`. Value types compile but produce a type mismatch at
+`forge.Repo(repo)`.
+
+**Consequences:** Documentation only — no API or behaviour change.

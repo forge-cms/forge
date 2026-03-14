@@ -452,6 +452,14 @@ type SQLRepo[T any] struct {
 // NewSQLRepo returns a [SQLRepo][T] ready for use. The table name is derived
 // automatically from T (e.g. BlogPost → "blog_posts"); pass [Table] to
 // override.
+//
+// T must be a pointer type and must match the proto passed to [NewModule]:
+//
+//	repo := forge.NewSQLRepo[*Post](db)
+//	m := forge.NewModule((*Post)(nil), forge.Repo(repo))
+//
+// Using a value type (NewSQLRepo[Post]) will compile but will not satisfy
+// Repository[*Post] — the type parameters must match throughout.
 func NewSQLRepo[T any](db DB, opts ...SQLRepoOption) *SQLRepo[T] {
 	t := reflect.TypeOf((*T)(nil)).Elem()
 	for t.Kind() == reflect.Ptr {

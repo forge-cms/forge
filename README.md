@@ -797,11 +797,15 @@ repo := forge.NewSQLRepo[*BlogPost](db)
 // Explicit table name
 repo := forge.NewSQLRepo[*BlogPost](db, forge.Table("posts"))
 
-// Wire into a module
-app.Content(&BlogPost{},
+// T must be a pointer type — NewSQLRepo[*BlogPost] pairs with NewModule((*BlogPost)(nil), ...)
+repo := forge.NewSQLRepo[*BlogPost](db)
+
+m := forge.NewModule((*BlogPost)(nil),
     forge.At("/posts"),
     forge.Repo(repo),
 )
+
+app.Content(m)
 ```
 
 `SQLRepo` uses `$N` positional placeholders (PostgreSQL / pgx compatible) and upserts via `ON CONFLICT (id) DO UPDATE`.
