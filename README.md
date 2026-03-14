@@ -1178,6 +1178,21 @@ Scheduled publishing
 
 ---
 
+## Known issues
+
+**Windows: CSS files served as `text/plain`**
+
+Go's MIME type lookup on Windows uses the registry, which may map `.css`
+to `text/plain`. If your browser rejects stylesheets during local development,
+add this to your `main()` before starting the server:
+
+```go
+import "mime"
+mime.AddExtensionType(".css", "text/css")
+```
+
+---
+
 ## License
 
 [AGPL v3](LICENSE) — free for individuals, open source projects, and companies
