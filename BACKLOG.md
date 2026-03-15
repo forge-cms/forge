@@ -213,6 +213,12 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 **Amendment A42** — `Config.Version` field + `App.Health()` endpoint — ✅ Done 2026-03-12
 
+**Amendment A44** — `dbFields`: flatten embedded struct fields in `storage.go` (`dbField.index` `int` → `[]int`, add `collectDBFields` recursive helper) — ✅ Done 2026-03-15 (v1.0.7)
+
+**Amendment A45** — Default `BearerHMAC` auth wired in `New()` via `Config.Auth` field — ✅ Done 2026-03-15 (v1.0.8)
+
+**Amendment A46** — Minimal Markdown→HTML renderer in `TemplateFuncMap` (`forge_markdown` upgrade) — 🔲 Pending (v1.0.9)
+
 ---
 
 ## Milestone 10 — MCP support (v2)
@@ -259,3 +265,13 @@ These topics require a new Tier 1 decision round before planning begins.
 - **Database migrations** — `forge migrate` CLI or migration interface
 - **Publish-time validation** — `forge:"required_when=published"` tag or `OnPublish` interface; enforces field requirements on `Published` transition without requiring manual `Validate()` implementation; needed before forge-admin
 - **Token revocation** — `forge.SignToken` TTL=0 is permanent; only revocation is rotating `Config.Secret` (invalidates all tokens); needs per-token revocation list backed by `forge.DB` or short default TTL + refresh; required before Forge Cloud
+
+---
+
+## Known issues (unfiled)
+
+These are confirmed bugs or sharp edges discovered during real-world usage.
+Each will be resolved as a patch or Phase 2 item.
+
+- [ ] **Health endpoint HTTPS redirect** — `forge.Config{HTTPS: true}` causes `GET /_health` to return 301, breaking tools like Caddy's `health_uri` check that follow internal routes and expect 200. Internal health checks should bypass the HTTPS redirect. (Relates to Amendment A42)
+- [ ] **SQLite reserved keyword guard** — `SQLRepo` generates unquoted column names; reserved keywords such as `order` cause SQL syntax errors at runtime. Consider quoting all column names in generated SQL (`"order"`), or document the restriction clearly so developers know to avoid reserved words in struct field names.
