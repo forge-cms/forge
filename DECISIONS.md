@@ -64,6 +64,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A41 | `Module[T]`: debounce callback must use `NewBackgroundContext`, not stashed request context | Agreed | 2026-03-12 |
 | A42 | `forge.go`: `Config.Version` field and `App.Health()` endpoint | Agreed | 2026-03-12 |
 | A43 | `NewSQLRepo` pointer type documentation (amends Decision 22) | Agreed | 2026-03-14 |
+| A44 | `dbFields`: flatten embedded (anonymous) struct fields via `[]int` index path | Agreed | 2026-03-15 |
 
 ---
 
@@ -2864,3 +2865,27 @@ passed to `NewModule`. Value types compile but produce a type mismatch at
 `forge.Repo(repo)`.
 
 **Consequences:** Documentation only — no API or behaviour change.
+
+---
+
+## Amendment A44 — `dbFields`: flatten embedded (anonymous) struct fields via `[]int` index path
+
+**Date:** 2026-03-15  
+**Status:** Agreed
+
+**Change:** `dbField.index` changed from `int` to `[]int` (a `reflect`
+field index path). `dbFields` now delegates to a new recursive helper
+`collectDBFields` that traverses anonymous (embedded) struct fields and
+collects their promoted fields with the full index path. All callers
+updated to use `reflect.Value.FieldByIndex` instead of `reflect.Value.Field`:
+
+- `Query[T]`: `colIdx` map changed to `map[string][]int`; scan target
+  resolved via `elem.FieldByIndex(idx)`.
+- `SQLRepo.columnForField`: resolved via `r.elemType.FieldByIndex(f.index).Name`.
+- `SQLRepo.Save`: argument value resolved via `rv.FieldByIndex(f.index).Interface()`.
+
+**Consequences:** Content types that embed `forge.Node` (or any anonymous
+struct) now have their promoted fields correctly mapped to SQL columns.
+Before this fix, `SQLRepo.Save` passed the embedded struct value itself as
+a SQL argument, producing `"unsupported type forge.Node, a struct"` at
+runtime. No API surface change; the fix is internal to the reflection layer.

@@ -23,6 +23,22 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.7] — 2026-03-15
+
+Bug fix: SQLRepo now correctly handles content types that embed `forge.Node`
+or any other anonymous (embedded) struct.
+
+### Fixed
+
+- `storage.go`: `dbFields` / `collectDBFields` — `dbField.index` changed from
+  `int` to `[]int` (reflect field index path); new recursive helper
+  `collectDBFields` flattens promoted fields from embedded structs so that
+  `SQLRepo.Save` no longer passes a raw struct value as a SQL argument
+  (`"unsupported type forge.Node, a struct"`). All callers updated to use
+  `reflect.Value.FieldByIndex` (Amendment A44)
+
+---
+
 ## [1.0.6] — 2026-03-12
 
 Health endpoint and application version field.

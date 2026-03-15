@@ -21,9 +21,11 @@ type DB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// dbField maps a SQL column name to the index of the matching struct field.
+// dbField maps a SQL column name to the index path of the matching struct
+// field. The index slice is used with reflect.Value.FieldByIndex and supports
+// promoted fields from embedded anonymous structs.
 type dbField struct {
-	index int
+	index []int  // field index path for reflect.Value.FieldByIndex
 	name  string // column name: db tag value, or lowercased field name
 }
 
@@ -32,15 +34,39 @@ type dbField struct {
 var dbFieldCache sync.Map
 
 // dbFields returns the cached column→field mapping for struct type t.
-// On cache miss, it iterates the exported fields and stores the result.
+// On cache miss, collectDBFields recurses into anonymous (embedded) struct
+// fields so that promoted fields such as forge.Node are flattened into the
+// result.
 func dbFields(t reflect.Type) []dbField {
 	if v, ok := dbFieldCache.Load(t); ok {
 		return v.([]dbField)
 	}
-	fields := make([]dbField, 0, t.NumField())
+	fields := collectDBFields(t, nil)
+	dbFieldCache.Store(t, fields)
+	return fields
+}
+
+// collectDBFields recurses into t, building a flat list of dbField values.
+// prefix is the index path to the current struct within the root type.
+// Anonymous (embedded) struct fields are traversed rather than included
+// directly — their promoted fields are mapped with the full index path so
+// that FieldByIndex resolves them correctly.
+func collectDBFields(t reflect.Type, prefix []int) []dbField {
+	result := make([]dbField, 0, t.NumField())
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if !f.IsExported() {
+			continue
+		}
+		idx := make([]int, len(prefix)+1)
+		copy(idx, prefix)
+		idx[len(prefix)] = i
+		ft := f.Type
+		if ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		if f.Anonymous && ft.Kind() == reflect.Struct {
+			result = append(result, collectDBFields(ft, idx)...)
 			continue
 		}
 		name := f.Tag.Get("db")
@@ -50,10 +76,9 @@ func dbFields(t reflect.Type) []dbField {
 		if name == "" {
 			name = strings.ToLower(f.Name)
 		}
-		fields = append(fields, dbField{index: i, name: name})
+		result = append(result, dbField{index: idx, name: name})
 	}
-	dbFieldCache.Store(t, fields)
-	return fields
+	return result
 }
 
 // goFieldPathKey is the cache key for [goFieldPath].
@@ -117,7 +142,7 @@ func Query[T any](ctx context.Context, db DB, query string, args ...any) ([]T, e
 	fields := dbFields(elemType)
 
 	// Build column-name → field-index lookup from the cached field list.
-	colIdx := make(map[string]int, len(fields))
+	colIdx := make(map[string][]int, len(fields))
 	for _, f := range fields {
 		colIdx[f.name] = f.index
 	}
@@ -130,7 +155,7 @@ func Query[T any](ctx context.Context, db DB, query string, args ...any) ([]T, e
 		targets := make([]any, len(cols))
 		for i, col := range cols {
 			if idx, ok := colIdx[col]; ok {
-				targets[i] = elem.Field(idx).Addr().Interface()
+				targets[i] = elem.FieldByIndex(idx).Addr().Interface()
 			} else {
 				var discard any
 				targets[i] = &discard
@@ -476,7 +501,7 @@ func NewSQLRepo[T any](db DB, opts ...SQLRepoOption) *SQLRepo[T] {
 // Returns ("", false) if the field is unknown or excluded from mapping.
 func (r *SQLRepo[T]) columnForField(goName string) (string, bool) {
 	for _, f := range dbFields(r.elemType) {
-		if r.elemType.Field(f.index).Name == goName {
+		if r.elemType.FieldByIndex(f.index).Name == goName {
 			return f.name, true
 		}
 	}
@@ -565,7 +590,7 @@ func (r *SQLRepo[T]) Save(ctx context.Context, item T) error {
 	for i, f := range fields {
 		cols[i] = f.name
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		vals[i] = rv.Field(f.index).Interface()
+		vals[i] = rv.FieldByIndex(f.index).Interface()
 		if f.name != "id" {
 			setParts = append(setParts, f.name+"=EXCLUDED."+f.name)
 		}
