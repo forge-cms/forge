@@ -23,6 +23,19 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.11] — 2026-03-15
+
+Manually published items now get a correct `PublishedAt` timestamp.
+
+### Fixed
+
+- `module.go`: `updateHandler` now sets `PublishedAt` to the current UTC time
+  and re-saves when the status transitions to `Published`; previously
+  `PublishedAt` remained at zero for all items published via PUT; the scheduler
+  path was already correct (Amendment A48)
+
+---
+
 ## [1.0.10] — 2026-03-15
 
 `forge_markdown` now delegates to `renderMarkdown`, gaining full table support.

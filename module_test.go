@@ -267,6 +267,44 @@ func TestModuleUpdateForbiddenGuest(t *testing.T) {
 	}
 }
 
+// TestModuleUpdateSetsPublishedAt verifies that transitioning an item from
+// Draft to Published via updateHandler sets PublishedAt to a non-zero time.
+func TestModuleUpdateSetsPublishedAt(t *testing.T) {
+	repo := NewMemoryRepo[*testPost]()
+	p := seedPost(t, repo, "Draft Post", Draft)
+
+	m := newTestModule(repo)
+
+	update := map[string]any{
+		"Title":  p.Title,
+		"Status": string(Published),
+	}
+	body, _ := json.Marshal(update)
+	before := time.Now().UTC()
+	w := httptest.NewRecorder()
+	r := withUser(
+		httptest.NewRequest(http.MethodPut, "/testposts/"+p.Slug, bytes.NewReader(body)),
+		editorUser(),
+	)
+	r.SetPathValue("slug", p.Slug)
+	m.updateHandler(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d; want 200, body: %s", w.Code, w.Body.String())
+	}
+
+	saved, err := repo.FindBySlug(context.Background(), p.Slug)
+	if err != nil {
+		t.Fatalf("FindBySlug: %v", err)
+	}
+	if saved.PublishedAt.IsZero() {
+		t.Error("PublishedAt is zero after Draft → Published transition")
+	}
+	if saved.PublishedAt.Before(before) {
+		t.Errorf("PublishedAt %v is before the request time %v", saved.PublishedAt, before)
+	}
+}
+
 // — Delete handler tests ——————————————————————————————————————————————————
 
 func TestModuleDeleteForbiddenAuthor(t *testing.T) {

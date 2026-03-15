@@ -1214,6 +1214,17 @@ func (m *Module[T]) updateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set PublishedAt on manual status transition to Published — mirrors the
+	// scheduler's behaviour (see processScheduled). Must happen before signals
+	// so AfterPublish handlers see the correct timestamp.
+	if prevStatus != Published && newStatus == Published {
+		setNodeTime(item, "PublishedAt", time.Now().UTC())
+		if err := m.repo.Save(ctx, item); err != nil {
+			WriteError(w, r, err)
+			return
+		}
+	}
+
 	dispatchAfter(ctx, m.signals[AfterUpdate], item)
 
 	// Status-transition hooks.

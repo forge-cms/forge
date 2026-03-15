@@ -68,6 +68,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A45 | `Config.Auth` field + default `BearerHMAC` wired in `New()` | Agreed | 2026-03-15 |
 | A46 | `markdown.go`: minimal Markdown→HTML renderer added to `TemplateFuncMap` | Agreed | 2026-03-15 |
 | A47 | `templatehelpers.go`: `forge_markdown` delegates to `renderMarkdown` | Agreed | 2026-03-15 |
+| A48 | `module.go`: set `PublishedAt` on manual publish in `updateHandler` | Agreed | 2026-03-15 |
 
 ---
 
@@ -2965,3 +2966,30 @@ were not part of the documented API and were not present in `renderMarkdown`.
 The `applyInline` helper and regex vars (`reMdLink`, `reMdBold`, `reMdItalic`,
 `reMdCode`, `reMdHeading`) in `templatehelpers.go` become dead code; they
 compile cleanly and are left in place to avoid a cross-file change.
+
+---
+
+## Amendment A48 — `module.go`: set `PublishedAt` on manual publish in `updateHandler`
+
+**Date:** 2026-03-15  
+**Status:** Agreed
+
+**Change:** `updateHandler` now sets `PublishedAt` to `time.Now().UTC()` and
+calls `m.repo.Save` a second time when the status transitions from any
+non-Published value to `Published`. This mirrors the already-correct behaviour
+in `processScheduled` (the scheduler path). The second save is committed before
+`AfterPublish` signal handlers are dispatched, so handlers see the correct
+timestamp.
+
+**Reason:** Items published manually via PUT had `PublishedAt` permanently
+stuck at the zero time ("0001-01-01"). The scheduler set it correctly via
+`setNodeTime(item, "PublishedAt", now)` but `updateHandler` had no equivalent
+step. Any template, feed entry, or AI index entry that rendered
+`PublishedAt` showed the wrong date for all manually-published content.
+
+**Consequences:** One additional `repo.Save` call per Draft→Published (or
+Scheduled→Published) transition triggered via PUT. For `MemoryRepo` this is
+negligible; for `SQLRepo` it is one extra `INSERT OR REPLACE` per manual
+publish event, which is acceptable given publish frequency. The response body
+returned by `updateHandler` reflects the updated `PublishedAt` value because
+`item` is mutated in place by `setNodeTime` before `writeJSON` is called.
