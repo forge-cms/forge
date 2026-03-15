@@ -65,6 +65,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A42 | `forge.go`: `Config.Version` field and `App.Health()` endpoint | Agreed | 2026-03-12 |
 | A43 | `NewSQLRepo` pointer type documentation (amends Decision 22) | Agreed | 2026-03-14 |
 | A44 | `dbFields`: flatten embedded (anonymous) struct fields via `[]int` index path | Agreed | 2026-03-15 |
+| A45 | `Config.Auth` field + default `BearerHMAC` wired in `New()` | Agreed | 2026-03-15 |
 
 ---
 
@@ -2889,3 +2890,28 @@ struct) now have their promoted fields correctly mapped to SQL columns.
 Before this fix, `SQLRepo.Save` passed the embedded struct value itself as
 a SQL argument, producing `"unsupported type forge.Node, a struct"` at
 runtime. No API surface change; the fix is internal to the reflection layer.
+
+---
+
+## Amendment A45 — `Config.Auth` field + default `BearerHMAC` wired in `New()`
+
+**Date:** 2026-03-15  
+**Status:** Agreed
+
+**Change:** Added `Auth AuthFunc` field to `Config`. `New()` now prepends
+`Authenticate(auth)` as the first item in `app.middleware`. When `Auth` is
+nil, `auth` defaults to `BearerHMAC(string(cfg.Secret))`. Developers can
+override by setting `Config.Auth` to `CookieSession`, `AnyAuth`, or any
+custom `AuthFunc` before calling `New()`. `Config.Secret` godoc updated to
+mention the default auth behaviour.
+
+**Consequences:**
+- Silent misconfiguration eliminated: a developer who sets `Config.Secret`
+  and calls `SignToken` but never calls `app.Use(forge.Authenticate(...))` no
+  longer gets unexplained 403 responses on every write request.
+- Existing apps that already call `app.Use(forge.Authenticate(...))` will now
+  have `Authenticate` in the stack twice. They should remove their explicit
+  call or set `Config.Auth` to their preferred `AuthFunc`. The double-wrapping
+  is safe (inner wins for role population) but redundant.
+- Auth can be disabled by setting `Config.Auth` to a no-op `AuthFunc` that
+  always returns `GuestUser` — no API change is required for that pattern.

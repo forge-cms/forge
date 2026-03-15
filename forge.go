@@ -33,7 +33,26 @@ type Config struct {
 
 	// Secret is the HMAC signing key used by [BearerHMAC], [CookieSession], and
 	// [SignToken]. It must be at least 16 bytes. Required.
+	//
+	// When Auth is nil, Secret is used to validate Bearer tokens automatically
+	// via [BearerHMAC]. Set [Config.Auth] to override.
 	Secret []byte
+
+	// Auth is the [AuthFunc] used to authenticate requests. When nil, Forge
+	// defaults to [BearerHMAC] using [Config.Secret]. Set this explicitly to
+	// use [CookieSession], [AnyAuth], or a custom [AuthFunc].
+	//
+	// Example — cookie sessions instead of bearer tokens:
+	//
+	//	Auth: forge.CookieSession("session", secret)
+	//
+	// Example — both bearer tokens and cookie sessions:
+	//
+	//	Auth: forge.AnyAuth(
+	//	    forge.BearerHMAC(secret),
+	//	    forge.CookieSession("session", secret),
+	//	)
+	Auth AuthFunc
 
 	// Version is the application version string. When non-empty, it is included
 	// in the GET /_health response.
@@ -171,9 +190,14 @@ func New(cfg Config) *App {
 	if cfg.IdleTimeout == 0 {
 		cfg.IdleTimeout = defaultIdleTimeout
 	}
+	auth := cfg.Auth
+	if auth == nil {
+		auth = BearerHMAC(string(cfg.Secret))
+	}
 	return &App{
 		cfg:           cfg,
 		mux:           http.NewServeMux(),
+		middleware:    []func(http.Handler) http.Handler{Authenticate(auth)},
 		redirectStore: NewRedirectStore(),
 	}
 }

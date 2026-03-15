@@ -23,6 +23,29 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.8] — 2026-03-15
+
+Default authentication wired automatically in `New()`. Silent misconfiguration
+where a developer sets `Config.Secret` and uses `SignToken` but forgets to call
+`app.Use(forge.Authenticate(...))` now produces a working app instead of 403 on
+every write request.
+
+### Added
+
+- `forge.go`: `Config.Auth AuthFunc` field — the `AuthFunc` used to authenticate
+  all requests; when nil, Forge defaults to `BearerHMAC(Config.Secret)`
+  automatically (Amendment A45)
+- `forge.go`: `New()` now prepends `Authenticate(auth)` as the first middleware in
+  the app stack; replaces the need to call `app.Use(forge.Authenticate(...))`
+  manually for the default bearer-token use case (Amendment A45)
+
+### Changed
+
+- `Config.Secret` godoc updated to note that it drives the default `BearerHMAC`
+  auth when `Config.Auth` is nil (Amendment A45)
+
+---
+
 ## [1.0.7] — 2026-03-15
 
 Bug fix: SQLRepo now correctly handles content types that embed `forge.Node`
