@@ -23,26 +23,44 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
-## [1.0.8] — 2026-03-15
+## [1.0.9] — 2026-03-15
 
-Default authentication wired automatically in `New()`. Silent misconfiguration
-where a developer sets `Config.Secret` and uses `SignToken` but forgets to call
-`app.Use(forge.Authenticate(...))` now produces a working app instead of 403 on
-every write request.
+Minimal Markdown→HTML renderer added to `TemplateFuncMap` with zero
+dependencies.
 
 ### Added
 
-- `forge.go`: `Config.Auth AuthFunc` field — the `AuthFunc` used to authenticate
-  all requests; when nil, Forge defaults to `BearerHMAC(Config.Secret)`
-  automatically (Amendment A45)
-- `forge.go`: `New()` now prepends `Authenticate(auth)` as the first middleware in
-  the app stack; replaces the need to call `app.Use(forge.Authenticate(...))`
-  manually for the default bearer-token use case (Amendment A45)
+- `markdown.go`: `renderMarkdown(s string) template.HTML` — XSS-safe
+  Markdown→HTML converter supporting h1–h6, fenced code blocks with
+  `class="language-〈lang〉"`, unordered lists, GFM tables, `**bold**`,
+  `` `inline code` ``, blank-line `<p>` paragraphs, and `---` as `<hr>`;
+  all content HTML-entity-escaped before tag wrapping; zero third-party
+  dependencies (Amendment A46)
+- `templatehelpers.go`: `TemplateFuncMap()` gains `"markdown"` key backed by
+  `renderMarkdown`; existing `"forge_markdown"` is unchanged (Amendment A46)
 
-### Changed
+---
 
-- `Config.Secret` godoc updated to note that it drives the default `BearerHMAC`
-  auth when `Config.Auth` is nil (Amendment A45)
+## [1.0.8] — 2026-03-15
+
+  Default authentication wired automatically in `New()`. Silent misconfiguration
+  where a developer sets `Config.Secret` and uses `SignToken` but forgets to call
+  `app.Use(forge.Authenticate(...))` now produces a working app instead of 403 on
+  every write request.
+
+  ### Added
+
+  - `forge.go`: `Config.Auth AuthFunc` field — the `AuthFunc` used to authenticate
+    all requests; when nil, Forge defaults to `BearerHMAC(Config.Secret)`
+    automatically (Amendment A45)
+  - `forge.go`: `New()` now prepends `Authenticate(auth)` as the first middleware in
+    the app stack; replaces the need to call `app.Use(forge.Authenticate(...))`
+    manually for the default bearer-token use case (Amendment A45)
+
+  ### Changed
+
+  - `Config.Secret` godoc updated to note that it drives the default `BearerHMAC`
+    auth when `Config.Auth` is nil (Amendment A45)
 
 ---
 

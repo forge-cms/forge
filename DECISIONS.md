@@ -66,6 +66,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A43 | `NewSQLRepo` pointer type documentation (amends Decision 22) | Agreed | 2026-03-14 |
 | A44 | `dbFields`: flatten embedded (anonymous) struct fields via `[]int` index path | Agreed | 2026-03-15 |
 | A45 | `Config.Auth` field + default `BearerHMAC` wired in `New()` | Agreed | 2026-03-15 |
+| A46 | `markdown.go`: minimal Markdown→HTML renderer added to `TemplateFuncMap` | Agreed | 2026-03-15 |
 
 ---
 
@@ -2915,3 +2916,25 @@ mention the default auth behaviour.
   is safe (inner wins for role population) but redundant.
 - Auth can be disabled by setting `Config.Auth` to a no-op `AuthFunc` that
   always returns `GuestUser` — no API change is required for that pattern.
+
+---
+
+## Amendment A46 — `markdown.go`: minimal Markdown→HTML renderer added to `TemplateFuncMap`
+
+**Date:** 2026-03-15  
+**Status:** Agreed
+
+**Change:** New file `markdown.go` implements `renderMarkdown(s string)
+template.HTML` — a zero-dependency, XSS-safe Markdown→HTML converter
+exposed in `TemplateFuncMap` as the `"markdown"` key. Supported elements:
+h1–h6, fenced code blocks with `class="language-〈lang〉"`, unordered lists,
+GFM tables (header + separator + body rows), `**bold**`, `` `inline code` ``,
+blank-line-separated `<p>` paragraphs, and standalone `---` as `<hr>`. All
+content is HTML-entity-escaped before being wrapped in tags. The existing
+`forge_markdown` / `forgeMarkdown` function in `templatehelpers.go` is
+unchanged for backward compatibility.
+
+**Consequences:** Templates can now use `{{.Content.Body | markdown}}` for
+a richer Markdown→HTML render (tables, language-tagged code blocks, hr)
+without any third-party dependency. `TemplateFuncMap` gains one new key
+(`"markdown"`); the key count increases from 7 to 8.

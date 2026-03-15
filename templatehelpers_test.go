@@ -159,6 +159,7 @@ func TestTemplateFuncMap_keys(t *testing.T) {
 		"forge_excerpt",
 		"forge_csrf_token",
 		"forge_llms_entries",
+		"markdown",
 	}
 	for _, key := range required {
 		if _, ok := fm[key]; !ok {

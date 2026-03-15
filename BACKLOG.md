@@ -217,7 +217,7 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 **Amendment A45** — Default `BearerHMAC` auth wired in `New()` via `Config.Auth` field — ✅ Done 2026-03-15 (v1.0.8)
 
-**Amendment A46** — Minimal Markdown→HTML renderer in `TemplateFuncMap` (`forge_markdown` upgrade) — 🔲 Pending (v1.0.9)
+**Amendment A46** — Minimal Markdown→HTML renderer in `TemplateFuncMap` (`forge_markdown` upgrade) — ✅ Done 2026-03-15 (v1.0.9)
 
 ---
 

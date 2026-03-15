@@ -268,6 +268,7 @@ func forgeLLMsEntries(data any) template.HTML {
 //	forge_csrf_token   — hidden CSRF input: {{forge_csrf_token .Request}}
 //	forge_rfc3339      — RFC 3339 timestamp: {{forge_rfc3339 .Head.Published}}
 //	forge_llms_entries — AI doc entry links (LLMsTemplateData): {{forge_llms_entries .}}
+//	markdown           — full Markdown → HTML (tables, hr, language class): {{.Body | markdown}}
 func TemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"forge_meta":         forgeMeta,
@@ -277,5 +278,6 @@ func TemplateFuncMap() template.FuncMap {
 		"forge_excerpt":      forgeExcerpt,
 		"forge_csrf_token":   forgeCSRFToken,
 		"forge_llms_entries": forgeLLMsEntries,
+		"markdown":           renderMarkdown,
 	}
 }
