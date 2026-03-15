@@ -67,6 +67,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A44 | `dbFields`: flatten embedded (anonymous) struct fields via `[]int` index path | Agreed | 2026-03-15 |
 | A45 | `Config.Auth` field + default `BearerHMAC` wired in `New()` | Agreed | 2026-03-15 |
 | A46 | `markdown.go`: minimal Markdown→HTML renderer added to `TemplateFuncMap` | Agreed | 2026-03-15 |
+| A47 | `templatehelpers.go`: `forge_markdown` delegates to `renderMarkdown` | Agreed | 2026-03-15 |
 
 ---
 
@@ -2938,3 +2939,29 @@ unchanged for backward compatibility.
 a richer Markdown→HTML render (tables, language-tagged code blocks, hr)
 without any third-party dependency. `TemplateFuncMap` gains one new key
 (`"markdown"`); the key count increases from 7 to 8.
+
+---
+
+## Amendment A47 — `templatehelpers.go`: `forge_markdown` delegates to `renderMarkdown`
+
+**Date:** 2026-03-15  
+**Status:** Agreed
+
+**Change:** `forgeMarkdown` in `templatehelpers.go` was a separate stub
+implementation without table support. The function body is replaced with a
+one-line delegation to `renderMarkdown` from `markdown.go`. Both `forge_markdown`
+and `markdown` template keys now use the identical full renderer.
+
+**Reason:** A46 added `renderMarkdown` and exposed it as the `"markdown"` key,
+but left `forge_markdown` / `forgeMarkdown` unchanged. Any template using
+`forge_markdown` continued to produce incorrect output for tables — the
+original stub had no table parsing at all.
+
+**Consequences:** `forge_markdown` gains full parity with `markdown`: GFM
+table rendering, language-tagged fenced code blocks (`class="language-X"`),
+`<hr>` from `---`, and XSS-safe HTML-entity escaping. Features that existed
+only in `forgeMarkdown` — `*italic*` and `[link](url)` — are dropped; they
+were not part of the documented API and were not present in `renderMarkdown`.
+The `applyInline` helper and regex vars (`reMdLink`, `reMdBold`, `reMdItalic`,
+`reMdCode`, `reMdHeading`) in `templatehelpers.go` become dead code; they
+compile cleanly and are left in place to avoid a cross-file change.

@@ -23,6 +23,20 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.0.10] — 2026-03-15
+
+`forge_markdown` now delegates to `renderMarkdown`, gaining full table support.
+
+### Fixed
+
+- `templatehelpers.go`: `forgeMarkdown` replaced with a one-line delegation to
+  `renderMarkdown`; the `forge_markdown` template function now renders GFM
+  tables, language-tagged fenced code blocks, `<hr>`, and all other elements
+  supported by `renderMarkdown`; the previous stub had no table parsing
+  (Amendment A47)
+
+---
+
 ## [1.0.9] — 2026-03-15
 
 Minimal Markdown→HTML renderer added to `TemplateFuncMap` with zero

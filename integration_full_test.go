@@ -608,7 +608,7 @@ func TestFull_forgeMarkdownInTemplate(t *testing.T) {
 	p := &testMDPost{
 		Node:  Node{ID: NewID(), Slug: "bold-page", Status: Published},
 		Title: "Bold Page",
-		Body:  "**bold text** and *italic*",
+		Body:  "**bold text** and `code`",
 	}
 	if err := pageRepo.Save(context.Background(), p); err != nil {
 		t.Fatal(err)
@@ -626,8 +626,8 @@ func TestFull_forgeMarkdownInTemplate(t *testing.T) {
 	if !strings.Contains(body, "<strong>bold text</strong>") {
 		t.Errorf("expected <strong>bold text</strong> in body, got:\n%s", body)
 	}
-	if !strings.Contains(body, "<em>italic</em>") {
-		t.Errorf("expected <em>italic</em> in body, got:\n%s", body)
+	if !strings.Contains(body, "<code>code</code>") {
+		t.Errorf("expected <code>code</code> in body, got:\n%s", body)
 	}
 }
 

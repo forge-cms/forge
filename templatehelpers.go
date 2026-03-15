@@ -71,121 +71,26 @@ func forgeDate(t time.Time) string {
 	return t.Format("2 January 2006")
 }
 
-// forgeMarkdown converts a minimal subset of Markdown to safe HTML and returns
-// it as [template.HTML] so the template engine does not double-escape it.
+// forgeMarkdown converts Markdown to safe HTML and returns it as [template.HTML]
+// so the template engine does not double-escape it. Delegates to [renderMarkdown].
 //
 // Supported syntax:
 //   - `# Heading` through `###### Heading` → <h1>–<h6>
-//   - `**text**` → <strong>text</strong>
-//   - `*text*` → <em>text</em>
-//   - " `code` " → <code>code</code>
-//   - `[text](url)` → <a href="url">text</a>
-//   - `- item` or `* item` → <ul><li>item</li></ul>
-//   - ` ```lang ` … ` ``` ` → <pre><code>…</code></pre>
-//   - Blank lines separate paragraphs
+//   - ` ```lang … ``` ` fenced code blocks → <pre><code class="language-lang">
+//   - `- item` → <ul><li>
+//   - `| col |` tables with a `| --- |` separator row → <table>
+//   - `**text**` → <strong>
+//   - " `code` " → <code>
+//   - Blank-line-separated paragraphs → <p>
+//   - Standalone `---` → <hr>
+//
+// All content is HTML-entity-escaped before tag wrapping (XSS-safe).
 //
 // Template usage:
 //
 //	{{.Content.Body | forge_markdown}}
 func forgeMarkdown(s string) template.HTML {
-	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
-
-	var out strings.Builder
-	var paraLines []string
-	var listItems []string
-	var codeLines []string
-	inCode := false
-
-	flushPara := func() {
-		if len(paraLines) == 0 {
-			return
-		}
-		out.WriteString("<p>")
-		out.WriteString(applyInline(strings.Join(paraLines, " ")))
-		out.WriteString("</p>\n")
-		paraLines = paraLines[:0]
-	}
-
-	flushList := func() {
-		if len(listItems) == 0 {
-			return
-		}
-		out.WriteString("<ul>")
-		for _, item := range listItems {
-			out.WriteString("<li>")
-			out.WriteString(applyInline(item))
-			out.WriteString("</li>")
-		}
-		out.WriteString("</ul>\n")
-		listItems = listItems[:0]
-	}
-
-	flushCode := func() {
-		if len(codeLines) == 0 {
-			return
-		}
-		out.WriteString("<pre><code>")
-		out.WriteString(template.HTMLEscapeString(strings.Join(codeLines, "\n")))
-		out.WriteString("</code></pre>\n")
-		codeLines = codeLines[:0]
-	}
-
-	for _, line := range lines {
-		// Fenced code block toggle.
-		if strings.HasPrefix(line, "```") {
-			if inCode {
-				flushCode()
-				inCode = false
-			} else {
-				flushPara()
-				flushList()
-				inCode = true
-			}
-			continue
-		}
-
-		// Inside a code block — buffer verbatim, no inline processing.
-		if inCode {
-			codeLines = append(codeLines, line)
-			continue
-		}
-
-		// Heading.
-		if m := reMdHeading.FindStringSubmatch(line); m != nil {
-			flushPara()
-			flushList()
-			tag := fmt.Sprintf("h%d", len(m[1]))
-			fmt.Fprintf(&out, "<%s>%s</%s>\n", tag, applyInline(m[2]), tag)
-			continue
-		}
-
-		// List item.
-		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
-			flushPara()
-			listItems = append(listItems, line[2:])
-			continue
-		}
-
-		// Blank line — flush pending blocks.
-		if strings.TrimSpace(line) == "" {
-			flushList()
-			flushPara()
-			continue
-		}
-
-		// Regular paragraph text — flush any open list first.
-		flushList()
-		paraLines = append(paraLines, line)
-	}
-
-	// Flush anything still open (unterminated fence treated as code).
-	if inCode {
-		flushCode()
-	}
-	flushList()
-	flushPara()
-
-	return template.HTML(strings.TrimRight(out.String(), "\n"))
+	return renderMarkdown(s)
 }
 
 // forgeExcerpt returns a plain-text excerpt of s truncated at the last word
