@@ -239,6 +239,18 @@ across list.html and show.html. Add partial directory support or a
 `forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid
 config. Make `New` call `MustConfig` internally so validation is not opt-in.
 
+**`forge.AppSchema{}`.**
+`forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages
+(home, about) cannot generate Organization or WebSite JSON-LD without hardcoding
+structured data in templates. Add `forge.AppSchema{}` via `app.SEO()` for
+app-level structured data. Discovered during forge-site rich results testing (Amendment S9).
+
+**`forge.OGDefaults{}`.**
+No app-level fallback for `og:image`, `twitter:site`, and `twitter:creator`;
+developers must hardcode these in templates. Add via `app.SEO()` so defaults
+are injected automatically by `forge:head`. Discovered during forge-site OG
+implementation (Amendment S9).
+
 **Third-party analytics script on forge-cms.dev.**
 Privacy-first, cookieless, EU-hosted — no consent banner required.
 A practical interim measure while native analytics is not yet built.

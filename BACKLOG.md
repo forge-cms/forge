@@ -237,6 +237,8 @@ and practical value for forge-cms.dev.
 - **Shared template partials** — `forge.Templates` currently parses a single file; nav/footer must be duplicated across list.html and show.html; add partial directory support or `{{template "include"}}` mechanism; discovered during forge-site templates sprint
 - **`forge:head` public helper** — `forgeHeadTmpl` is package-private; `forge.Handle` home handlers cannot use `forge:head`; expose as `forge.HeadPartial(head Head) template.HTML` or equivalent
 - **`forge.New` MustConfig enforcement** — `forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid config; make `New` call `MustConfig` internally so validation is not opt-in
+- **`forge.AppSchema{}`** — `forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages (home, about) cannot generate Organization or WebSite JSON-LD without hardcoding; add `forge.AppSchema{}` via `app.SEO()` for app-level structured data; discovered during forge-site rich results testing (Amendment S9)
+- **`forge.OGDefaults{}`** — no app-level fallback for `og:image`, `twitter:site`, `twitter:creator`; developers must hardcode these in templates; add via `app.SEO()` so defaults are injected automatically; discovered during forge-site OG implementation (Amendment S9)
 
 ---
 
@@ -257,4 +259,3 @@ These topics require a new Tier 1 decision round before planning begins.
 - **Database migrations** — `forge migrate` CLI or migration interface
 - **Publish-time validation** — `forge:"required_when=published"` tag or `OnPublish` interface; enforces field requirements on `Published` transition without requiring manual `Validate()` implementation; needed before forge-admin
 - **Token revocation** — `forge.SignToken` TTL=0 is permanent; only revocation is rotating `Config.Secret` (invalidates all tokens); needs per-token revocation list backed by `forge.DB` or short default TTL + refresh; required before Forge Cloud
-- **OG fallback defaults** — `forge:head` has no app-level fallback for `og:image`, `twitter:site`, and `twitter:creator`; developers must hardcode these in templates; add `forge.OGDefaults{}` via `app.SEO()` or `Config`; discovered during forge-site favicon/OG implementation
