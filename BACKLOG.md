@@ -257,3 +257,4 @@ These topics require a new Tier 1 decision round before planning begins.
 - **Database migrations** — `forge migrate` CLI or migration interface
 - **Publish-time validation** — `forge:"required_when=published"` tag or `OnPublish` interface; enforces field requirements on `Published` transition without requiring manual `Validate()` implementation; needed before forge-admin
 - **Token revocation** — `forge.SignToken` TTL=0 is permanent; only revocation is rotating `Config.Secret` (invalidates all tokens); needs per-token revocation list backed by `forge.DB` or short default TTL + refresh; required before Forge Cloud
+- **OG fallback defaults** — `forge:head` has no app-level fallback for `og:image`, `twitter:site`, and `twitter:creator`; developers must hardcode these in templates; add `forge.OGDefaults{}` via `app.SEO()` or `Config`; discovered during forge-site favicon/OG implementation
