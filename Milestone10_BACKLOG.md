@@ -36,7 +36,7 @@ apply without modification.
 | 2 | forge-mcp/resource.go | ✅ Complete | 2026-03-16 |
 | 3 | forge-mcp/tool.go | ✅ Complete | 2026-03-17 |
 | 4 | forge-mcp/transport.go | ✅ Complete | 2026-03-16 |
-| 5 | forge-mcp/README.md | 🔲 Not started | — |
+| 5 | forge-mcp/README.md | ✅ Complete | 2026-03-17 |
 
 ---
 
@@ -593,21 +593,21 @@ behave correctly in isolation. The end-to-end MCP communication tests live in
 
 #### 5.1 — `forge-mcp/README.md`
 
-- [ ] Quick start: install, register a module with `forge.MCP(forge.MCPWrite)`,
+- [x] Quick start: install, register a module with `forge.MCP(forge.MCPWrite)`,
   create an `MCPServer`, call `ServeStdio`
-- [ ] Claude Desktop configuration example (`claude_desktop_config.json`)
-- [ ] Cursor MCP configuration example
-- [ ] SSE remote configuration with Bearer token
-- [ ] Table: which operations are available under MCPRead vs MCPWrite
-- [ ] Note on lifecycle enforcement: MCPRead exposes only Published content;
+- [x] Claude Desktop configuration example (`claude_desktop_config.json`)
+- [x] Cursor MCP configuration example
+- [x] SSE remote configuration with Bearer token
+- [x] Table: which operations are available under MCPRead vs MCPWrite
+- [x] Note on lifecycle enforcement: MCPRead exposes only Published content;
   MCPWrite respects the full Draft → Scheduled → Published → Archived lifecycle
-- [ ] Note on role enforcement: SSE transport authenticates using the same
+- [x] Note on role enforcement: SSE transport authenticates using the same
   `forge.BearerHMAC` tokens as the REST API
-- [ ] Note on zero-dependency design: no external MCP SDK
+- [x] Note on zero-dependency design: no external MCP SDK
 
 #### 5.2 — Example in README verified by example_test.go
 
-- [ ] Add `ExampleMCPServer` to `forge-mcp/mcp_test.go` (compile test):
+- [x] Add `ExampleMCPServer` to `forge-mcp/mcp_test.go` (compile test):
   ```go
   func ExampleNew() {
       app := forge.New(forge.MustConfig(forge.Config{...}))
@@ -622,39 +622,39 @@ behave correctly in isolation. The end-to-end MCP communication tests live in
 
 Cross-milestone group exercising A49 on the forge core side:
 
-- [ ] `TestFull_G22_MCPModuleInterface` — register two modules, one with
+- [x] `TestFull_G22_MCPModuleInterface` — register two modules, one with
   `forge.MCP(forge.MCPRead)` and one with `forge.MCP(forge.MCPWrite)`; call
   `app.MCPModules()`; assert two modules returned; verify `MCPMeta()` returns
   correct Prefix and Operations for each; verify `MCPSchema()` returns at least
   one field with correct Required flag from a `forge:"required"` struct tag
-- [ ] `TestFull_G22_MCPCreatePublishLifecycle` — use `MCPCreate` + `MCPPublish`
+- [x] `TestFull_G22_MCPCreatePublishLifecycle` — use `MCPCreate` + `MCPPublish`
   directly (no transport) through the `MCPModule` interface; assert item
   transitions correctly and appears in `MCPList` filtered by Published
 
 #### 5.4 — ARCHITECTURE.md update
 
-- [ ] Add `forge-mcp/` entry to the package structure section
-- [ ] Document `MCPModule` interface location (`mcp.go`) and implementor
+- [x] Add `forge-mcp/` entry to the package structure section
+- [x] Document `MCPModule` interface location (`mcp.go`) and implementor
   (`module.go`)
-- [ ] Document `App.MCPModules()` addition
-- [ ] Update the "planned files" → "implemented files" table for M10
+- [x] Document `App.MCPModules()` addition
+- [x] Update the "planned files" → "implemented files" table for M10
 
 #### 5.5 — README.md badge
 
-- [ ] Update the MCP section badge in the root `README.md` from
+- [x] Update the MCP section badge in the root `README.md` from
   `🔲 Coming in Milestone 10` to `✅ Available`
 
 #### Verification — Step 5
 
-- [ ] `go build ./...` — no errors (all modules)
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test ./...` — all green, including G22 groups and forge-mcp tests
-- [ ] `forge-mcp/README.md` — quick start instructions are accurate
-- [ ] Root `README.md` — MCP badge updated
-- [ ] `ARCHITECTURE.md` — reflects forge-mcp module
-- [ ] `BACKLOG.md` — M10 marked ✅ Done; top-level Progress table updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors (all modules)
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test ./...` — all green, including G22 groups and forge-mcp tests
+- [x] `forge-mcp/README.md` — quick start instructions are accurate
+- [x] Root `README.md` — MCP badge updated
+- [x] `ARCHITECTURE.md` — reflects forge-mcp module
+- [x] `BACKLOG.md` — M10 marked ✅ Done; top-level Progress table updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

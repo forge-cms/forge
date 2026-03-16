@@ -163,8 +163,10 @@ github.com/forge-cms/forge-mcp/  (separate module: ./forge-mcp/)
 ├── tool.go           handleToolMethod, handleToolsList, handleToolsCall,  ✅ Milestone 10 Step 3
 │                     toolName, parseToolName, moduleForType, authorise,
 │                     errorFor, stringArg
-└── transport.go      ServeStdio(ctx, in, out), Handler(),                 ✅ Milestone 10 Step 4
-                      sseHandler, messageHandler
+├── transport.go      ServeStdio(ctx, in, out), Handler(),                 ✅ Milestone 10 Step 4
+│                     sseHandler, messageHandler
+└── README.md         AI-first integration guide: quick start, Claude/Cursor  ✅ Milestone 10 Step 5
+                      config, SSE Bearer auth, MCPRead vs MCPWrite table
 ```
 
 ### Shipped (Milestones 7–8)

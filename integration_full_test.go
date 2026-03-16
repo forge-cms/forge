@@ -28,6 +28,7 @@ package forge
 //   G19 — Scheduler end-to-end: processScheduled + AfterPublish signal (M8 + M1)
 //   G20 — Scheduler wired through App.Content(): schedulerModules populated, tick publishes (M8 + M2 + M3)
 //   G21 — Full v1.0.0 stack: scheduler + sitemap + feed + AI index + redirects (M1+M2+M3+M5+M7+M8)
+//   G22 — forge-mcp MCPModule interface + lifecycle (M10)
 
 import (
 	"bytes"
@@ -2124,5 +2125,175 @@ func TestFull_G21_V1FullStack(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusForbidden {
 		t.Errorf("POST /posts as Guest status = %d; want 403", w.Code)
+	}
+}
+
+// — G22: forge-mcp core — MCPModule interface + lifecycle (M10) ——————————————
+
+// testMCPPost is the canonical MCP test content type for the G22 group.
+// Required fields with min constraints exercise MCPCreate validation and
+// MCPSchema field derivation.
+type testMCPPost struct {
+	Node
+	Title  string `forge:"required,min=3"`
+	Body   string `forge:"required,min=10"`
+	Rating int
+	Tags   string `json:"tags"`
+}
+
+// findField looks up an MCPField by Go field name in a schema slice.
+// Tests use this helper rather than positional indexing because field
+// order is unspecified.
+func findField(schema []MCPField, name string) (MCPField, bool) {
+	for _, f := range schema {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	return MCPField{}, false
+}
+
+// TestFull_G22_MCPModuleInterface verifies that App.MCPModules() returns the
+// registered modules and that MCPMeta() and MCPSchema() report correct
+// metadata on the forge core side of Amendment A49.
+func TestFull_G22_MCPModuleInterface(t *testing.T) {
+	repo1 := NewMemoryRepo[*testMCPPost]()
+	m1 := NewModule((*testMCPPost)(nil),
+		Repo(repo1),
+		At("/posts"),
+		MCP(MCPRead),
+	)
+	repo2 := NewMemoryRepo[*testMCPPost]()
+	m2 := NewModule((*testMCPPost)(nil),
+		Repo(repo2),
+		At("/articles"),
+		MCP(MCPWrite),
+	)
+
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Content(m1)
+	app.Content(m2)
+
+	mods := app.MCPModules()
+	if len(mods) != 2 {
+		t.Fatalf("MCPModules() len = %d; want 2", len(mods))
+	}
+
+	// m1: MCPRead at /posts
+	if mods[0].MCPMeta().Prefix != "/posts" {
+		t.Errorf("mods[0].Prefix = %q; want /posts", mods[0].MCPMeta().Prefix)
+	}
+	if len(mods[0].MCPMeta().Operations) != 1 || mods[0].MCPMeta().Operations[0] != MCPRead {
+		t.Errorf("mods[0].Operations = %v; want [MCPRead]", mods[0].MCPMeta().Operations)
+	}
+
+	// m2: MCPWrite at /articles
+	if mods[1].MCPMeta().Prefix != "/articles" {
+		t.Errorf("mods[1].Prefix = %q; want /articles", mods[1].MCPMeta().Prefix)
+	}
+	if len(mods[1].MCPMeta().Operations) != 1 || mods[1].MCPMeta().Operations[0] != MCPWrite {
+		t.Errorf("mods[1].Operations = %v; want [MCPWrite]", mods[1].MCPMeta().Operations)
+	}
+
+	// Title must be a required field in the schema.
+	schema := mods[0].MCPSchema()
+	titleField, ok := findField(schema, "Title")
+	if !ok {
+		t.Fatal("MCPSchema() missing Title field")
+	}
+	if !titleField.Required {
+		t.Errorf("Title.Required = false; want true")
+	}
+	if titleField.JSONName == "" {
+		t.Error("Title.JSONName must not be empty")
+	}
+}
+
+// TestFull_G22_MCPCreatePublishLifecycle exercises the create→publish lifecycle
+// through the MCPModule interface: Draft status on create, Published after
+// MCPPublish, AfterPublish signal fires, MCPList status filtering is correct.
+func TestFull_G22_MCPCreatePublishLifecycle(t *testing.T) {
+	var afterPublishCount int64
+
+	repo := NewMemoryRepo[*testMCPPost]()
+	m := NewModule((*testMCPPost)(nil),
+		Repo(repo),
+		At("/posts"),
+		MCP(MCPRead, MCPWrite),
+		On(AfterPublish, func(_ Context, _ *testMCPPost) error {
+			atomic.AddInt64(&afterPublishCount, 1)
+			return nil
+		}),
+	)
+
+	app := New(MustConfig(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("16bytessecretkey"),
+	}))
+	app.Content(m)
+
+	mods := app.MCPModules()
+	if len(mods) != 1 {
+		t.Fatalf("MCPModules() len = %d; want 1", len(mods))
+	}
+	mod := mods[0]
+
+	ctx := NewTestContext(User{ID: "u1", Roles: []Role{Author}})
+
+	// MCPCreate with JSONName keys ("title"/"body", not "Title"/"Body").
+	item, err := mod.MCPCreate(ctx, map[string]any{
+		"title": "Hello MCP World",
+		"body":  "This body is long enough to pass validation.",
+	})
+	if err != nil {
+		t.Fatalf("MCPCreate: %v", err)
+	}
+
+	// Verify Draft status and non-empty slug via type assertion.
+	got, ok := item.(*testMCPPost)
+	if !ok {
+		t.Fatalf("MCPCreate returned %T; want *testMCPPost", item)
+	}
+	if got.Status != Draft {
+		t.Errorf("created item Status = %v; want Draft", got.Status)
+	}
+	if got.Slug == "" {
+		t.Fatal("created item Slug must not be empty")
+	}
+	slug := got.Slug
+
+	// MCPPublish: Draft → Published.
+	if err := mod.MCPPublish(ctx, slug); err != nil {
+		t.Fatalf("MCPPublish: %v", err)
+	}
+
+	// Wait for async AfterPublish signal (same pattern as G19/G20).
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) && atomic.LoadInt64(&afterPublishCount) < 1 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if n := atomic.LoadInt64(&afterPublishCount); n != 1 {
+		t.Errorf("AfterPublish fired %d times; want 1", n)
+	}
+
+	// Published list must contain the item.
+	published, err := mod.MCPList(ctx, Published)
+	if err != nil {
+		t.Fatalf("MCPList(Published): %v", err)
+	}
+	if len(published) != 1 {
+		t.Errorf("MCPList(Published) = %d items; want 1", len(published))
+	}
+
+	// Draft list must be empty.
+	drafts, err := mod.MCPList(ctx, Draft)
+	if err != nil {
+		t.Fatalf("MCPList(Draft): %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Errorf("MCPList(Draft) = %d items; want 0", len(drafts))
 	}
 }

@@ -23,6 +23,33 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.0] — 2026-03-17
+
+`forge-mcp` — MCP support shipped (Milestone 10). New exported symbols in
+forge core enabling AI assistants to discover and operate on content modules
+via the Model Context Protocol.
+
+### Added
+
+- `mcp.go`: `MCPOperation` type; `MCPRead`, `MCPWrite` constants; `MCP(...)`
+  option function; `MCPMeta` struct (`Prefix`, `TypeName`, `Operations`);
+  `MCPField` struct (`Name`, `JSONName`, `Type`, `Required`, `MinLength`,
+  `MaxLength`, `Enum`); `MCPModule` interface (`MCPMeta()`, `MCPSchema()`,
+  `MCPList()`, `MCPGet()`, `MCPCreate()`, `MCPUpdate()`, `MCPPublish()`,
+  `MCPSchedule()`, `MCPArchive()`, `MCPDelete()`)
+- `module.go`: `Module[T]` implements `MCPModule` — all nine operations
+  delegating to the existing repo, validation, signal, and lifecycle layers
+- `forge.go`: `App.MCPModules() []MCPModule` — returns modules registered
+  with `MCP(...)`
+- `auth.go`: `VerifyBearerToken(r *http.Request, secret []byte) (User, error)`
+  — validates HMAC Bearer tokens for SSE transport (Amendment A50)
+- `context.go`: `NewContextWithUser(user User) Context` — production-safe
+  background context for use by transport layers (Amendment A50)
+- `forge.go`: `App.Secret() []byte` — exposes the app secret for transport
+  layer token verification (Amendment A50)
+
+---
+
 ## [1.0.11] — 2026-03-15
 
 Manually published items now get a correct `PublishedAt` timestamp.

@@ -4,7 +4,7 @@
 Built for developers. Optimized for AI. Zero compromises on readability.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/forge-cms/forge.svg)](https://pkg.go.dev/github.com/forge-cms/forge)
-**v1.0.11 — stable.** All exported symbols are stable. No breaking changes without a major version bump. See [CHANGELOG.md](CHANGELOG.md).
+**v1.1.0 — stable.** All exported symbols are stable. No breaking changes without a major version bump. See [CHANGELOG.md](CHANGELOG.md).
 
 ```go
 app := forge.New(forge.Config{
@@ -77,6 +77,7 @@ SEO is never missing. AI crawlers always get clean data.
 - [Templates & rendering](#templates--rendering)
 - [Error handling](#error-handling)
 - [Redirects & content mobility](#redirects--content-mobility)
+- [MCP integration (forge-mcp)](#mcp-integration-forge-mcp)
 - [The AI-first design philosophy](#the-ai-first-design-philosophy)
 - [Minimal complete example](#minimal-complete-example)
 
@@ -1048,6 +1049,35 @@ if err := app.RedirectStore().Load(ctx, db); err != nil {
 ```
 GET /.well-known/redirects.json   (requires Editor+)
 ```
+
+---
+
+## MCP integration (forge-mcp)
+
+✅ **Available**
+
+`forge-mcp` is a separate module that wraps a `forge.App` and exposes its
+content modules to AI assistants via the [Model Context Protocol](https://modelcontextprotocol.io).
+Schema derivation, lifecycle enforcement, and role checks are all automatic —
+no configuration beyond `forge.MCP(...)` on your existing modules.
+
+```go
+import forgemcp "github.com/forge-cms/forge-mcp"
+
+func main() {
+    app := forge.New(forge.MustConfig(forge.Config{
+        BaseURL: "https://mysite.com",
+        Secret:  []byte(os.Getenv("SECRET")),
+    }))
+    app.Content(
+        forge.NewModule((*Post)(nil), forge.At("/posts"), forge.MCP(forge.MCPWrite)),
+    )
+    forgemcp.New(app).ServeStdio(context.Background(), os.Stdin, os.Stdout)
+}
+```
+
+For Claude Desktop, Cursor, and SSE remote transport configuration see
+[forge-mcp/README.md](forge-mcp/README.md).
 
 ---
 

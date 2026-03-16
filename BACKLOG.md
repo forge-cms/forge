@@ -21,7 +21,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M7 | Redirects (v0.7.0) | ✅ Done |
 | M8 | Scheduled publishing (v0.8.0) | ✅ Done |
 | M9 | v1.0.0 stabilisation | ✅ Done |
-| M10 | MCP support (v2) | � In progress |
+| M10 | MCP support (v2) | ✅ Done |
 
 ---
 
@@ -232,13 +232,13 @@ Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
 | 2 | forge-mcp/resource.go | ✅ Done | 2026-03-16 |
 | 3 | forge-mcp/tool.go | ✅ Done | 2026-03-17 |
 | 4 | forge-mcp/transport.go | ✅ Done | 2026-03-16 |
-| 5 | forge-mcp/README.md | 🔲 Not started | — |
+| 5 | forge-mcp/README.md | ✅ Done | 2026-03-17 |
 
 - [x] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
 - [x] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
 - [x] Step 3 — MCPWrite: expose Create/Update/Delete/Publish as MCP tools with role checks
 - [x] Step 4 — Transport: stdio (local AI tools) + SSE (remote, authenticated)
-- [ ] Step 5 — Documentation: connecting Claude/Cursor/Copilot to a Forge app
+- [x] Step 5 — Documentation: connecting Claude/Cursor/Copilot to a Forge app
 
 ---
 

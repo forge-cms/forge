@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1125,4 +1126,16 @@ func TestMCPHandler_SSEOpen(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "event: open") {
 		t.Errorf("body %q does not contain 'event: open'", w.Body.String())
 	}
+}
+
+// ExampleNew verifies that the README quick-start compiles correctly.
+func ExampleNew() {
+	app := forge.New(forge.Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte(os.Getenv("SECRET")),
+	})
+	// app.Content(..., forge.MCP(forge.MCPWrite))
+	srv := New(app)
+	_ = srv
+	// Output:
 }
