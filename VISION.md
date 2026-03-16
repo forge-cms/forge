@@ -1,9 +1,8 @@
 # Forge — Vision
 
 This document captures the long-term vision for Forge and Forge Cloud.
-It is an internal planning document, not intended for public distribution.
 
-Last updated: 2026-03-11
+Last updated: 2026-03-15
 
 ---
 
@@ -33,10 +32,43 @@ No code. No deployment pipeline. No configuration files. Just a conversation.
 
 ---
 
-## Why this is achievable with Forge
+## Authored AI — the methodology
 
-This is not a distant aspiration. Every architectural decision in Forge v1.0.0
-points directly toward it.
+Forge is the product. Authored AI is the methodology it was built with —
+and the methodology it enables.
+
+**Authored AI** describes AI-partnered development where the human is the
+author of all architectural decisions and governance, and AI is the
+implementation partner. The human directs. AI implements. The human owns
+the output — not because they wrote every line, but because they made every
+decision that mattered.
+
+This is the natural evolution beyond vibe coding. Vibe coding is fast and
+powerful — and it will collapse under its own speed if nobody is making
+the architectural decisions. Authored AI is what happens when you bring
+governance to AI-partnered development.
+
+The key insight: AI has no memory between sessions. If architectural
+decisions are not persisted — in DECISIONS.md, in amendment protocols, in
+copilot instructions — the reasoning exists only in chat history that will
+be closed. The AI cannot help you maintain what it cannot remember building.
+
+**Authored AI in practice:**
+- Every architectural decision is documented before implementation
+- An amendment protocol governs cross-file changes
+- AI instructions encode the rules and constraints
+- The human reviews and approves before any commit
+- The output is attributable — every decision has a named author
+
+Forge embodies this methodology. Its API naming, file structure, and
+architecture documentation are designed to be unambiguous — so any AI
+assistant, given the codebase and the docs, produces idiomatic output on
+the first try. Not because the AI is clever, but because the framework
+leaves no room for ambiguity.
+
+---
+
+## Why this is achievable with Forge
 
 **Content lifecycle as a first-class concept.** `forge.Node` enforces
 Draft → Scheduled → Published → Archived for every content type. An AI
@@ -44,8 +76,8 @@ assistant creating content operates within the same lifecycle rules as a
 human editor. There is no special mode, no bypass, no unsafe shortcut.
 
 **Structured schema from struct tags.** A `BlogPost` content type already
-defines its own schema via Go struct tags and the `Head()` method. Forge can
-derive an MCP resource schema from this automatically — no separate schema
+defines its own schema via Go struct tags and the `Head()` method. Forge
+derives an MCP resource schema from this automatically — no separate schema
 definition, no drift between code and documentation.
 
 **Role system the AI respects.** `forge.Auth` and the role hierarchy
@@ -59,66 +91,15 @@ creating a post that violates validation rules gets the same 422 response
 a human would.
 
 **AI-readable output already built in.** `llms.txt`, `llms-full.txt`, AIDoc
-endpoints, and gzip-compressed AI responses are already part of v1.0.0.
-A Forge site is already optimised for AI consumption before MCP is added.
+endpoints, and gzip-compressed AI responses are part of v1.0.0. A Forge
+site is already optimised for AI consumption before MCP is added.
 
----
-
-## Forge Cloud
-
-Forge Cloud is the hosted offering built on top of the open source framework.
-
-### What it is not
-
-Forge Cloud is not a generic hosting platform. It does not accept arbitrary
-Go code. It does not run user-supplied binaries. This would require sandboxing,
-build pipelines, and security isolation at a level that is a different product
-entirely.
-
-### What it is
-
-Forge Cloud provisions and manages Forge instances. A user defines their
-content model — the types, fields, and relationships that make up their site —
-and Forge Cloud generates and hosts the corresponding Forge application.
-
-The user never writes Go code. The user never deploys. Forge Cloud owns
-the infrastructure, the upgrades, and the backups.
-
-```
-User defines:    BlogPost { Title, Body, Tags, CoverImage }
-Cloud generates: a running Forge instance with that content model
-User receives:   Admin UI + REST API + MCP endpoint + llms.txt + sitemap
-```
-
-Because every Forge Cloud instance is a genuine Forge application, it
-inherits everything from the framework: lifecycle enforcement, role-based
-access, validation, redirects, scheduled publishing, AI endpoints — all
-of it, without the user thinking about any of it.
-
-### How humans use Forge Cloud
-
-For most users, the admin UI is the primary interface. Content editors,
-marketers, and site owners log in, create and manage content, review
-drafts, and publish — exactly as they would in any other CMS. The AI
-assistant is an additional capability, not a replacement for the human
-interface.
-
-A typical Forge Cloud site has:
-- An admin UI for day-to-day content management by humans
-- A REST API for developers and integrations
-- An MCP endpoint for AI assistants
-- Public-facing HTML (or headless, if preferred)
-
-All four interfaces operate on the same content model, the same lifecycle
-rules, and the same role system. There is no separate "AI mode" — it is
-one system with multiple surfaces.
-
-### The escape hatch
-
-A developer who outgrows the no-code layer can eject to raw Go code at any
-time. Forge Cloud exports a complete, idiomatic Forge application that the
-developer can take, host themselves, and extend freely. The AGPL-licensed
-core means the code is always readable and auditable.
+**Forge is a structured contract layer between humans and AI.** The role
+system, lifecycle enforcement, and validation rules apply equally to human
+requests and AI agent calls. You can give an AI assistant precisely the
+access level it needs — and know with certainty that it cannot exceed it.
+Not because you wrote special AI rules, but because the rules already exist
+for everyone.
 
 ---
 
@@ -147,18 +128,12 @@ protocol.
 **Content operations:**
 - Create, update, publish, archive, and delete content
 - Schedule posts for future publication
-- Query content by status, tag, date range, or full-text search
+- Query content by status, tag, or date range
 
 **Site management:**
 - Inspect and update redirect rules
 - Check SEO status of published content
-- Review cookie declarations and compliance manifests
 - Query sitemap coverage
-
-**Forge Cloud operations (hosted):**
-- Provision a new site with a given content model
-- Add a new content type to an existing site
-- Configure domain and SSL
 
 ### The ten-minute blog — step by step
 
@@ -166,18 +141,12 @@ protocol.
 User → AI assistant:
   "Create a blog about my travels. First post: my day in Copenhagen today."
 
-AI assistant → Forge Cloud MCP:
-  tool: provision_site
-  args: { name: "My Travel Blog", subdomain: "travel" }
-
-  tool: define_content_type
-  args: { name: "Post", fields: [Title, Body, Location, CoverImage, Tags] }
-
+AI assistant → Forge MCP:
   tool: create_content
   args: { type: "Post", title: "A day in Copenhagen",
-          body: "...", location: "Copenhagen", status: "published" }
+          body: "...", status: "published" }
 
-Result: travel.forge.cloud is live, admin UI accessible, one published post.
+Result: blog is live, one published post.
 Total time: under 10 minutes.
 ```
 
@@ -189,16 +158,10 @@ authenticated user of the system.
 
 ## Roadmap
 
-This is a solo project maintained alongside a full-time job. The roadmap
-reflects that reality. Phases are sequential and deliberately scoped —
-each phase must demonstrate value before the next begins. Forge Cloud
-does not start until there is community demand that justifies it.
-
 ### Phase 1 — MCP core (M10, v2.0.0)
 
 Implement the MCP server in Forge. This is the technical prerequisite for
-everything that follows, and the step that sharpens the AI-first narrative
-from philosophy to working code.
+everything that follows.
 
 - MCP server transport: stdio (local tools) and SSE (remote, authenticated)
 - Auto-derive resource schema from `forge.Node` struct tags
@@ -209,85 +172,31 @@ from philosophy to working code.
 ### Phase 2 — Production foundation
 
 Close the remaining gaps between the open source framework and a hosted
-offering. This phase produces no Cloud product — it produces the
-infrastructure that makes Cloud possible.
+offering.
 
-Steps are ordered by dependency and practical value for forge-cms.dev,
-which serves as the primary real-world Forge deployment during this phase.
-
-**`forge-pgx` integration tests against a real database.**
-The foundation everything else rests on. SQLRepo is implemented but
-untested against a real database. This closes that gap.
-
-**Health endpoint + error reporter interface.**
-`GET /_health` for load balancers and uptime monitors. A `forge.ErrorReporter`
-interface that third-party error tracking tools (or custom webhooks) can
-implement and plug in via `app.Use(...)`. Needed for forge-cms.dev from
-day one in production.
-
-**Shared template partials.**
-`forge.Templates` currently parses a single file; nav/footer must be duplicated
-across list.html and show.html. Add partial directory support or a
-`{{template "include"}}` mechanism. Discovered during forge-site templates sprint.
-
-**`forge:head` public helper.**
-`forgeHeadTmpl` is package-private; `forge.Handle` home handlers cannot use
-`forge:head` and must duplicate meta tags manually. Expose as
-`forge.HeadPartial(head Head) template.HTML` or equivalent.
-
-**`forge.New` MustConfig enforcement.**
-`forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid
-config. Make `New` call `MustConfig` internally so validation is not opt-in.
-
-**`forge.AppSchema{}`.**
-`forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages
-(home, about) cannot generate Organization or WebSite JSON-LD without hardcoding
-structured data in templates. Add `forge.AppSchema{}` via `app.SEO()` for
-app-level structured data. Discovered during forge-site rich results testing (Amendment S9).
-
-**`forge.OGDefaults{}`.**
-No app-level fallback for `og:image`, `twitter:site`, and `twitter:creator`;
-developers must hardcode these in templates. Add via `app.SEO()` so defaults
-are injected automatically by `forge:head`. Discovered during forge-site OG
-implementation (Amendment S9).
-
-**Third-party analytics script on forge-cms.dev.**
-Privacy-first, cookieless, EU-hosted — no consent banner required.
-A practical interim measure while native analytics is not yet built.
-Replaced by `forge.Analytics` when ready.
-
-**Webhooks.**
-Outbound HTTP calls on content lifecycle events, Signal-based. Enables
-search indexing, CDN invalidation, and notification integrations.
-
-**`forge.Analytics` middleware.**
-Native cookieless analytics backed by `forge.DB`. Aggregated page views,
-referrers, and user agent data — no personal data, no consent required.
-Replaces the third-party analytics script on forge-cms.dev when complete.
-
-**`forge-admin`: web-based admin UI.**
-The most significant piece of work in this phase and the gateway to
-non-developer users — and therefore to commercial viability. Not a small
-task. Sequenced last because everything above informs what it needs to do.
+- `forge-pgx` integration tests against a real database
+- Shared template partials
+- `forge:head` public helper
+- `forge.New` MustConfig enforcement
+- `forge.AppSchema{}` and `forge.OGDefaults{}`
+- Webhooks
+- `forge.Analytics` middleware
+- `forge-admin`: web-based admin UI
 
 ### Phase 3 — Forge Cloud private beta
 
-Only started when there is demonstrable community interest. Invitation-only,
-manually provisioned instances to start — automation comes later, driven by
-actual usage, not speculation.
+Invitation-only. Manually provisioned instances to start.
 
-- Site provisioning (manual at first, automated when justified)
+- Site provisioning
 - Content model definition via admin UI (no-code)
-- Forge Cloud MCP layer (extends M10 with provisioning tools)
+- Forge Cloud MCP layer
 - Custom domain and SSL
-- Backup and restore
 
 ### Phase 4 — Forge Cloud general availability
 
 - Automated multi-tenant provisioning
 - Team management and billing
 - Commercial license (AGPL exemption) introduced
-- Public MCP endpoint for AI assistant integrations
 
 ---
 
@@ -300,8 +209,7 @@ the GNU Affero General Public License v3 (AGPL).
 
 AGPL means: the source code is open and free to use, modify, and distribute.
 If you use Forge to provide a hosted service to others, you must release your
-modifications under the same license. This protects against a well-funded
-competitor taking the codebase and building a closed competing product.
+modifications under the same license.
 
 For individual developers, open source projects, and companies building their
 own sites with Forge: AGPL imposes no meaningful restriction. You can use
@@ -311,10 +219,9 @@ Forge freely.
 
 When Forge Cloud launches commercially, a commercial license will be available
 for organisations that want to use Forge as the basis of a hosted service
-without the AGPL obligation. Forge Cloud itself is the primary example of this:
-it operates under a commercial license.
+without the AGPL obligation.
 
-This is the standard "open core" model. The framework stays open. The
+This is the standard open core model. The framework stays open. The
 commercial license is for those who want to build on top of it as a service.
 
 ### On the MIT → AGPL transition
@@ -322,16 +229,15 @@ commercial license is for those who want to build on top of it as a service.
 Forge launched under MIT. No external contributors exist as of March 2026,
 so relicensing to AGPL requires no coordination. The CLA signed by future
 contributors grants forge-cms the right to issue commercial licenses without
-requiring individual consent — this is the mechanism that makes the open
-core model legally sound at scale.
+requiring individual consent.
 
 ---
 
 ## What this is not
 
 Forge Cloud is not a competitor to Vercel, Netlify, or Railway. Those are
-general-purpose deployment platforms. Forge Cloud is a content platform —
-specifically a CMS platform — that happens to be built on a Go framework.
+general-purpose deployment platforms. Forge Cloud is a content platform
+where AI is a first-class participant in every layer.
 
 The differentiation is not infrastructure. It is the AI-first content model,
 the MCP integration, and the structured access that allows an AI assistant

@@ -168,6 +168,7 @@ type App struct {
 	schedulerModules       []schedulableModule // modules that implement scheduled publishing
 	rebuilderModules       []rebuilder         // modules with derived content (sitemap, feed, AI)
 	stoppableModules       []stoppable         // modules with background goroutines to stop at shutdown
+	mcpModules             []MCPModule         // modules registered with forge.MCP(...)
 	rebuildDone            bool                // true once startup rebuildAll goroutine is launched
 }
 
@@ -287,11 +288,20 @@ func (a *App) Content(v any, opts ...Option) {
 		if sp, ok := r.(stoppable); ok {
 			a.stoppableModules = append(a.stoppableModules, sp)
 		}
+		if mm, ok := r.(MCPModule); ok && len(mm.MCPMeta().Operations) > 0 {
+			a.mcpModules = append(a.mcpModules, mm)
+		}
 		return
 	}
 	m := NewModule(v, opts...)
 	m.Register(a.mux)
 }
+
+// MCPModules returns all content modules registered with [MCP].
+// forge-mcp calls this once in its New constructor to build its resource and
+// tool registry. The returned slice is the App's live internal slice and must
+// not be modified by the caller.
+func (a *App) MCPModules() []MCPModule { return a.mcpModules }
 
 // httpsRedirect returns a middleware that redirects plain-HTTP requests to
 // their HTTPS equivalents with a 301 Moved Permanently response.

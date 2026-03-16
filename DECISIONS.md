@@ -69,6 +69,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A46 | `markdown.go`: minimal Markdown→HTML renderer added to `TemplateFuncMap` | Agreed | 2026-03-15 |
 | A47 | `templatehelpers.go`: `forge_markdown` delegates to `renderMarkdown` | Agreed | 2026-03-15 |
 | A48 | `module.go`: set `PublishedAt` on manual publish in `updateHandler` | Agreed | 2026-03-15 |
+| A49 | `mcp.go`/`module.go`/`forge.go`: `MCPModule` contract — `mcpOption` carries ops; export `MCPMeta`, `MCPField`, `MCPModule`; `Module[T]` implements 10 MCP methods; `App.MCPModules()` | Agreed | 2026-03-16 |
 
 ---
 
@@ -2993,3 +2994,80 @@ negligible; for `SQLRepo` it is one extra `INSERT OR REPLACE` per manual
 publish event, which is acceptable given publish frequency. The response body
 returned by `updateHandler` reflects the updated `PublishedAt` value because
 `item` is mutated in place by `setNodeTime` before `writeJSON` is called.
+
+---
+
+### Amendment A49 — `mcp.go`/`module.go`/`forge.go`: `MCPModule` contract
+
+**Date:** 2026-03-16
+**Status:** Agreed
+
+**Change:** Three coordinated changes across forge core upgrade the v1 MCP stubs
+into a real, testable interface that `forge-mcp` (a separate Go module) can
+consume without accessing `Module[T]` internals directly.
+
+**`mcp.go`:**
+- `mcpOption` gains a field: `type mcpOption struct{ ops []MCPOperation }`.
+  `MCP(ops ...MCPOperation) Option` now stores them: `return mcpOption{ops: ops}`.
+- `MCPMeta` struct added (exported): `Prefix string`, `TypeName string`,
+  `Operations []MCPOperation`.
+- `MCPField` struct added (exported): `Name`, `JSONName`, `Type`
+  (`"string" | "number" | "boolean" | "datetime"`), `Required bool`,
+  `MinLength int`, `MaxLength int`, `Enum []string`. Derived automatically from
+  Go struct fields and `forge:` struct tags.
+- `MCPModule` interface added (exported): 10 methods — `MCPMeta() MCPMeta`,
+  `MCPSchema() []MCPField`, `MCPList`, `MCPGet`, `MCPCreate`, `MCPUpdate`,
+  `MCPPublish`, `MCPSchedule`, `MCPArchive`, `MCPDelete`. This interface is the
+  sole boundary `forge-mcp` crosses into `forge` core.
+- Godoc on `MCPRead`, `MCPWrite`, and `MCP()` updated: "no-op in v1" language
+  removed; references to `MCPModule` added.
+- `"time"` import added to `mcp.go` (required for `MCPSchedule`'s `time.Time`
+  parameter in the `MCPModule` interface).
+
+**`module.go`:**
+- `Module[T]` struct gains `mcpOps []MCPOperation` field. The option switch in
+  `NewModule` gains `case mcpOption: m.mcpOps = v.ops`. This is the sole
+  persistent MCP state on the struct.
+- All 10 `MCPModule` methods implemented on `*Module[T]`. Mutating methods share
+  the same `repo`, `signals`, `RunValidation`, `invalidateCache`,
+  `triggerRebuild`, and `dispatchAfter` calls as the existing HTTP handlers—no
+  new I/O paths, no new lifecycle rules.
+- Four private helpers added: `typeName(reflect.Type) string`,
+  `snakeCase(string) string`, `mcpGoTypeStr(reflect.Type) string`,
+  `mcpJSONName(reflect.StructField) string`, `mcpParseForgeTag(string)`,
+  `mcpStructField(reflect.StructField) MCPField`.
+- `snakeCase` rule: consecutive uppercase letters form one word—
+  `MCPPost → mcp_post`, `BlogID → blog_id`.
+- Compile-time assertion: `var _ MCPModule = (*Module[struct{ Node }])(nil)`.
+
+**`forge.go`:**
+- `App` struct gains `mcpModules []MCPModule` field.
+- `App.Content()` type-asserts each `Registrator` against `MCPModule` and
+  appends it when `len(mm.MCPMeta().Operations) > 0`. Mirrors the existing
+  `schedulerModules`/`rebuilderModules`/`stoppableModules` pattern exactly.
+- `App.MCPModules() []MCPModule` accessor added. Returns the live internal slice.
+  `forge-mcp` calls this once in `New(app)` to build its registry.
+
+**Call-site syntax** — unchanged before and after:
+
+```go
+app.Content(&BlogPost{},
+    forge.At("/posts"),
+    forge.MCP(forge.MCPRead, forge.MCPWrite),
+)
+```
+
+**Consequences:**
+1. `forge.MCP(...)` options are no longer a no-op at runtime. `App.MCPModules()`
+   returns a non-empty slice for apps that use `forge.MCP(...)`.
+2. Three new exported types — `MCPMeta`, `MCPField`, `MCPModule` — are the
+   stable API surface for `forge-mcp`. No existing exported symbol is removed
+   or renamed.
+3. `forge` never imports `forge-mcp`. The import direction is one-way.
+4. `MCPModule` methods do not gate on `ctx.User().Role()`. Role decisions are
+   the caller's responsibility; `forge-mcp` constructs a `forge.Context` with
+   the appropriate role before every call.
+5. `MCPUpdate` preserves `Node.ID`, `Node.Slug`, and `Node.Status` after the
+   JSON merge; status transitions go through the dedicated lifecycle methods.
+6. `MCPSchema` includes the embedded `forge.Node` fields Slug, Status,
+   PublishedAt, and ScheduledAt; it omits ID, CreatedAt, and UpdatedAt.

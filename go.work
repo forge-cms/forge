@@ -4,6 +4,8 @@ use .
 
 use ./forge-pgx
 
+use ./forge-mcp
+
 use ./example/blog
 
 use ./example/docs

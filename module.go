@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -302,6 +303,8 @@ type Module[T any] struct {
 	feedCfg   *FeedConfig // nil when no Feed option, or when DisableFeed was called
 	feedStore *FeedStore  // set by App.Content via setFeedStore
 
+	mcpOps []MCPOperation // non-nil when MCP(...) option was given
+
 	stopCh chan struct{} // closed by Stop() to terminate the cache sweep goroutine
 }
 
@@ -389,6 +392,8 @@ func NewModule[T any](proto T, opts ...Option) *Module[T] {
 			m.feedCfg = &cfg
 		case feedDisabledOption:
 			m.feedCfg = nil
+		case mcpOption:
+			m.mcpOps = v.ops
 		}
 		// repoOption[T] requires a concrete type assertion — handled separately.
 		if ro, ok := o.(repoOption[T]); ok {
@@ -1276,4 +1281,355 @@ func (m *Module[T]) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	m.triggerRebuild()
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// — MCP implementation ————————————————————————————————————————————————————
+
+// Compile-time assertion: *Module[T] must satisfy MCPModule.
+var _ MCPModule = (*Module[struct{ Node }])(nil)
+
+// typeName returns the unqualified type name of t, dereferencing pointer types.
+func typeName(t reflect.Type) string {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+
+// snakeCase converts a PascalCase or camelCase identifier to lower_snake_case.
+// Consecutive uppercase letters are treated as a single word:
+//
+//	BlogPost → blog_post
+//	MCPPost  → mcp_post
+//	BlogID   → blog_id
+//
+// NOTE: This function is intentionally duplicated in forge-mcp/mcp.go.
+// The two packages cannot import each other, so each carries its own copy.
+// Any change to the algorithm here must be mirrored in forge-mcp/mcp.go, and vice versa.
+func snakeCase(s string) string {
+	runes := []rune(s)
+	var b strings.Builder
+	for i, r := range runes {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				prev := runes[i-1]
+				prevLow := (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9')
+				prevUp := prev >= 'A' && prev <= 'Z'
+				if prevLow {
+					b.WriteByte('_')
+				} else if prevUp {
+					// Acronym boundary: insert _ before the last cap of an uppercase
+					// run when it is immediately followed by a lowercase letter.
+					if i+1 < len(runes) && runes[i+1] >= 'a' && runes[i+1] <= 'z' {
+						b.WriteByte('_')
+					}
+				}
+			}
+			b.WriteRune(r + 32)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// mcpGoTypeStr maps a reflect.Type to an MCP schema type string.
+// Pointer types are dereferenced before the lookup.
+func mcpGoTypeStr(t reflect.Type) string {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t == reflect.TypeOf(time.Time{}) {
+		return "datetime"
+	}
+	switch t.Kind() { //nolint:exhaustive
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return "number"
+	default:
+		return "string"
+	}
+}
+
+// mcpJSONName returns the JSON key for a struct field: the json: tag name when
+// present, otherwise the snakeCase conversion of the Go field name.
+func mcpJSONName(sf reflect.StructField) string {
+	if tag := sf.Tag.Get("json"); tag != "" && tag != "-" {
+		if name := strings.SplitN(tag, ",", 2)[0]; name != "" {
+			return name
+		}
+	}
+	return snakeCase(sf.Name)
+}
+
+// mcpParseForgeTag extracts constraint metadata from a forge: struct tag value.
+func mcpParseForgeTag(tag string) (required bool, minLen, maxLen int, enum []string) {
+	for _, part := range strings.Split(tag, ",") {
+		part = strings.TrimSpace(part)
+		switch {
+		case part == "required":
+			required = true
+		case strings.HasPrefix(part, "min="):
+			minLen, _ = strconv.Atoi(strings.TrimPrefix(part, "min="))
+		case strings.HasPrefix(part, "max="):
+			maxLen, _ = strconv.Atoi(strings.TrimPrefix(part, "max="))
+		case strings.HasPrefix(part, "oneof="):
+			enum = strings.Split(strings.TrimPrefix(part, "oneof="), "|")
+		}
+	}
+	return
+}
+
+// mcpStructField builds an MCPField descriptor from a reflect.StructField.
+func mcpStructField(sf reflect.StructField) MCPField {
+	f := MCPField{
+		Name:     sf.Name,
+		JSONName: mcpJSONName(sf),
+		Type:     mcpGoTypeStr(sf.Type),
+	}
+	if tag := sf.Tag.Get("forge"); tag != "" {
+		f.Required, f.MinLength, f.MaxLength, f.Enum = mcpParseForgeTag(tag)
+	}
+	return f
+}
+
+// MCPMeta returns the MCP registration metadata for this module.
+func (m *Module[T]) MCPMeta() MCPMeta {
+	t := m.proto
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return MCPMeta{
+		Prefix:     m.prefix,
+		TypeName:   typeName(t),
+		Operations: m.mcpOps,
+	}
+}
+
+// MCPSchema derives the field schema for this module's content type from Go
+// struct fields and forge: struct tags. The embedded forge.Node fields Slug,
+// Status, PublishedAt, and ScheduledAt are included; ID, CreatedAt, and
+// UpdatedAt are omitted because they are managed by the framework.
+func (m *Module[T]) MCPSchema() []MCPField {
+	t := m.proto
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	nodeType := reflect.TypeOf(Node{})
+	nodeSkip := map[string]bool{"ID": true, "CreatedAt": true, "UpdatedAt": true}
+
+	var fields []MCPField
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		if !sf.IsExported() {
+			continue
+		}
+		ft := sf.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		if sf.Anonymous && ft == nodeType {
+			// Expand the embedded Node: include Slug, Status, PublishedAt,
+			// ScheduledAt; skip ID, CreatedAt, UpdatedAt.
+			for j := 0; j < nodeType.NumField(); j++ {
+				nf := nodeType.Field(j)
+				if !nf.IsExported() || nodeSkip[nf.Name] {
+					continue
+				}
+				fields = append(fields, mcpStructField(nf))
+			}
+			continue
+		}
+		if sf.Anonymous {
+			continue // skip other embedded types
+		}
+		fields = append(fields, mcpStructField(sf))
+	}
+	return fields
+}
+
+// MCPList returns all content items matching the given statuses. If no
+// statuses are provided, items of all statuses are returned.
+func (m *Module[T]) MCPList(ctx Context, status ...Status) ([]any, error) {
+	opts := ListOptions{}
+	if len(status) > 0 {
+		opts.Status = status
+	}
+	items, err := m.repo.FindAll(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]any, len(items))
+	for i, item := range items {
+		result[i] = item
+	}
+	return result, nil
+}
+
+// MCPGet returns the item with the given slug regardless of its lifecycle
+// status. The caller is responsible for enforcing visibility rules.
+func (m *Module[T]) MCPGet(ctx Context, slug string) (any, error) {
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+// MCPCreate creates a new content item from the supplied fields map. A new ID
+// is always generated; the slug is auto-derived when absent. The item is
+// validated before persistence. AfterCreate signals are dispatched
+// asynchronously.
+func (m *Module[T]) MCPCreate(ctx Context, fields map[string]any) (any, error) {
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return nil, ErrBadRequest
+	}
+	pv, elemType := m.newItemPtr()
+	if err := json.Unmarshal(data, pv.Interface()); err != nil {
+		return nil, ErrBadRequest
+	}
+
+	f := getNodeFields(elemType)
+	id := NewID()
+	pv.Elem().FieldByIndex(f.id).SetString(id)
+	if pv.Elem().FieldByIndex(f.slug).String() == "" {
+		slug := autoSlug(pv.Elem())
+		if slug == "" {
+			slug = id[:8]
+		}
+		slug = UniqueSlug(slug, func(s string) bool {
+			_, err := m.repo.FindBySlug(ctx, s)
+			return err == nil
+		})
+		pv.Elem().FieldByIndex(f.slug).SetString(slug)
+	}
+	if pv.Elem().FieldByIndex(f.status).String() == "" {
+		pv.Elem().FieldByIndex(f.status).Set(reflect.ValueOf(Draft))
+	}
+
+	item := ptrToT[T](pv, m.proto)
+	if err := RunValidation(item); err != nil {
+		return nil, err
+	}
+	if err := m.repo.Save(ctx, item); err != nil {
+		return nil, err
+	}
+	dispatchAfter(ctx, m.signals[AfterCreate], item)
+	m.invalidateCache()
+	return item, nil
+}
+
+// MCPUpdate applies a partial update to the item with the given slug. Fields
+// present in the map overlay the existing item; absent fields are preserved.
+// Node.ID, Node.Slug, and Node.Status are always restored after the merge —
+// use the dedicated lifecycle methods to change status.
+func (m *Module[T]) MCPUpdate(ctx Context, slug string, fields map[string]any) (any, error) {
+	existing, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	pv, elemType := m.newItemPtr()
+	// Seed pv from the existing item so that fields absent from the map are
+	// preserved (partial-update semantics).
+	if seed, merr := json.Marshal(existing); merr == nil {
+		json.Unmarshal(seed, pv.Interface()) //nolint:errcheck
+	}
+
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return nil, ErrBadRequest
+	}
+	if err := json.Unmarshal(data, pv.Interface()); err != nil {
+		return nil, ErrBadRequest
+	}
+
+	// Restore identity and lifecycle so callers cannot overwrite them.
+	f := getNodeFields(elemType)
+	pv.Elem().FieldByIndex(f.id).SetString(nodeIDOf(existing))
+	pv.Elem().FieldByIndex(f.slug).SetString(slug)
+	pv.Elem().FieldByIndex(f.status).Set(reflect.ValueOf(nodeStatusOf(existing)))
+
+	item := ptrToT[T](pv, m.proto)
+	if err := RunValidation(item); err != nil {
+		return nil, err
+	}
+	if err := m.repo.Save(ctx, item); err != nil {
+		return nil, err
+	}
+	dispatchAfter(ctx, m.signals[AfterUpdate], item)
+	m.invalidateCache()
+	return item, nil
+}
+
+// MCPPublish transitions the item with the given slug to Published, sets
+// PublishedAt to now, fires AfterPublish, and triggers derived-content rebuild.
+func (m *Module[T]) MCPPublish(ctx Context, slug string) error {
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+	setNodeStatus(item, Published)
+	setNodeTime(item, "PublishedAt", time.Now().UTC())
+	if err := m.repo.Save(ctx, item); err != nil {
+		return err
+	}
+	dispatchAfter(ctx, m.signals[AfterPublish], item)
+	m.invalidateCache()
+	m.triggerRebuild()
+	return nil
+}
+
+// MCPSchedule sets the item with the given slug to Scheduled and records
+// the time at which it will be automatically published.
+func (m *Module[T]) MCPSchedule(ctx Context, slug string, at time.Time) error {
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+	setNodeStatus(item, Scheduled)
+	atCopy := at
+	setNodeTimePtr(item, "ScheduledAt", &atCopy)
+	if err := m.repo.Save(ctx, item); err != nil {
+		return err
+	}
+	m.invalidateCache()
+	return nil
+}
+
+// MCPArchive transitions the item with the given slug to Archived, fires
+// AfterArchive, and triggers derived-content rebuild.
+func (m *Module[T]) MCPArchive(ctx Context, slug string) error {
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+	setNodeStatus(item, Archived)
+	if err := m.repo.Save(ctx, item); err != nil {
+		return err
+	}
+	dispatchAfter(ctx, m.signals[AfterArchive], item)
+	m.invalidateCache()
+	m.triggerRebuild()
+	return nil
+}
+
+// MCPDelete permanently removes the item with the given slug, fires
+// AfterDelete, and triggers derived-content rebuild.
+func (m *Module[T]) MCPDelete(ctx Context, slug string) error {
+	item, err := m.repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return err
+	}
+	if err := m.repo.Delete(ctx, nodeIDOf(item)); err != nil {
+		return err
+	}
+	dispatchAfter(ctx, m.signals[AfterDelete], item)
+	m.invalidateCache()
+	m.triggerRebuild()
+	return nil
 }

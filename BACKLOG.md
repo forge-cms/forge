@@ -21,7 +21,7 @@ All architectural decisions are locked in `DECISIONS.md`.
 | M7 | Redirects (v0.7.0) | ✅ Done |
 | M8 | Scheduled publishing (v0.8.0) | ✅ Done |
 | M9 | v1.0.0 stabilisation | ✅ Done |
-| M10 | MCP support (v2) | 🔲 Not started |
+| M10 | MCP support (v2) | � In progress |
 
 ---
 
@@ -223,16 +223,18 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 ## Milestone 10 — MCP support (v2)
 
-> **Priority: M10 is the primary focus.** MCP is not just a technical
-> milestone — it is the narrative and commercial differentiator for
-> Forge Cloud. Work on M10 runs in parallel with forge-site cleanup
-> and minimal forge-admin. Phase 2 infrastructure items are real but
-> do not block first revenue.
-
 Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
-**Detail:** Milestone10_BACKLOG.md *(not yet created)*
+**Detail:** [Milestone10_BACKLOG.md](Milestone10_BACKLOG.md)
 
-- [ ] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
+| Step | File | Status | Completed |
+|------|------|--------|-----------|
+| 1 | forge-mcp/mcp.go | ✅ Done | 2026-03-16 |
+| 2 | forge-mcp/resource.go | 🔲 Not started | — |
+| 3 | forge-mcp/tool.go | 🔲 Not started | — |
+| 4 | forge-mcp/transport.go | 🔲 Not started | — |
+| 5 | forge-mcp/README.md | 🔲 Not started | — |
+
+- [x] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
 - [ ] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
 - [ ] Step 3 — MCPWrite: expose Create/Update/Delete/Publish as MCP tools with role checks
 - [ ] Step 4 — Transport: stdio (local AI tools) + SSE (remote, authenticated)
@@ -243,46 +245,15 @@ Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
 ## Phase 2 — Production foundation
 
 See [VISION.md](VISION.md) for context. Steps are ordered by dependency
-and practical value for forge-cms.dev.
+and practical value.
 
 - **Health endpoint + error reporter interface** — `GET /_health` ✅ Done (Amendment A42); `forge.ErrorReporter` interface (plug in third-party error tracking or custom webhooks via `app.Use(...)`) still pending
-- **Shared template partials** — `forge.Templates` currently parses a single file; nav/footer must be duplicated across list.html and show.html; add partial directory support or `{{template "include"}}` mechanism; discovered during forge-site templates sprint
+- **Shared template partials** — `forge.Templates` currently parses a single file; shared template components (navigation, footer, partials) must be duplicated across templates; add partial directory support or `{{template "include"}}` mechanism
 - **`forge:head` public helper** — `forgeHeadTmpl` is package-private; `forge.Handle` home handlers cannot use `forge:head`; expose as `forge.HeadPartial(head Head) template.HTML` or equivalent
 - **`forge.New` MustConfig enforcement** — `forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid config; make `New` call `MustConfig` internally so validation is not opt-in
-- **`forge.AppSchema{}`** — `forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages (home, about) cannot generate Organization or WebSite JSON-LD without hardcoding; add `forge.AppSchema{}` via `app.SEO()` for app-level structured data; discovered during forge-site rich results testing (Amendment S9)
-- **`forge.OGDefaults{}`** — no app-level fallback for `og:image`, `twitter:site`, `twitter:creator`; developers must hardcode these in templates; add via `app.SEO()` so defaults are injected automatically; discovered during forge-site OG implementation (Amendment S9)
-- **DDoS mitigation for heavy AI endpoints** — `llms-full.txt` and per-item `/{prefix}/{slug}/aidoc` are CPU-intensive under load: large Markdown payloads, optionally gzip-compressed per request. Proposed approach (in priority order): (1) pre-compute and cache the compressed response at generation time — serve from buffer on every request, no per-request compression cost, fits Forge's existing event-driven philosophy; (2) per-endpoint rate limiting with a lower limit on `llms-full.txt` and `/{prefix}/{slug}/aidoc` than on standard content endpoints; (3) concurrent request cap on heavy endpoints, independent of rate limit. Relates to: `forge.RateLimit`, `ai.go` (`compressIfAccepted`).
-
----
-
-## Critical path to Forge Cloud (revised 2026-03-15)
-
-Ordered by priority. Items in the same tier run in parallel.
-
-**Tier 1 — Patch now:**
-- Health endpoint HTTPS bypass (v1.0.12)
-- `forge:head` public helper
-- Shared template partials
-
-**Tier 2 — forge-site cleanup (before going public):**
-- Remove workaround comments from templates
-- ADMIN_TOKEN documented in README
-- Deployment guide in README
-- Make forge-site repo public
-
-**Tier 3 — MCP (M10, parallel with Tier 2):**
-Steps as already listed in M10 section. The demo — a 60-second
-clip of an AI assistant creating and publishing via MCP — is the
-milestone that defines readiness for Show HN.
-
-**Tier 4 — Minimal forge-admin (parallel with MCP):**
-MVP scope only: login, list content, create/edit, publish/unpublish.
-No JavaScript framework. Go HTML templates + forge-cms.dev design system.
-This is the gateway to non-developer users and first revenue.
-
-**Tier 5 — Forge Cloud early access (manual provisioning):**
-Manually provisioned instances. Stripe for payment. 3-5 customers
-before automation. Validation, not product completeness.
+- **`forge.AppSchema{}`** — `forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages (home, about) cannot generate Organization or WebSite JSON-LD without hardcoding; add `forge.AppSchema{}` via `app.SEO()` for app-level structured data (Amendment S9)
+- **`forge.OGDefaults{}`** — no app-level fallback for `og:image`, `twitter:site`, `twitter:creator`; developers must hardcode these in templates; add via `app.SEO()` so defaults are injected automatically (Amendment S9)
+- **AI endpoint performance hardening** — pre-computation, caching, and rate limiting for compute-intensive endpoints. See NOTES.md [N1].
 
 ---
 
