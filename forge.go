@@ -303,6 +303,11 @@ func (a *App) Content(v any, opts ...Option) {
 // not be modified by the caller.
 func (a *App) MCPModules() []MCPModule { return a.mcpModules }
 
+// Secret returns the HMAC signing secret from the application configuration.
+// It is intended for use by forge-mcp and other companion packages that must
+// verify tokens minted with [SignToken] but cannot access [Config] directly.
+func (a *App) Secret() []byte { return a.cfg.Secret }
+
 // httpsRedirect returns a middleware that redirects plain-HTTP requests to
 // their HTTPS equivalents with a 301 Moved Permanently response.
 //

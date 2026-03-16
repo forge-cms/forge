@@ -49,6 +49,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-16 | Milestone 10 Step 1: `forge-mcp/mcp.go` + Amendment A49 — `forge.MCPModule` interface added to `mcp.go`; `Module[T]` implements it in `module.go`; `App.MCPModules()` added to `forge.go`; `forge-mcp` scaffold (`go.mod`, `Server`, `New`, JSON-RPC types, `handle`, `handleInitialize`, `snakeCase`, `hasMCPOp`, `slugOf`, `mcpToolDefs`, `inputSchema`, `inputSchemaUpdate`). |
 | 2026-03-16 | Milestone 10 Step 2: `forge-mcp/resource.go` — read path: `handleResourceMethod`, `handleResourcesList`, `handleResourcesTemplatesList`, `handleResourcesRead`, `parseResourceURI`; `mcpResource`/`resourceContent`/`resourceTemplate` wire types; Published-only lifecycle enforcement. `handle` default case delegates to `handleResourceMethod`. |
 | 2026-03-17 | Milestone 10 Step 3: `forge-mcp/tool.go` — write path: `handleToolMethod`, `handleToolsList`, `handleToolsCall` dispatcher (create/update/publish/schedule/archive/delete); `toolName`, `parseToolName`, `moduleForType`, `authorise`, `errorFor`, `stringArg` helpers; Author-level role enforcement; Flag H idempotency on publish; Flag F delete response `{"deleted":true,"slug":...}`; godoc NOTE on zero-value limitation (Flag G). `handle` default case now delegates to `handleToolMethod` before `handleResourceMethod`. |
+| 2026-03-16 | Milestone 10 Step 4: `forge-mcp/transport.go` + Amendment A50 — `ServeStdio(ctx, in, out)` with goroutine-based scanner and 1 MiB `bufio.Scanner` buffer limit; `Handler()` returning ServeMux with `GET /mcp` (SSE keepalive) and `POST /mcp/message` (HTTP 401 auth boundary + `MaxBytesReader` 1 MiB body limit + JSON-RPC response); A50 additions: `forge.VerifyBearerToken(r, secret)` in `auth.go`; `App.Secret()` accessor in `forge.go`; `forge.NewContextWithUser(user)` production-safe background context constructor in `context.go`; `Server.secret []byte` + `New(app, opts...)` auto-inherit + `WithSecret` option + mismatch `log.Printf` warning in `forge-mcp/mcp.go`. 10 transport tests + 3 `TestVerifyBearerToken` sub-tests added. |
 
 ---
 
@@ -66,11 +67,13 @@ github.com/forge-cms/forge/
 ├── mcp.go            MCP() no-op option (v1), MCPRead/MCPWrite constants
 ├── node.go           Node, Status, lifecycle constants, NewID(), GenerateSlug(), UniqueSlug(), ValidateStruct()
 │                     GetSlug(), GetPublishedAt(), GetStatus() getter methods (Amendment A2)
-├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser
+├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser,
+│                     NewBackgroundContext, NewContextWithUser
 ├── signals.go        Signal type, On[T]() option, dispatchBefore(), dispatchAfter(), debouncer,
 │                     debouncer.Stop() (Amendment A39)
 ├── storage.go        DB interface, Query[T], QueryOne[T], Repository[T], MemoryRepo[T], ListOptions
-├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken
+├── auth.go           AuthFunc interface, BearerHMAC, CookieSession, BasicAuth, AnyAuth, SignToken,
+│                     VerifyBearerToken
 ├── middleware.go     RequestLogger, Recoverer, SecurityHeaders, CORS, MaxBodySize,
 │                     RateLimit, TrustedProxy, InMemoryCache, CacheStore, Authenticate, CSRF, Chain
 ├── module.go         Module[T], NewModule, Register, Stop, At, Cache, Auth,
@@ -97,7 +100,9 @@ github.com/forge-cms/forge/
                       always mounted (Amendment A21); redirectManifestOpts field,
                       App.RedirectManifestAuth() (Amendment A22);
                       stoppableModules []stoppable field, Stop() wired after srv.Shutdown
-                      (Amendment A39)
+                      (Amendment A39);
+                      App.MCPModules() (Amendment A49);
+                      App.Secret() (Amendment A50)
 └── head.go           Head (Title, Description, Author, Published, Modified, Image, Type,
                       Canonical, Tags, Breadcrumbs, Alternates, Social, NoIndex),
                       Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
@@ -147,16 +152,19 @@ github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
 
 github.com/forge-cms/forge-mcp/  (separate module: ./forge-mcp/)
-├── mcp.go            Server, New, handle (JSON-RPC dispatch), handleInitialize,
+├── mcp.go            Server (secret []byte), New(app, opts...), ServerOption,
+│                     WithSecret; handle (JSON-RPC dispatch), handleInitialize,
 │                     JSON-RPC wire types (jsonRPCRequest/Response/Error),
 │                     mcpTool, mcpResource, allResources, mcpToolDefs,
 │                     inputSchema, inputSchemaUpdate, hasMCPOp, slugOf, snakeCase
 ├── resource.go       handleResourceMethod, handleResourcesList,           ✅ Milestone 10 Step 2
 │                     handleResourcesTemplatesList, handleResourcesRead,
 │                     parseResourceURI; mcpResource/resourceContent/resourceTemplate
-└── tool.go           handleToolMethod, handleToolsList, handleToolsCall,  ✅ Milestone 10 Step 3
-                      toolName, parseToolName, moduleForType, authorise,
-                      errorFor, stringArg
+├── tool.go           handleToolMethod, handleToolsList, handleToolsCall,  ✅ Milestone 10 Step 3
+│                     toolName, parseToolName, moduleForType, authorise,
+│                     errorFor, stringArg
+└── transport.go      ServeStdio(ctx, in, out), Handler(),                 ✅ Milestone 10 Step 4
+                      sseHandler, messageHandler
 ```
 
 ### Shipped (Milestones 7–8)

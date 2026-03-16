@@ -35,7 +35,7 @@ apply without modification.
 | 1 | forge-mcp/mcp.go | ✅ Complete | 2026-03-16 |
 | 2 | forge-mcp/resource.go | ✅ Complete | 2026-03-16 |
 | 3 | forge-mcp/tool.go | ✅ Complete | 2026-03-17 |
-| 4 | forge-mcp/transport.go | 🔲 Not started | — |
+| 4 | forge-mcp/transport.go | ✅ Complete | 2026-03-16 |
 | 5 | forge-mcp/README.md | 🔲 Not started | — |
 
 ---
@@ -482,7 +482,7 @@ The MCP protocol uses JSON-RPC 2.0 messages. Two transports are provided:
 
 #### 4.1 — JSON-RPC types
 
-- [ ] Define internal types in `transport.go`:
+- [x] Define internal types in `transport.go`:
   ```go
   type jsonRPCRequest struct {
       JSONRPC string          `json:"jsonrpc"`
@@ -502,68 +502,76 @@ The MCP protocol uses JSON-RPC 2.0 messages. Two transports are provided:
       Data    any    `json:"data,omitempty"`
   }
   ```
-- [ ] `Server.handle(ctx forge.Context, req jsonRPCRequest) jsonRPCResponse`:
+- [x] `Server.handle(ctx forge.Context, req jsonRPCRequest) jsonRPCResponse`:
   dispatches to `initialize`, `resources/list`, `resources/templates/list`,
   `resources/read`, `tools/list`, `tools/call`; maps errors to JSON-RPC error
   codes; returns `jsonrpc: "2.0"` on all responses
 
 #### 4.2 — `initialize` handler
 
-- [ ] `Server.handleInitialize() any`:
+- [x] `Server.handleInitialize() any`:
   returns `map[string]any{"protocolVersion": "2024-11-05", "serverInfo": map[string]any{"name": "forge-mcp", "version": "1.0.0"}, "capabilities": map[string]any{"resources": map[string]any{"subscribe": false, "listChanged": false}, "tools": map[string]any{"listChanged": false}}}`
 
 #### 4.3 — stdio transport
 
-- [ ] `Server.ServeStdio(ctx context.Context, in io.Reader, out io.Writer) error`:
-  - Creates a `forge.NewBackgroundContext` (background context uses
-    `forge.Admin` role for stdio — the process runs locally and the operator
-    is trusted)
-  - Reads newline-delimited JSON from `in` in a loop
-  - Parses each line as `jsonRPCRequest`
-  - Calls `s.handle(forgeCtx, req)` — result or error
-  - Encodes `jsonRPCResponse` to `out` as a single JSON line + `\n`
-  - Returns when `ctx` is cancelled or `in` is closed
-  - Production usage: `server.ServeStdio(ctx, os.Stdin, os.Stdout)`
+- [x] `Server.ServeStdio(ctx context.Context, in io.Reader, out io.Writer) error`:
+  - Creates `forge.NewContextWithUser` with `forge.Admin` role (Amendment A50-3;
+    replaces `NewBackgroundContext` which hardcodes GuestUser)
+  - `scanner.Buffer(make([]byte, 64*1024), 1<<20)` applied immediately after
+    `bufio.NewScanner` — hard 1 MiB line limit, not "further consideration"
+  - Scanner goroutine sends lines to a channel; main loop selects on ctx.Done()
+    and the channel — returns immediately on context cancellation
+  - Empty lines skipped; malformed JSON returns -32700 response
+  - Returns when ctx is cancelled or in reaches EOF
 
 #### 4.4 — SSE transport
 
-- [ ] `Server.Handler() http.Handler`:
+- [x] `Server.Handler() http.Handler`:
   - Returns a `http.ServeMux` with two routes:
-    - `GET /mcp` — SSE endpoint; upgrades to SSE, sends `event: open\ndata: {}\n\n`
-      then blocks until the connection closes
-    - `POST /mcp/message` — accepts a `jsonRPCRequest` as JSON body; authenticates
-      the caller using `Authorization: Bearer {token}` via `forge.BearerHMAC`
-      (server must be constructed with `WithSecret(secret string)` option or read
-      from `forge.Config`); constructs a `forge.Context` with the authenticated
-      user's role; calls `s.handle(ctx, req)`; returns `jsonRPCResponse` as JSON
+    - `GET /mcp` — SSE endpoint; sends `event: open\ndata: {}\n\n` then blocks
+      until the connection closes
+    - `POST /mcp/message` — HTTP 401 (auth boundary) before any JSON-RPC if
+      secret is set; `http.MaxBytesReader(w, r.Body, 1<<20)` body limit;
+      `*http.MaxBytesError` → 413; constructs `forge.Context` with verified user
   - SSE response headers: `Content-Type: text/event-stream`,
     `Cache-Control: no-cache`, `Connection: keep-alive`
-- [ ] `WithSecret(secret string) ServerOption` constructor option:
-  sets the HMAC secret used by the SSE transport to verify Bearer tokens
+- [x] `WithSecret(secret []byte) ServerOption` constructor option with auto-inherit
+  from `app.Secret()` in `New()` (Amendment A50-4); mismatch → `log.Printf` warning
 
-#### 4.5 — Tests
+#### 4.5 — Tests (10 total in mcp_test.go)
 
-- [ ] `TestMCPServeStdio_roundtrip` — construct `Server`; create two
-  `io.Pipe` pairs (`inR/inW` for input, `outR/outW` for output); call
-  `server.ServeStdio(ctx, inR, outW)` in a goroutine; write
-  `initialize` JSON line to `inW`; read response from `outR`; assert
-  valid `protocolVersion` in result; cancel ctx to shut down
-- [ ] `TestMCPServeStdio_resourcesList` — seed a published item, send
-  `resources/list` over stdio, assert item appears in response
-- [ ] `TestMCPHandler_initialize` — POST `initialize` to `/mcp/message`;
-  assert 200 + correct result
-- [ ] `TestMCPHandler_toolsCall_unauthenticated` — POST without Bearer token;
-  assert 401 or JSON-RPC error
+- [x] `TestMCPServeStdio_roundtrip` — initialize over stdio; assert protocolVersion
+- [x] `TestMCPServeStdio_resourcesList` — seed published item; resources/list over
+  stdio; assert only published item appears
+- [x] `TestMCPServeStdio_malformedJSON` — non-JSON line → -32700 error response
+- [x] `TestMCPServeStdio_emptyLine` — empty line skipped; next request processed
+- [x] `TestMCPServeStdio_contextCancel` — cancel context; ServeStdio returns nil
+- [x] `TestMCPHandler_initialize` — POST initialize to /mcp/message (no-secret
+  app); 200 + correct result
+- [x] `TestMCPHandler_unauthenticated` — POST without Bearer token (secret set); 401
+- [x] `TestMCPHandler_authenticated_resourcesList` — valid Bearer → resources/list
+- [x] `TestMCPHandler_bodyTooLarge` — valid-JSON body > 1 MiB → 413
+- [x] `TestMCPHandler_SSEOpen` — GET /mcp → text/event-stream headers + event:open
+
+#### Amendment A50 sub-tasks (applied first)
+
+- [x] A50-1: `forge/auth.go` — `VerifyBearerToken(r *http.Request, secret []byte) (User, bool)`
+- [x] A50-2: `forge/forge.go` — `func (a *App) Secret() []byte`
+- [x] A50-3: `forge/context.go` — `NewContextWithUser(user User) Context`
+- [x] A50-4: `forge-mcp/mcp.go` — `secret []byte` field; `New(app, opts...)`
+  auto-inherits `app.Secret()`; `WithSecret` + mismatch warning
+- [x] `forge/auth_test.go` — `TestVerifyBearerToken` (valid, missing header, wrong secret)
+- [x] `DECISIONS.md` — A50 index row + body both added
 
 #### Verification — Step 4
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestMCPServe ./...` — all green
-- [ ] `BACKLOG.md` — updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
-      or new Decision/Amendment drafted and agreed upon
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestMCPServe|TestMCPHandler|TestVerifyBearer" ./...` — all green
+- [x] Full `go test ./...` — no regressions
+- [x] `BACKLOG.md` — updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — Amendment A50 drafted and agreed upon
 
 ---
 

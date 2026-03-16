@@ -422,3 +422,56 @@ func TestWithoutCSRFImplementsOption(t *testing.T) {
 	// Compile-time: var WithoutCSRF Option — this test documents the runtime check.
 	var _ Option = WithoutCSRF
 }
+
+// — VerifyBearerToken ———————————————————————————————————————————————————————
+
+func TestVerifyBearerToken(t *testing.T) {
+	secret := []byte("test-secret-32-bytes-xxxxxxxxxxxx")
+	u := User{ID: "u1", Name: "Alice", Roles: []Role{Editor}}
+
+	t.Run("valid token returns user", func(t *testing.T) {
+		tok, err := SignToken(u, string(secret), 0)
+		if err != nil {
+			t.Fatalf("SignToken: %v", err)
+		}
+		r, _ := http.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Authorization", "Bearer "+tok)
+		got, ok := VerifyBearerToken(r, secret)
+		if !ok {
+			t.Fatal("expected ok=true for valid token")
+		}
+		if got.ID != u.ID {
+			t.Errorf("user ID: got %q want %q", got.ID, u.ID)
+		}
+		if len(got.Roles) == 0 || got.Roles[0] != Editor {
+			t.Errorf("user roles: got %v want [Editor]", got.Roles)
+		}
+	})
+
+	t.Run("missing Authorization header returns GuestUser", func(t *testing.T) {
+		r, _ := http.NewRequest(http.MethodGet, "/", nil)
+		got, ok := VerifyBearerToken(r, secret)
+		if ok {
+			t.Fatal("expected ok=false for missing header")
+		}
+		if got.ID != GuestUser.ID {
+			t.Errorf("expected GuestUser, got %+v", got)
+		}
+	})
+
+	t.Run("wrong secret returns GuestUser", func(t *testing.T) {
+		tok, err := SignToken(u, string(secret), 0)
+		if err != nil {
+			t.Fatalf("SignToken: %v", err)
+		}
+		r, _ := http.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Authorization", "Bearer "+tok)
+		got, ok := VerifyBearerToken(r, []byte("wrong-secret-32-bytes-xxxxxxxxxxxx"))
+		if ok {
+			t.Fatal("expected ok=false for wrong secret")
+		}
+		if got.ID != GuestUser.ID {
+			t.Errorf("expected GuestUser, got %+v", got)
+		}
+	})
+}

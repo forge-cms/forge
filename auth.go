@@ -186,6 +186,26 @@ func (b *bearerAuthFn) authenticate(r *http.Request) (User, bool) {
 	return user, true
 }
 
+// VerifyBearerToken extracts and verifies the HMAC-signed bearer token from r's
+// Authorization header. It returns the authenticated [User] and true on success,
+// or [GuestUser] and false if the header is absent, malformed, or the signature
+// is invalid. secret must be the same value used to sign the token with [SignToken].
+// This is the public counterpart to the unexported authenticate method on
+// [BearerHMAC] and is intended for use outside the forge package (e.g. forge-mcp
+// SSE transport) where [AuthFunc] is not directly callable.
+func VerifyBearerToken(r *http.Request, secret []byte) (User, bool) {
+	hdr := r.Header.Get("Authorization")
+	if !strings.HasPrefix(hdr, "Bearer ") {
+		return GuestUser, false
+	}
+	token := strings.TrimPrefix(hdr, "Bearer ")
+	user, err := decodeToken(token, string(secret))
+	if err != nil {
+		return GuestUser, false
+	}
+	return user, true
+}
+
 // — CookieSession ——————————————————————————————————————————————————————————
 
 // cookieAuthFn implements [AuthFunc] and [csrfAware] for cookie-based sessions.

@@ -5,22 +5,49 @@
 package forgemcp
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 
 	"github.com/forge-cms/forge"
 )
+
+// ServerOption configures a [Server]. Use [WithSecret] to override the HMAC
+// secret used for SSE bearer-token authentication.
+type ServerOption func(*Server)
+
+// WithSecret overrides the HMAC secret used to verify SSE bearer tokens.
+// The secret must match Config.Secret from the forge.App passed to New.
+// Tokens minted by [forge.SignToken] with a different secret will fail SSE
+// verification with HTTP 401. WithSecret is only needed for secret rotation.
+func WithSecret(secret []byte) ServerOption {
+	return func(s *Server) { s.secret = secret }
+}
 
 // Server wraps a set of [forge.MCPModule] values and serves the MCP protocol
 // over stdio (see [Server.ServeStdio]) or HTTP SSE (see [Server.Handler]).
 type Server struct {
 	modules []forge.MCPModule
-	auth    forge.AuthFunc // nil = stdio transport (no auth required); set for SSE
+	secret  []byte // HMAC secret for SSE bearer-token verification
 }
 
 // New creates a Server for the given forge App, collecting all content modules
-// registered with forge.MCP(...).
-func New(app *forge.App) *Server {
-	return &Server{modules: app.MCPModules()}
+// registered with forge.MCP(...). The App's HMAC secret (Config.Secret) is
+// inherited automatically and used for SSE bearer-token verification.
+// Pass [WithSecret] to override (e.g. during secret rotation).
+func New(app *forge.App, opts ...ServerOption) *Server {
+	s := &Server{
+		modules: app.MCPModules(),
+		secret:  app.Secret(),
+	}
+	for _, o := range opts {
+		o(s)
+	}
+	if len(s.secret) > 0 && !bytes.Equal(s.secret, app.Secret()) {
+		log.Printf("forge-mcp: WithSecret value differs from app Config.Secret — " +
+			"tokens minted by forge.SignToken will fail SSE verification")
+	}
+	return s
 }
 
 // moduleByPrefix returns the module whose MCPMeta.Prefix equals prefix.

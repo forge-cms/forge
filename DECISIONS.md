@@ -70,6 +70,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A47 | `templatehelpers.go`: `forge_markdown` delegates to `renderMarkdown` | Agreed | 2026-03-15 |
 | A48 | `module.go`: set `PublishedAt` on manual publish in `updateHandler` | Agreed | 2026-03-15 |
 | A49 | `mcp.go`/`module.go`/`forge.go`: `MCPModule` contract — `mcpOption` carries ops; export `MCPMeta`, `MCPField`, `MCPModule`; `Module[T]` implements 10 MCP methods; `App.MCPModules()` | Agreed | 2026-03-16 |
+| A50 | `auth.go`/`forge.go`/`context.go`/`forge-mcp/mcp.go`: `VerifyBearerToken`, `App.Secret()`, `NewContextWithUser`, `Server` secret auto-inherit | Agreed | 2026-03-16 |
 
 ---
 
@@ -3071,3 +3072,138 @@ app.Content(&BlogPost{},
    JSON merge; status transitions go through the dedicated lifecycle methods.
 6. `MCPSchema` includes the embedded `forge.Node` fields Slug, Status,
    PublishedAt, and ScheduledAt; it omits ID, CreatedAt, and UpdatedAt.
+
+---
+
+## Amendment A50 — `auth.go`/`forge.go`/`context.go`/`forge-mcp/mcp.go`: `VerifyBearerToken`, `App.Secret()`, `NewContextWithUser`, `Server` secret auto-inherit
+
+**Date:** 2026-03-16
+**Status:** Agreed
+
+**Change:** Four co-dependent additions required to implement `forge-mcp/transport.go`
+without leaking test-scoped helpers into production code and without silent
+misconfiguration of SSE bearer-token authentication.
+
+**Part 1 — `forge/auth.go`: `VerifyBearerToken`**
+
+Add a new exported free function:
+
+```go
+// VerifyBearerToken extracts and verifies the HMAC-signed bearer token from r's
+// Authorization header. It returns the authenticated User and true on success,
+// or GuestUser and false if the header is absent, malformed, or the signature
+// is invalid. secret must be the same value used to sign the token with
+// [SignToken]. This is the public counterpart to the unexported authenticate
+// method on [BearerHMAC] and is intended for use outside the forge package
+// (e.g. forge-mcp SSE transport) where [AuthFunc] is not directly callable.
+func VerifyBearerToken(r *http.Request, secret []byte) (User, bool) {
+    hdr := r.Header.Get("Authorization")
+    if !strings.HasPrefix(hdr, "Bearer ") {
+        return GuestUser, false
+    }
+    token := strings.TrimPrefix(hdr, "Bearer ")
+    user, err := decodeToken(token, string(secret))
+    if err != nil {
+        return GuestUser, false
+    }
+    return user, true
+}
+```
+
+The signature takes `*http.Request` and `secret []byte` (not two strings) to
+match HTTP handler call sites directly and to accept the `[]byte` secret stored
+in `Config.Secret` without a conversion at the call site.
+
+**Part 2 — `forge/forge.go`: `App.Secret()`**
+
+Add one exported accessor method:
+
+```go
+// Secret returns the HMAC signing secret from the application configuration.
+// It is intended for use by forge-mcp and other companion packages that must
+// verify tokens minted with [SignToken] but cannot access [Config] directly.
+func (a *App) Secret() []byte { return a.cfg.Secret }
+```
+
+**Part 3 — `forge/context.go`: `NewContextWithUser`**
+
+Add a new exported constructor:
+
+```go
+// NewContextWithUser returns a [Context] for use in background goroutines or
+// non-HTTP transports (e.g. stdio MCP) that require a real User identity.
+// Unlike [NewTestContext], this function may appear in production code.
+// Unlike [NewBackgroundContext], the User is caller-supplied rather than
+// hardcoded to [GuestUser].
+func NewContextWithUser(user User) Context {
+    rec := httptest.NewRecorder()
+    req := httptest.NewRequest(http.MethodGet, "/", nil)
+    req = req.WithContext(context.Background())
+    return &contextImpl{
+        Context:   context.Background(),
+        user:      user,
+        locale:    "en",
+        siteName:  "",
+        requestID: NewID(),
+        req:       req,
+        w:         rec,
+    }
+}
+```
+
+`net/http/httptest` was already imported by `NewTestContext` in `context.go` —
+no new dependency is introduced.
+
+**Part 4 — `forge-mcp/mcp.go`: `Server` secret auto-inherit**
+
+Replace the `auth forge.AuthFunc` placeholder field with `secret []byte` and
+update `New` to auto-inherit the app's secret. Add a `ServerOption` type and
+`WithSecret` option:
+
+```go
+type ServerOption func(*Server)
+
+func WithSecret(secret []byte) ServerOption {
+    return func(s *Server) { s.secret = secret }
+}
+
+type Server struct {
+    modules []forge.MCPModule
+    secret  []byte
+}
+
+func New(app *forge.App, opts ...ServerOption) *Server {
+    s := &Server{
+        modules: app.MCPModules(),
+        secret:  app.Secret(),
+    }
+    for _, o := range opts {
+        o(s)
+    }
+    if len(s.secret) > 0 && !bytes.Equal(s.secret, app.Secret()) {
+        log.Printf("forge-mcp: WithSecret value differs from app Config.Secret — " +
+            "tokens minted by forge.SignToken will fail SSE verification")
+    }
+    return s
+}
+```
+
+**Consequences:**
+
+1. `forge.VerifyBearerToken` gives `forge-mcp/transport.go` a clean, callable
+   authentication path without exposing the unexported `authenticate` method
+   on `AuthFunc` or importing test infrastructure.
+2. `App.Secret()` eliminates a class of silent misconfiguration (the A45
+   analogy): the SSE transport automatically uses the same secret as the rest
+   of the application without any extra developer action.
+3. `forge.NewContextWithUser` provides a production-safe background context
+   constructor calling `NewContextWithUser(forge.User{ID:"stdio", Roles:
+   []forge.Role{forge.Admin}})`. `NewTestContext` continues to exist unchanged
+   for test code; the new function is the non-test equivalent.
+4. `Server.auth forge.AuthFunc` is removed. The field was unexported and only
+   ever used as a placeholder — no call site outside `forge-mcp` referenced it.
+5. `New(app *forge.App, opts ...ServerOption)` is backward-compatible at
+   existing call sites where `New(app)` is called with no options. The
+   variadic `opts` parameter adds no obligation.
+6. The `bytes` and `log` standard library packages are added to `forge-mcp/mcp.go`
+   imports (needed for `bytes.Equal` and `log.Printf` in the mismatch warning).

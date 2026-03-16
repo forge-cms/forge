@@ -1,8 +1,13 @@
 package forgemcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -749,5 +754,375 @@ func TestMCPToolsCall_update_cannot_clear_field(t *testing.T) {
 	if stored.Body != "original body content ok" {
 		t.Errorf("Body = %q after failed clear, want %q",
 			stored.Body, "original body content ok")
+	}
+}
+
+// — Transport tests ————————————————————————————————————————————————————————
+
+// mcpRoundTrip is a helper that sends a JSON-RPC request over stdio
+// (using io.Pipe) and returns the decoded response map.
+func mcpRoundTrip(t *testing.T, srv *Server, reqObj map[string]any) map[string]any {
+	t.Helper()
+	pr, pw := io.Pipe()
+	var buf bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- srv.ServeStdio(ctx, pr, &buf) }()
+
+	b, err := json.Marshal(reqObj)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	if _, err := pw.Write(append(b, '\n')); err != nil {
+		t.Fatalf("write to pipe: %v", err)
+	}
+	pw.Close()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("ServeStdio did not return within timeout")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &resp); err != nil {
+		t.Fatalf("unmarshal response %q: %v", buf.String(), err)
+	}
+	return resp
+}
+
+func TestMCPServeStdio_roundtrip(t *testing.T) {
+	app := newTestApp(t, forge.MCP(forge.MCPRead))
+	srv := New(app)
+
+	resp := mcpRoundTrip(t, srv, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "initialize",
+		"params":  map[string]any{},
+	})
+
+	if resp["jsonrpc"] != "2.0" {
+		t.Errorf("jsonrpc = %v, want 2.0", resp["jsonrpc"])
+	}
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result not an object: %v", resp["result"])
+	}
+	if result["protocolVersion"] != "2024-11-05" {
+		t.Errorf("protocolVersion = %v, want 2024-11-05", result["protocolVersion"])
+	}
+}
+
+func TestMCPServeStdio_resourcesList(t *testing.T) {
+	cfg := forge.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+	}
+	app := forge.New(cfg)
+	repo := forge.NewMemoryRepo[*testMCPPost]()
+	posts := forge.NewModule[*testMCPPost](
+		(*testMCPPost)(nil),
+		forge.Repo(repo),
+		forge.At("/posts"),
+		forge.MCP(forge.MCPRead),
+	)
+	app.Content(posts)
+	seedPost(t, repo, "hello-world", forge.Published, "Hello World", "body content here")
+	seedPost(t, repo, "draft-post", forge.Draft, "Draft Post", "draft content here")
+
+	srv := New(app)
+	resp := mcpRoundTrip(t, srv, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "resources/list",
+		"params":  map[string]any{},
+	})
+
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result not an object: %v", resp)
+	}
+	resources, ok := result["resources"].([]any)
+	if !ok {
+		t.Fatalf("resources not a slice: %v", result["resources"])
+	}
+	if len(resources) != 1 {
+		t.Fatalf("resources len = %d, want 1 (only Published)", len(resources))
+	}
+	res := resources[0].(map[string]any)
+	if !strings.Contains(res["uri"].(string), "hello-world") {
+		t.Errorf("URI = %v, want to contain hello-world", res["uri"])
+	}
+}
+
+func TestMCPServeStdio_malformedJSON(t *testing.T) {
+	app := newTestApp(t, forge.MCP(forge.MCPRead))
+	srv := New(app)
+
+	pr, pw := io.Pipe()
+	var buf bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- srv.ServeStdio(ctx, pr, &buf) }()
+
+	pw.Write([]byte("not valid json\n"))
+	pw.Close()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("ServeStdio did not return within timeout")
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	rpcErr, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error field, got %v", resp)
+	}
+	code := rpcErr["code"].(float64)
+	if code != -32700 {
+		t.Errorf("error code = %v, want -32700", code)
+	}
+}
+
+func TestMCPServeStdio_emptyLine(t *testing.T) {
+	app := newTestApp(t, forge.MCP(forge.MCPRead))
+	srv := New(app)
+
+	pr, pw := io.Pipe()
+	var buf bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- srv.ServeStdio(ctx, pr, &buf) }()
+
+	// Write empty line then a valid request — both should be processed without panic.
+	req := map[string]any{"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": map[string]any{}}
+	b, _ := json.Marshal(req)
+	pw.Write([]byte("\n"))
+	pw.Write(append(b, '\n'))
+	pw.Close()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("ServeStdio did not return within timeout")
+	}
+
+	// Should contain exactly one JSON line (the initialize response, not an error for the empty line).
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 response line, got %d: %q", len(lines), buf.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp["error"] != nil {
+		t.Errorf("unexpected error for empty-line skip: %v", resp["error"])
+	}
+}
+
+func TestMCPServeStdio_contextCancel(t *testing.T) {
+	app := newTestApp(t, forge.MCP(forge.MCPRead))
+	srv := New(app)
+
+	// Use a non-closing reader so ServeStdio blocks on the scanner goroutine.
+	pr, _ := io.Pipe()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() { done <- srv.ServeStdio(ctx, pr, io.Discard) }()
+
+	// Cancel the context — ServeStdio must return promptly.
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("ServeStdio returned non-nil error on cancel: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ServeStdio did not return after context cancel")
+	}
+}
+
+func TestMCPHandler_initialize(t *testing.T) {
+	// Use a no-secret app so the server applies no auth on POST /mcp/message.
+	cfg := forge.Config{BaseURL: "http://localhost"}
+	app := forge.New(cfg)
+	repo := forge.NewMemoryRepo[*testMCPPost]()
+	posts := forge.NewModule[*testMCPPost](
+		(*testMCPPost)(nil),
+		forge.Repo(repo),
+		forge.At("/posts"),
+		forge.MCP(forge.MCPRead),
+	)
+	app.Content(posts)
+	srv := New(app) // empty secret → GuestUser path
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/message", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["jsonrpc"] != "2.0" {
+		t.Errorf("jsonrpc = %v, want 2.0", resp["jsonrpc"])
+	}
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result not an object: %v", resp["result"])
+	}
+	if result["protocolVersion"] != "2024-11-05" {
+		t.Errorf("protocolVersion = %v, want 2024-11-05", result["protocolVersion"])
+	}
+}
+
+func TestMCPHandler_unauthenticated(t *testing.T) {
+	// Construct server with a non-empty secret so auth is enforced.
+	secret := []byte("test-secret-32-bytes-xxxxxxxxxxxx")
+	cfg := forge.Config{
+		BaseURL: "http://localhost",
+		Secret:  secret,
+	}
+	app := forge.New(cfg)
+	repo := forge.NewMemoryRepo[*testMCPPost]()
+	posts := forge.NewModule[*testMCPPost](
+		(*testMCPPost)(nil),
+		forge.Repo(repo),
+		forge.At("/posts"),
+		forge.MCP(forge.MCPRead, forge.MCPWrite),
+	)
+	app.Content(posts)
+	srv := New(app) // auto-inherits secret
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/message", strings.NewReader(body))
+	// No Authorization header.
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestMCPHandler_authenticated_resourcesList(t *testing.T) {
+	secret := []byte("test-secret-32-bytes-xxxxxxxxxxxx")
+	cfg := forge.Config{
+		BaseURL: "http://localhost",
+		Secret:  secret,
+	}
+	app := forge.New(cfg)
+	repo := forge.NewMemoryRepo[*testMCPPost]()
+	posts := forge.NewModule[*testMCPPost](
+		(*testMCPPost)(nil),
+		forge.Repo(repo),
+		forge.At("/posts"),
+		forge.MCP(forge.MCPRead),
+	)
+	app.Content(posts)
+	seedPost(t, repo, "auth-post", forge.Published, "Auth Post", "some body content here")
+
+	adminUser := forge.User{ID: "admin", Roles: []forge.Role{forge.Admin}}
+	tok, err := forge.SignToken(adminUser, string(secret), 0)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+
+	srv := New(app)
+	body := `{"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/message", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result not an object: %v", resp)
+	}
+	resources := result["resources"].([]any)
+	if len(resources) != 1 {
+		t.Errorf("resources len = %d, want 1", len(resources))
+	}
+}
+
+func TestMCPHandler_bodyTooLarge(t *testing.T) {
+	// Use a no-secret app so we test body-size enforcement in isolation.
+	cfg := forge.Config{BaseURL: "http://localhost"}
+	appNoSecret := forge.New(cfg)
+	repo := forge.NewMemoryRepo[*testMCPPost]()
+	posts := forge.NewModule[*testMCPPost](
+		(*testMCPPost)(nil),
+		forge.Repo(repo),
+		forge.At("/posts"),
+		forge.MCP(forge.MCPRead),
+	)
+	appNoSecret.Content(posts)
+	srv := New(appNoSecret) // empty secret → GuestUser path
+
+	// Build a body larger than 1 MiB. The body must be structured as valid JSON
+	// so the decoder reads past the 1 MiB limit before hitting a parse error;
+	// otherwise json.Decode returns a syntax error before MaxBytesReader fires.
+	junk := strings.Repeat("x", 1<<20)
+	large := `{"method":"initialize","id":1,"params":{"data":"` + junk + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp/message", strings.NewReader(large))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want 413", w.Code)
+	}
+}
+
+func TestMCPHandler_SSEOpen(t *testing.T) {
+	app := newTestApp(t, forge.MCP(forge.MCPRead))
+	srv := New(app)
+
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	// Use a response recorder — the handler blocks on r.Context().Done(), which fires
+	// when the request context is cancelled (httptest cancels it on the next GC cycle).
+	// We use a context with immediate cancel to unblock the handler.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately so sseHandler unblocks
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q, want text/event-stream", ct)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache", cc)
+	}
+	if !strings.Contains(w.Body.String(), "event: open") {
+		t.Errorf("body %q does not contain 'event: open'", w.Body.String())
 	}
 }

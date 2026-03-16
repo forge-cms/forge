@@ -147,6 +147,30 @@ func NewTestContext(user User) Context {
 	}
 }
 
+// NewContextWithUser returns a [Context] for use in background goroutines or
+// non-HTTP transports (e.g. stdio MCP) that require a real User identity.
+// Unlike [NewTestContext], this function may appear in production code.
+// Unlike [NewBackgroundContext], the User is caller-supplied rather than
+// hardcoded to [GuestUser].
+//
+//   - Request() returns a synthetic GET / request backed by [context.Background]
+//   - Response() returns a *httptest.ResponseRecorder (discards output)
+//   - Locale is "en"; SiteName is ""; RequestID is a generated UUID v7
+func NewContextWithUser(user User) Context {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.Background())
+	return &contextImpl{
+		Context:   context.Background(),
+		user:      user,
+		locale:    "en",
+		siteName:  "",
+		requestID: NewID(),
+		req:       req,
+		w:         rec,
+	}
+}
+
 // NewBackgroundContext returns a [Context] for use in background goroutines
 // such as the scheduled-publishing ticker. It has no HTTP lifecycle and never
 // times out:
