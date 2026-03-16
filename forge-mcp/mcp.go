@@ -202,6 +202,9 @@ func (s *Server) handle(ctx forge.Context, req jsonRPCRequest) jsonRPCResponse {
 			Result:  s.handleInitialize(),
 		}
 	default:
+		if r, ok := s.handleToolMethod(ctx, req); ok {
+			return r
+		}
 		if r, ok := s.handleResourceMethod(ctx, req); ok {
 			return r
 		}

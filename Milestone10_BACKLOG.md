@@ -34,7 +34,7 @@ apply without modification.
 |------|------|--------|-----------|
 | 1 | forge-mcp/mcp.go | ✅ Complete | 2026-03-16 |
 | 2 | forge-mcp/resource.go | ✅ Complete | 2026-03-16 |
-| 3 | forge-mcp/tool.go | 🔲 Not started | — |
+| 3 | forge-mcp/tool.go | ✅ Complete | 2026-03-17 |
 | 4 | forge-mcp/transport.go | 🔲 Not started | — |
 | 5 | forge-mcp/README.md | 🔲 Not started | — |
 
@@ -368,85 +368,100 @@ in forge core; `go.work` updated
 **Decisions:** Amendment A49, Decision 4 (role hierarchy), Decision 13 (validation)
 **Files:** `forge-mcp/tool.go` (new), extended `forge-mcp/mcp_test.go`
 
-#### 3.1 — Tool naming convention
+#### 3.1 — `toolName` and `parseToolName` helpers (`tool.go`)
 
-Tools are named `{operation}_{type_snake}`, e.g. `create_blog_post`,
-`publish_blog_post`. Type name is derived from `MCPMeta.TypeName` converted to
-`lower_snake_case`.
+- [x] `toolName(operation, typeName string) string`:
+  calls `snakeCase(typeName)` (same package), prepends `operation + "_"`
+- [x] `parseToolName(name string) (op, typeSnake string, ok bool)`:
+  `strings.Cut(name, "_")` — prefix=op, suffix=typeSnake; `ok=false` if no `_`
 
-- [ ] `toolName(operation, typeName string) string` helper:
-  convert camelCase TypeName to snake_case (e.g. `BlogPost` → `blog_post`,
-  `MCPPost` → `mcp_post`; consecutive uppercase letters = single word),
-  prepend operation
+#### 3.2 — `moduleForType` helper (`tool.go`)
 
-#### 3.2 — `tools/list` handler
+- [x] `(s *Server) moduleForType(typeSnake string) (forge.MCPModule, bool)`:
+  iterates `s.modules`; returns first where
+  `hasMCPOp(m, forge.MCPWrite) && snakeCase(m.MCPMeta().TypeName) == typeSnake`
 
-- [ ] `Server.handleToolsList() any`:
-  - For each module with `MCPWrite` in its operations:
-    - Emit tools: `create_{type}`, `update_{type}`, `publish_{type}`,
-      `schedule_{type}`, `archive_{type}`, `delete_{type}`
-    - For `create_{type}`: inputSchema from `inputSchema(m.MCPSchema())`
-    - For `update_{type}`: inputSchema adds a required `"slug"` string field
-      plus all schema fields (none required — partial update semantics)
-    - For `publish_{type}`, `archive_{type}`, `delete_{type}`:
-      inputSchema = `{"type":"object","properties":{"slug":{"type":"string"}},"required":["slug"]}`
-    - For `schedule_{type}`: inputSchema adds required `"slug"` and required
-      `"scheduled_at"` (type `"string"`, format `"date-time"`)
-  - Return `map[string]any{"tools": tools}`
+#### 3.3 — `authorise` (`tool.go`)
 
-#### 3.3 — `tools/call` dispatcher
+- [x] `(s *Server) authorise(ctx forge.Context) *jsonRPCError`:
+  `forge.HasRole(ctx.User().Roles, forge.Author)` → nil if ok;
+  `&jsonRPCError{Code: -32001, Message: "forbidden"}` if not
 
-- [ ] `Server.handleToolsCall(ctx forge.Context, name string, args map[string]any) (any, error)`:
-  - Split `name` on first `_` to get `operation` and `typeSnake`
-  - Find module where `snakeCase(m.MCPMeta().TypeName) == typeSnake`;
-    return MCP error -32602 (invalid params) if not found
-  - Route to operation:
-    - `"create"` → `m.MCPCreate(ctx, args)` → return serialised item
-    - `"update"` → extract `slug` from args; call `m.MCPUpdate(ctx, slug, args)`
-    - `"publish"` → extract `slug`; call `m.MCPPublish(ctx, slug)`
-    - `"schedule"` → extract `slug` and `scheduled_at` (parse RFC3339); call
-      `m.MCPSchedule(ctx, slug, t)`
-    - `"archive"` → `m.MCPArchive(ctx, slug)`
-    - `"delete"` → `m.MCPDelete(ctx, slug)`
-  - On forge validation error (`forge.ErrValidation`): return MCP error -32602
-    with the validation message as `"data"`
-  - On forge not-found error: return MCP error -32001
+#### 3.4 — `errorFor` helper (`tool.go`)
 
-#### 3.4 — Role enforcement
+- [x] `errorFor(err error) *jsonRPCError`:
+  - `errors.As(err, &ve)` (*ValidationError) → -32602 with `err.Error()`
+  - `errors.Is(err, forge.ErrNotFound)` → -32001
+  - `errors.Is(err, forge.ErrForbidden)` → -32001
+  - anything else → -32603 internal error
 
-- [ ] `Server.authorise(ctx forge.Context, op MCPOperation) error`:
-  - `MCPRead` requires at minimum `forge.Guest` (read is public)
-  - `MCPWrite` requires at minimum `forge.Author`
-  - Check via `forge.HasRole(ctx.User().Role, requiredRole)` — same check as
-    the HTTP write handler
-  - Return `forge.ErrForbidden` if insufficient
+#### 3.5 — `handleToolsList` (`tool.go`)
 
-#### 3.5 — Tests
+- [x] `(s *Server) handleToolsList() any`:
+  calls `mcpToolDefs(m)` (same package, `mcp.go`) for each MCPWrite module;
+  returns `map[string]any{"tools": tools}`
 
-- [ ] `TestMCPToolsList` — register a module with MCPWrite; assert all 6 tools
-  appear with correct names and input schemas
-- [ ] `TestMCPToolsCall_create` — call `create_{type}` with valid fields; assert
-  item created in repo with Draft status
-- [ ] `TestMCPToolsCall_create_validation` — call `create_{type}` missing a
-  required field; assert MCP error -32602 returned
-- [ ] `TestMCPToolsCall_publish` — create a Draft item; call `publish_{type}`;
-  assert status is Published and PublishedAt is non-zero
-- [ ] `TestMCPToolsCall_schedule` — call `schedule_{type}` with a future time;
-  assert status is Scheduled and ScheduledAt is set
-- [ ] `TestMCPToolsCall_archive` — publish then archive; assert status is Archived
-- [ ] `TestMCPToolsCall_delete` — create then delete; assert FindBySlug returns
-  not-found error
-- [ ] `TestMCPToolsCall_forbidden` — call `create_{type}` with a Guest context;
-  assert MCP error is returned
+#### 3.6 — `handleToolsCall` (`tool.go`)
+
+- [x] `(s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any, *jsonRPCError)`:
+  1. Unmarshal params → `{Name string, Arguments map[string]any}`
+  2. `authorise(ctx)` → early return
+  3. `parseToolName(name)` → -32602 on malformed
+  4. `moduleForType(typeSnake)` → -32602 if not found
+  5. Dispatch by operation:
+     - `"create"` → `m.MCPCreate(ctx, args)` → return item
+     - `"update"` → extract `slug` from args (-32602 if absent) →
+       `m.MCPUpdate(ctx, slug, args)` → return updated item
+       **NOTE (Flag G):** zero-value fields in args are ignored by the overlay;
+       a caller cannot clear a string field to "" or an int to 0
+     - `"publish"` → extract slug → `m.MCPGet` pre-flight check (Flag H):
+       if already Published, return `{"slug":slug,"status":"published"}`;
+       else `m.MCPPublish(ctx, slug)` → same return
+     - `"schedule"` → extract slug + "scheduled_at" (-32602 if either absent)
+       → `time.Parse(time.RFC3339, ...)` (-32602 on error)
+       → `m.MCPSchedule(ctx, slug, t)` →
+       `{"slug":slug,"status":"scheduled","scheduled_at":scheduledAt}`
+     - `"archive"` → `m.MCPArchive(ctx, slug)` → `{"slug":slug,"status":"archived"}`
+     - `"delete"` → `m.MCPDelete(ctx, slug)` → `{"deleted":true,"slug":slug}` (Flag F)
+  6. All errors mapped through `errorFor`
+
+#### 3.7 — `handleToolMethod` dispatch hook (`tool.go`)
+
+- [x] `(s *Server) handleToolMethod(ctx forge.Context, req jsonRPCRequest) (jsonRPCResponse, bool)`:
+  handles `tools/list` and `tools/call`; returns `(zero, false)` otherwise
+  (same pattern as `handleResourceMethod` in `resource.go`)
+
+#### 3.8 — Hook in `handle` (`forge-mcp/mcp.go`, one line)
+
+- [x] In `handle` default case, before the resource hook, add:
+  `if r, ok := s.handleToolMethod(ctx, req); ok { return r }`
+
+#### 3.9 — Tests (`forge-mcp/mcp_test.go`) — 11 new
+
+- [x] `TestMCPToolName` — `toolName("create","BlogPost")=="create_blog_post"`;
+  `toolName("publish","testMCPPost")=="publish_test_mcp_post"`
+- [x] `TestMCPToolsList` — MCPWrite → 6 tools; names correct; MCPRead-only absent
+- [x] `TestMCPToolsCall_create` — valid fields → Draft item; ID+Slug non-empty
+- [x] `TestMCPToolsCall_create_validation` — missing required Title → -32602
+- [x] `TestMCPToolsCall_publish` — seed Draft; publish → Published; PublishedAt ≥ t0
+- [x] `TestMCPToolsCall_publish_already_published` — seed Published; publish again →
+  success; AfterPublish not fired second time (atomic counter)
+- [x] `TestMCPToolsCall_schedule` — `schedule_*` with RFC3339 → Scheduled + ScheduledAt
+- [x] `TestMCPToolsCall_archive` — `archive_*` → Archived
+- [x] `TestMCPToolsCall_delete` — `delete_*` → MCPGet returns error; response `deleted:true`
+- [x] `TestMCPToolsCall_forbidden` — Guest ctx → -32001 before MCPCreate called
+- [x] `TestMCPToolsCall_update_cannot_clear_field` — update with `Body:""` →
+  -32602 validation error; Body unchanged in repo (Flag G documentation test)
 
 #### Verification — Step 3
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestMCPTools ./...` — all green
-- [ ] `BACKLOG.md` — updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run "TestMCPTool" ./...` — all 11 new tests green
+- [x] Full `go test ./...` — no regressions
+- [x] `BACKLOG.md` — step row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

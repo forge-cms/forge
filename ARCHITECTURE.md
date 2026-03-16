@@ -46,6 +46,9 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-12 | Hardening sweep (Amendments A37–A41, v1.0.5): A37 — all `http.NotFound`/`http.Error` bypasses replaced with `WriteError(w, r, sentinel)`. A38 — `auth.go` `encodeToken` returns `ErrInternal` instead of raw `fmt.Errorf`. A39 — `Module[T]` goroutine lifecycle: `stopCh` field + `Stop()` method; cache sweep exits on `stopCh`; `debouncer.Stop()` added; `stoppable` interface + `App.stoppableModules`; `App.Run()` calls `Stop()` on all modules after `srv.Shutdown`. A40 — `FeedDisabled()` → `DisableFeed()`; `forgeLLMSEntries` → `forgeLLMsEntries`. A41 — debounce callback used stashed request context (cancelled before 2-second delay fires); replaced with `NewBackgroundContext(m.siteName)` at fire time; `debounceMu`/`debounceCtx` fields removed; `triggerSitemap(ctx)` → `triggerRebuild()`. |
 | 2026-03-12 | Amendment A42 (`forge.go`): `Config.Version string` field added immediately after `Secret []byte`; `App.Health()` method mounts `GET /_health` returning `{"status":"ok"}` or `{"status":"ok","version":"X.Y.Z"}` (200, `application/json`). Explicit opt-in — not auto-mounted. Three tests: `TestApp_health_ok`, `TestApp_health_version`, `TestApp_health_notMounted`. |
 | 2026-03-14 | Amendment A43: `NewSQLRepo` godoc and README updated — explicit pointer-type guidance added; wiring example shows `NewSQLRepo[*Post]` + `NewModule((*Post)(nil), ...)` together. |
+| 2026-03-16 | Milestone 10 Step 1: `forge-mcp/mcp.go` + Amendment A49 — `forge.MCPModule` interface added to `mcp.go`; `Module[T]` implements it in `module.go`; `App.MCPModules()` added to `forge.go`; `forge-mcp` scaffold (`go.mod`, `Server`, `New`, JSON-RPC types, `handle`, `handleInitialize`, `snakeCase`, `hasMCPOp`, `slugOf`, `mcpToolDefs`, `inputSchema`, `inputSchemaUpdate`). |
+| 2026-03-16 | Milestone 10 Step 2: `forge-mcp/resource.go` — read path: `handleResourceMethod`, `handleResourcesList`, `handleResourcesTemplatesList`, `handleResourcesRead`, `parseResourceURI`; `mcpResource`/`resourceContent`/`resourceTemplate` wire types; Published-only lifecycle enforcement. `handle` default case delegates to `handleResourceMethod`. |
+| 2026-03-17 | Milestone 10 Step 3: `forge-mcp/tool.go` — write path: `handleToolMethod`, `handleToolsList`, `handleToolsCall` dispatcher (create/update/publish/schedule/archive/delete); `toolName`, `parseToolName`, `moduleForType`, `authorise`, `errorFor`, `stringArg` helpers; Author-level role enforcement; Flag H idempotency on publish; Flag F delete response `{"deleted":true,"slug":...}`; godoc NOTE on zero-value limitation (Flag G). `handle` default case now delegates to `handleToolMethod` before `handleResourceMethod`. |
 
 ---
 
@@ -142,6 +145,18 @@ github.com/forge-cms/forge/
 
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
+
+github.com/forge-cms/forge-mcp/  (separate module: ./forge-mcp/)
+├── mcp.go            Server, New, handle (JSON-RPC dispatch), handleInitialize,
+│                     JSON-RPC wire types (jsonRPCRequest/Response/Error),
+│                     mcpTool, mcpResource, allResources, mcpToolDefs,
+│                     inputSchema, inputSchemaUpdate, hasMCPOp, slugOf, snakeCase
+├── resource.go       handleResourceMethod, handleResourcesList,           ✅ Milestone 10 Step 2
+│                     handleResourcesTemplatesList, handleResourcesRead,
+│                     parseResourceURI; mcpResource/resourceContent/resourceTemplate
+└── tool.go           handleToolMethod, handleToolsList, handleToolsCall,  ✅ Milestone 10 Step 3
+                      toolName, parseToolName, moduleForType, authorise,
+                      errorFor, stringArg
 ```
 
 ### Shipped (Milestones 7–8)
