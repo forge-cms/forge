@@ -14,7 +14,7 @@ apply without modification.
   implement the interface; adds `App.MCPModules() []MCPModule`
 
 **Constraints:**
-- `forge-mcp` is a separate module (`github.com/forge-cms/forge-mcp`) with its
+- `forge-mcp` is a sub-module (`github.com/forge-cms/forge/forge-mcp`) with its
   own `go.mod`. It imports `forge` core; `forge` core must **never** import it.
 - `forge` core defines the `MCPModule` interface so `Module[T]` can implement
   it and `forge-mcp` can consume it — no circular import, no reflection into
@@ -196,7 +196,7 @@ in forge core; `go.work` updated
 
 - [x] Create `forge-mcp/go.mod`:
   ```
-  module github.com/forge-cms/forge-mcp
+  module github.com/forge-cms/forge/forge-mcp
 
   go 1.24.0
 

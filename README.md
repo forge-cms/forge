@@ -1062,7 +1062,7 @@ Schema derivation, lifecycle enforcement, and role checks are all automatic —
 no configuration beyond `forge.MCP(...)` on your existing modules.
 
 ```go
-import forgemcp "github.com/forge-cms/forge-mcp"
+import forgemcp "github.com/forge-cms/forge/forge-mcp"
 
 func main() {
     app := forge.New(forge.MustConfig(forge.Config{

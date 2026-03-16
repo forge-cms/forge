@@ -151,7 +151,7 @@ github.com/forge-cms/forge/
 github.com/forge-cms/forge-pgx/  (separate module: ./forge-pgx/)
 └── pgx.go            Wrap(*pgxpool.Pool) forge.DB — native pgx adapter
 
-github.com/forge-cms/forge-mcp/  (separate module: ./forge-mcp/)
+github.com/forge-cms/forge/forge-mcp/  (sub-module: ./forge-mcp/)
 ├── mcp.go            Server (secret []byte), New(app, opts...), ServerOption,
 │                     WithSecret; handle (JSON-RPC dispatch), handleInitialize,
 │                     JSON-RPC wire types (jsonRPCRequest/Response/Error),

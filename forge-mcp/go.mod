@@ -1,4 +1,4 @@
-module github.com/forge-cms/forge-mcp
+module github.com/forge-cms/forge/forge-mcp
 
 go 1.22
 

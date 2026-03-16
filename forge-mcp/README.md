@@ -15,7 +15,7 @@ same code paths as the HTTP layer. There is no special MCP bypass.
 ## Quick start
 
 ```bash
-go get github.com/forge-cms/forge-mcp
+go get github.com/forge-cms/forge/forge-mcp
 ```
 
 ```go
@@ -25,7 +25,7 @@ import (
 	"context"
 	"os"
 
-	forgemcp "github.com/forge-cms/forge-mcp"
+	forgemcp "github.com/forge-cms/forge/forge-mcp"
 
 	"github.com/forge-cms/forge"
 )
