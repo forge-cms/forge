@@ -245,6 +245,7 @@ and practical value for forge-cms.dev.
 - **`forge.New` MustConfig enforcement** — `forge.New(forge.Config{...})` without `MustConfig` silently accepts invalid config; make `New` call `MustConfig` internally so validation is not opt-in
 - **`forge.AppSchema{}`** — `forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages (home, about) cannot generate Organization or WebSite JSON-LD without hardcoding; add `forge.AppSchema{}` via `app.SEO()` for app-level structured data; discovered during forge-site rich results testing (Amendment S9)
 - **`forge.OGDefaults{}`** — no app-level fallback for `og:image`, `twitter:site`, `twitter:creator`; developers must hardcode these in templates; add via `app.SEO()` so defaults are injected automatically; discovered during forge-site OG implementation (Amendment S9)
+- **DDoS mitigation for heavy AI endpoints** — `llms-full.txt` and per-item `/{prefix}/{slug}/aidoc` are CPU-intensive under load: large Markdown payloads, optionally gzip-compressed per request. Proposed approach (in priority order): (1) pre-compute and cache the compressed response at generation time — serve from buffer on every request, no per-request compression cost, fits Forge's existing event-driven philosophy; (2) per-endpoint rate limiting with a lower limit on `llms-full.txt` and `/{prefix}/{slug}/aidoc` than on standard content endpoints; (3) concurrent request cap on heavy endpoints, independent of rate limit. Relates to: `forge.RateLimit`, `ai.go` (`compressIfAccepted`).
 
 ---
 
