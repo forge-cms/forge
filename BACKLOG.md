@@ -223,6 +223,12 @@ Test coverage, benchmarks, godoc audit, example apps.
 
 ## Milestone 10 — MCP support (v2)
 
+> **Priority: M10 is the primary focus.** MCP is not just a technical
+> milestone — it is the narrative and commercial differentiator for
+> Forge Cloud. Work on M10 runs in parallel with forge-site cleanup
+> and minimal forge-admin. Phase 2 infrastructure items are real but
+> do not block first revenue.
+
 Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
 **Detail:** Milestone10_BACKLOG.md *(not yet created)*
 
@@ -246,6 +252,37 @@ and practical value for forge-cms.dev.
 - **`forge.AppSchema{}`** — `forge.Handle` routes have no content type and cannot use `SchemaFor`; static pages (home, about) cannot generate Organization or WebSite JSON-LD without hardcoding; add `forge.AppSchema{}` via `app.SEO()` for app-level structured data; discovered during forge-site rich results testing (Amendment S9)
 - **`forge.OGDefaults{}`** — no app-level fallback for `og:image`, `twitter:site`, `twitter:creator`; developers must hardcode these in templates; add via `app.SEO()` so defaults are injected automatically; discovered during forge-site OG implementation (Amendment S9)
 - **DDoS mitigation for heavy AI endpoints** — `llms-full.txt` and per-item `/{prefix}/{slug}/aidoc` are CPU-intensive under load: large Markdown payloads, optionally gzip-compressed per request. Proposed approach (in priority order): (1) pre-compute and cache the compressed response at generation time — serve from buffer on every request, no per-request compression cost, fits Forge's existing event-driven philosophy; (2) per-endpoint rate limiting with a lower limit on `llms-full.txt` and `/{prefix}/{slug}/aidoc` than on standard content endpoints; (3) concurrent request cap on heavy endpoints, independent of rate limit. Relates to: `forge.RateLimit`, `ai.go` (`compressIfAccepted`).
+
+---
+
+## Critical path to Forge Cloud (revised 2026-03-15)
+
+Ordered by priority. Items in the same tier run in parallel.
+
+**Tier 1 — Patch now:**
+- Health endpoint HTTPS bypass (v1.0.12)
+- `forge:head` public helper
+- Shared template partials
+
+**Tier 2 — forge-site cleanup (before going public):**
+- Remove workaround comments from templates
+- ADMIN_TOKEN documented in README
+- Deployment guide in README
+- Make forge-site repo public
+
+**Tier 3 — MCP (M10, parallel with Tier 2):**
+Steps as already listed in M10 section. The demo — a 60-second
+clip of an AI assistant creating and publishing via MCP — is the
+milestone that defines readiness for Show HN.
+
+**Tier 4 — Minimal forge-admin (parallel with MCP):**
+MVP scope only: login, list content, create/edit, publish/unpublish.
+No JavaScript framework. Go HTML templates + forge-cms.dev design system.
+This is the gateway to non-developer users and first revenue.
+
+**Tier 5 — Forge Cloud early access (manual provisioning):**
+Manually provisioned instances. Stripe for payment. 3-5 customers
+before automation. Validation, not product completeness.
 
 ---
 
@@ -276,3 +313,4 @@ Each will be resolved as a patch or Phase 2 item.
 
 - [ ] **Health endpoint HTTPS redirect** — `forge.Config{HTTPS: true}` causes `GET /_health` to return 301, breaking tools like Caddy's `health_uri` check that follow internal routes and expect 200. Internal health checks should bypass the HTTPS redirect. (Relates to Amendment A42)
 - [ ] **SQLite reserved keyword guard** — `SQLRepo` generates unquoted column names; reserved keywords such as `order` cause SQL syntax errors at runtime. Consider quoting all column names in generated SQL (`"order"`), or document the restriction clearly so developers know to avoid reserved words in struct field names.
+- [ ] **forge-admin missing** — no web UI for content management; non-developer users cannot manage content without the REST API; MVP forge-admin is Tier 4 on the critical path to Forge Cloud.
