@@ -77,6 +77,10 @@ type MCPModule interface {
 	// none are given).
 	MCPList(ctx Context, status ...Status) ([]any, error)
 	// MCPGet returns the item with the given slug.
+	// MCPGet does not filter by lifecycle status — it returns the item
+	// regardless of status. Callers are responsible for enforcing lifecycle
+	// rules (e.g. forge-mcp checks that the item is Published before
+	// including it in a resources/read response).
 	MCPGet(ctx Context, slug string) (any, error)
 	// MCPCreate creates a new item from the given fields map.
 	MCPCreate(ctx Context, fields map[string]any) (any, error)

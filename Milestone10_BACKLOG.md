@@ -33,7 +33,7 @@ apply without modification.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | forge-mcp/mcp.go | ✅ Complete | 2026-03-16 |
-| 2 | forge-mcp/resource.go | 🔲 Not started | — |
+| 2 | forge-mcp/resource.go | ✅ Complete | 2026-03-16 |
 | 3 | forge-mcp/tool.go | 🔲 Not started | — |
 | 4 | forge-mcp/transport.go | 🔲 Not started | — |
 | 5 | forge-mcp/README.md | 🔲 Not started | — |
@@ -249,9 +249,9 @@ in forge core; `go.work` updated
 **Decisions:** Amendment A49, Decision 14 (content lifecycle)
 **Files:** `forge-mcp/resource.go` (new), extended `forge-mcp/mcp_test.go`
 
-#### 2.1 — MCP resource types
+#### 2.1 — Internal types (`resource.go`)
 
-- [ ] Define `resourceContent` internal type:
+- [x] Define `resourceContent` internal type:
   ```go
   type resourceContent struct {
       URI      string `json:"uri"`
@@ -259,7 +259,7 @@ in forge core; `go.work` updated
       Text     string `json:"text"` // JSON-encoded content item
   }
   ```
-- [ ] Define `resourceTemplate` internal type (for `resources/templates/list`):
+- [x] Define `resourceTemplate` internal type (for `resources/templates/list`):
   ```go
   type resourceTemplate struct {
       URITemplate string `json:"uriTemplate"` // e.g. "forge://posts/{slug}"
@@ -269,53 +269,93 @@ in forge core; `go.work` updated
   }
   ```
 
-#### 2.2 — `resources/list` handler
+#### 2.2 — `handleResourcesList` (`resource.go`)
 
-- [ ] `Server.handleResourcesList(ctx forge.Context) (any, error)`:
-  - For each module in `s.modules` that has `MCPRead` in its operations:
-    - Call `MCPList(ctx, forge.Published)` — **only Published** content is
-      exposed; lifecycle enforcement is unconditional here
-    - For each item: marshal to JSON; build `mcpResource` with:
-      `URI = "forge://{prefix}/{slug}"` (slug extracted from `Node.Slug` via
-      type assertion to `interface{ GetSlug() string }`)
-  - Return `map[string]any{"resources": resources}`
+- [x] `func (s *Server) handleResourcesList(ctx forge.Context) any`:
+  - Delegates to `allResources(ctx)` (already in `mcp.go`); wraps in
+    `map[string]any{"resources": ...}`
+  - `allResources` already calls `MCPList(ctx, forge.Published)` — no
+    additional lifecycle logic needed here
 
-#### 2.3 — `resources/templates/list` handler
+#### 2.3 — `handleResourcesTemplatesList` (`resource.go`)
 
-- [ ] `Server.handleResourcesTemplatesList() any`:
-  - For each MCPRead module: build one `resourceTemplate` per module
-  - URI template: `forge://{prefix}/{slug}` with `{slug}` as a literal
-    template parameter
+- [x] `func (s *Server) handleResourcesTemplatesList() any`:
+  - Iterate modules with `MCPRead`; build one `resourceTemplate` per module
+  - `URITemplate: "forge:/" + prefix + "/{slug}"`
   - Return `map[string]any{"resourceTemplates": templates}`
 
-#### 2.4 — `resources/read` handler
+#### 2.4 — `parseResourceURI` helper (`resource.go`)
 
-- [ ] `Server.handleResourcesRead(ctx forge.Context, uri string) (any, error)`:
-  - Parse the URI: expect `forge://{prefix}/{slug}`; extract prefix and slug
-  - Lookup module by prefix via `moduleByPrefix`
-  - Call `m.MCPGet(ctx, slug)` — returns the item as `any`
-  - Check that item's status is Published (type-assert to `interface{ GetStatus() forge.Status }`);
-    return `ErrNotFound` (map to MCP error code -32001) if not Published
-  - Marshal item to JSON; return `map[string]any{"contents": []resourceContent{...}}`
+- [x] `func (s *Server) parseResourceURI(uri string) (forge.MCPModule, string, bool)`:
+  - For each MCPRead module: try `strings.CutPrefix(uri, "forge:/"+prefix+"/")`
+  - If ok and slug non-empty and slug contains no `/` → return `(m, slug, true)`
+  - Returns `(nil, "", false)` for bad URI, unknown prefix, or extra path segments
 
-#### 2.5 — Tests
+#### 2.5 — `handleResourcesRead` (`resource.go`)
 
-- [ ] `TestMCPResourcesList` — register a module with MCPRead, create a
-  Published post and a Draft post; call `handleResourcesList`; assert only
-  the Published post appears
-- [ ] `TestMCPResourcesRead_published` — read a published item by URI; assert
-  correct JSON content
-- [ ] `TestMCPResourcesRead_draft` — attempt to read a draft item; assert error
-- [ ] `TestMCPResourcesTemplatesList` — assert one template per MCPRead module
+- [x] `func (s *Server) handleResourcesRead(ctx forge.Context, params json.RawMessage) (any, *jsonRPCError)`:
+  - Unmarshal params → `struct{ URI string \`json:"uri"\` }`
+  - Call `parseResourceURI` → `-32001` if not found
+  - Call `m.MCPGet(ctx, slug)` → `-32001` on error
+  - Type-assert to `interface{ GetStatus() forge.Status }` → `-32001` if
+    status ≠ `forge.Published`
+  - `json.Marshal(item)` → return
+    `map[string]any{"contents": []resourceContent{{URI, MimeType, Text}}}`
+
+#### 2.6 — Dispatch hook (`forge-mcp/mcp.go`, single line)
+
+- [x] Add `handleResourceMethod` to `resource.go`:
+  ```go
+  func (s *Server) handleResourceMethod(ctx forge.Context, req jsonRPCRequest) (jsonRPCResponse, bool)
+  ```
+  Handles `resources/list`, `resources/templates/list`, `resources/read`; returns
+  `(response, true)` if matched, `(zero, false)` otherwise.
+- [x] In `handle` (`mcp.go`), insert before the `default` case:
+  ```go
+  if r, ok := s.handleResourceMethod(ctx, req); ok { return r }
+  ```
+
+#### 2.7 — Flag E: `MCPGet` godoc (`mcp.go` forge core)
+
+- [x] Add to the `MCPGet` comment in the `MCPModule` interface:
+  "MCPGet does not filter by lifecycle status — it returns the item
+  regardless of status. Callers are responsible for enforcing lifecycle
+  rules (e.g. forge-mcp checks Published before including in a response)."
+
+#### 2.8 — Fixture upgrade + tests (`forge-mcp/mcp_test.go`)
+
+- [x] Rename `testPost` → `testMCPPost`; upgrade struct:
+  ```go
+  type testMCPPost struct {
+      forge.Node
+      Title  string `forge:"required,min=3"`
+      Body   string `forge:"required,min=10"`
+      Rating int
+      Tags   string `json:"tags"`
+  }
+  ```
+- [x] Update all existing references (`newTestApp`, `TestNewServer`) from
+  `testPost` / `*testPost` → `testMCPPost` / `*testMCPPost`
+- [x] Add `seedPost(repo, slug, status, title, body)` internal helper that
+  creates and saves a `testMCPPost` with the given fields via `repo.Save`
+- [x] `TestMCPResourcesList` — 1 Published + 1 Draft; assert only Published
+  URI appears; assert URI format = `forge://posts/{slug}`
+- [x] `TestMCPResourcesRead_published` — read Published item by URI; assert
+  `contents[0].text` round-trips to correct `title` value (JSON round-trip
+  pattern per Flag D)
+- [x] `TestMCPResourcesRead_draft` — read Draft by URI; assert `-32001` error
+- [x] `TestMCPResourcesTemplatesList` — 2 MCPRead modules; assert 2 templates
+  with correct `uriTemplate` format
 
 #### Verification — Step 2
 
-- [ ] `go build ./...` — no errors
-- [ ] `go vet ./...` — clean
-- [ ] `gofmt -l .` — returns nothing
-- [ ] `go test -v -run TestMCPResources ./...` — all green
-- [ ] `BACKLOG.md` — updated
-- [ ] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
+- [x] `go build ./...` — no errors
+- [x] `go vet ./...` — clean
+- [x] `gofmt -l .` — returns nothing
+- [x] `go test -v -run TestMCPResources ./...` — all 4 new tests green
+- [x] Full `go test ./...` — no regressions
+- [x] `BACKLOG.md` — step row updated
+- [x] Review `ARCHITECTURE.md` and `DECISIONS.md` — no new decisions required,
       or new Decision/Amendment drafted and agreed upon
 
 ---

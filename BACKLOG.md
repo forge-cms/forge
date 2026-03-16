@@ -229,13 +229,13 @@ Implementation of Decision 19. Syntax reserved in v1 via mcp.go.
 | Step | File | Status | Completed |
 |------|------|--------|-----------|
 | 1 | forge-mcp/mcp.go | ✅ Done | 2026-03-16 |
-| 2 | forge-mcp/resource.go | 🔲 Not started | — |
+| 2 | forge-mcp/resource.go | ✅ Done | 2026-03-16 |
 | 3 | forge-mcp/tool.go | 🔲 Not started | — |
 | 4 | forge-mcp/transport.go | 🔲 Not started | — |
 | 5 | forge-mcp/README.md | 🔲 Not started | — |
 
 - [x] Step 1 — `forge-mcp` module scaffold: MCPServer, resource schema auto-generation from Node + struct tags
-- [ ] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
+- [x] Step 2 — MCPRead: expose Published content as readable MCP resources with lifecycle enforcement
 - [ ] Step 3 — MCPWrite: expose Create/Update/Delete/Publish as MCP tools with role checks
 - [ ] Step 4 — Transport: stdio (local AI tools) + SSE (remote, authenticated)
 - [ ] Step 5 — Documentation: connecting Claude/Cursor/Copilot to a Forge app
