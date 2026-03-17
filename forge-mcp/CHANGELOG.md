@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.1] — 2026-03-17
+
+`inputSchema` and `inputSchemaUpdate` now emit the correct JSON Schema for
+`[]string` fields (Amendment A52-2).
+
+### Fixed
+
+- `mcp.go`: `inputSchema` and `inputSchemaUpdate` now emit
+  `{"type":"array","items":{"type":"string"}}` for fields with `Type == "array"`;
+  previously emitted bare `{"type":"array"}` without an `items` declaration, and
+  incorrectly applied `minLength`/`maxLength`/`enum` constraints to array fields
+  (Amendment A52-2)
+
+---
+
 ## [1.0.0] — 2026-03-17
 
 Initial release of `forge-mcp` — MCP support for Forge apps (Milestone 10).
