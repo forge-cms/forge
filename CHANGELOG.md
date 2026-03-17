@@ -23,6 +23,22 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.1] — 2026-03-17
+
+`forge:head` now emits the correct `twitter:card` value for article and product
+content types (Amendment A51).
+
+### Fixed
+
+- `templates.go`: `forgeHeadTmpl` now emits `twitter:card = summary_large_image`
+  when `Head.Type` is `"Article"` or `"Product"`, even when no image is provided;
+  previously only a non-empty `Head.Image.URL` triggered the large-image card,
+  causing OG/Twitter scrapers to render a small summary card for article-type
+  content; `Head.Social.Twitter.Card` explicit override continues to take
+  priority over the derived value (Amendment A51)
+
+---
+
 ## [1.1.0] — 2026-03-17
 
 `forge-mcp` — MCP support shipped (Milestone 10). New exported symbols in

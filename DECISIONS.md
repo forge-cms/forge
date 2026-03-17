@@ -71,6 +71,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A48 | `module.go`: set `PublishedAt` on manual publish in `updateHandler` | Agreed | 2026-03-15 |
 | A49 | `mcp.go`/`module.go`/`forge.go`: `MCPModule` contract — `mcpOption` carries ops; export `MCPMeta`, `MCPField`, `MCPModule`; `Module[T]` implements 10 MCP methods; `App.MCPModules()` | Agreed | 2026-03-16 |
 | A50 | `auth.go`/`forge.go`/`context.go`/`forge-mcp/mcp.go`: `VerifyBearerToken`, `App.Secret()`, `NewContextWithUser`, `Server` secret auto-inherit | Agreed | 2026-03-16 |
+| A51 | `templates.go`: `twitter:card` derives from `Head.Type` — `Article`/`Product` emit `summary_large_image` without requiring an explicit image | Agreed | 2026-03-17 |
 
 ---
 
@@ -3207,3 +3208,53 @@ func New(app *forge.App, opts ...ServerOption) *Server {
    variadic `opts` parameter adds no obligation.
 6. The `bytes` and `log` standard library packages are added to `forge-mcp/mcp.go`
    imports (needed for `bytes.Equal` and `log.Printf` in the mismatch warning).
+
+## Amendment A51 — `templates.go`: `twitter:card` derives from `Head.Type`
+
+**Status:** Agreed  
+**Date:** 2026-03-17  
+**Scope:** `templates.go` (one-line conditional change), `templates_test.go` (five new sub-tests)
+
+**Problem:**  
+`forgeHeadTmpl` only emits `twitter:card = "summary_large_image"` when
+`Head.Image.URL` is non-empty. A `Head{Type: "Article"}` with no explicit
+image emits `"summary"`, which suppresses the large-image card layout on
+Twitter/X for content that is clearly article-like. OG audits on
+forge-cms.dev surfaced this as a real-world regression.
+
+**Decision:**  
+Extend the `twitter:card` conditional to emit `"summary_large_image"` when
+`Head.Type` is `"Article"` or `"Product"`, regardless of whether an image is
+present. Priority order (highest to lowest):
+
+1. `Head.Social.Twitter.Card` explicit override — unchanged
+2. `Head.Type == "Article"` or `"Product"` — new, derives card from content type
+3. `Head.Image.URL` non-empty — existing behaviour preserved
+4. Default `"summary"`
+
+**Change:**
+
+```go
+// Before
+{{- else if .Image.URL}}
+<meta name="twitter:card" content="summary_large_image">
+
+// After
+{{- else if or (eq .Type "Article") (eq .Type "Product") .Image.URL}}
+<meta name="twitter:card" content="summary_large_image">
+```
+
+**Consequences:**
+
+1. Article and product pages automatically emit the correct Twitter Card type
+   without requiring developers to set `Head.Social.Twitter.Card` explicitly
+   or provide a placeholder image.
+2. No exported API change — `Head.Type` is already part of `Head` and is set
+   by the existing `Article`, `Product` constants in `head.go`.
+3. Existing pages that set `Head.Image.URL` are unaffected — the `or`
+   short-circuits and the image path still triggers `summary_large_image`.
+4. Pages that explicitly set `Head.Social.Twitter.Card = Summary` continue to
+   emit `"summary"` even when `Head.Type` is `"Article"` — the override
+   remains the highest-priority branch.
+5. No README examples break. `example_test.go` requires no changes.
+6. Shipped as patch v1.1.1 — no breaking change.

@@ -99,7 +99,7 @@ const forgeHeadTmpl = `{{define "forge:head"}}<title>{{.Title}}</title>
 {{- end}}
 {{- if .Social.Twitter.Card}}
 <meta name="twitter:card" content="{{.Social.Twitter.Card}}">
-{{- else if .Image.URL}}
+{{- else if or (eq .Type "Article") (eq .Type "Product") .Image.URL}}
 <meta name="twitter:card" content="summary_large_image">
 {{- else}}
 <meta name="twitter:card" content="summary">

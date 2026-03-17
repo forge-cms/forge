@@ -160,6 +160,55 @@ func TestTemplates_errorPage_custom(t *testing.T) {
 	}
 }
 
+func TestTemplates_twitterCard(t *testing.T) {
+	tpl := template.Must(template.New("test").Funcs(TemplateFuncMap()).Parse(forgeHeadTmpl))
+
+	cases := []struct {
+		name string
+		head Head
+		want string
+	}{
+		{
+			name: "Article type → summary_large_image",
+			head: Head{Title: "T", Type: Article},
+			want: "summary_large_image",
+		},
+		{
+			name: "Product type → summary_large_image",
+			head: Head{Title: "T", Type: Product},
+			want: "summary_large_image",
+		},
+		{
+			name: "no type no image → summary",
+			head: Head{Title: "T"},
+			want: "summary",
+		},
+		{
+			name: "explicit Card override takes priority over Article",
+			head: Head{Title: "T", Type: Article, Social: SocialOverrides{Twitter: TwitterMeta{Card: Summary}}},
+			want: "summary",
+		},
+		{
+			name: "image without type → summary_large_image",
+			head: Head{Title: "T", Image: Image{URL: "/img.jpg"}},
+			want: "summary_large_image",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := tpl.ExecuteTemplate(&buf, "forge:head", tc.head); err != nil {
+				t.Fatalf("ExecuteTemplate: %v", err)
+			}
+			want := `content="` + string(tc.want) + `"`
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("twitter:card: want %q in output:\n%s", want, buf.String())
+			}
+		})
+	}
+}
+
 func TestTemplates_errorPage_fallback(t *testing.T) {
 	orig := errorTemplateLookup
 	defer func() { setErrorTemplateLookup(orig) }()
