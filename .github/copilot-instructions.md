@@ -260,29 +260,55 @@ date, a tagger, and a message, and appear as formal releases on GitHub.
 - Patch releases (bug fixes, no API change) get a tag
 - Amendments alone do not get a tag unless they ship with a milestone
 
+**Sub-module tagging rule (non-negotiable):**
+Any commit that modifies files under `forge-mcp/` (or any other sub-module
+directory) in a way that affects behaviour **must** also produce a sub-module tag.
+The sub-module tag uses the prefix convention: `forge-mcp/vX.Y.Z`.
+- Update `forge-mcp/CHANGELOG.md` with a `[X.Y.Z]` section before tagging.
+- The root module version and the sub-module version are bumped **independently**
+  — a patch to `forge-mcp/mcp.go` does not require a root version bump if no
+  root-package files changed behaviourally, and vice versa.
+- At the end of every commit, explicitly state which module tags are required:
+  root (`vX.Y.Z`) and/or sub-module (`forge-mcp/vX.Y.Z`).
+
 **Pre-tag checklist — all three must be green before tagging:**
 1. `git status --short` returns nothing (working tree clean)
-2. `go test ./...` is green
-3. `CHANGELOG.md` has an entry for the version being tagged
+2. `go test ./...` is green (root); `go test ./...` inside `forge-mcp/` is green
+3. `CHANGELOG.md` (root) and/or `forge-mcp/CHANGELOG.md` has an entry for the
+   version being tagged
 
 **Tag and push sequence:**
 ```
 git tag -a vX.Y.Z -m "Forge vX.Y.Z — {one line summary}"
 git push origin main
 git push origin vX.Y.Z
+# if forge-mcp also changed:
+git tag -a forge-mcp/vX.Y.Z -m "forge-mcp vX.Y.Z — {one line summary}"
+git push origin forge-mcp/vX.Y.Z
 ```
 
-Push commits and tag **separately** — never in the same command.
+Push commits and each tag **separately** — never in the same command.
 
-**After pushing:**
-Go to `github.com/forge-cms/forge/releases`, create a GitHub Release from the tag,
-and paste the relevant `CHANGELOG.md` section as release notes.
+**GitHub Release titles:**
+After pushing, create a GitHub Release for each tag from
+`github.com/forge-cms/forge/releases`. Title each release as follows:
+
+| Tag | Release title format |
+|-----|----------------------|
+| `vX.Y.Z` | `Forge vX.Y.Z — {release name}` |
+| `forge-mcp/vX.Y.Z` | `forge-mcp vX.Y.Z — {release name}` |
+
+The release name is a short (2–4 word) phrase that captures the primary change —
+identical to the one-line summary in the tag message. Always propose the GitHub
+Release title(s) alongside the commit message. Paste the relevant
+`CHANGELOG.md` section as release notes.
 
 **Never:**
 - Tag before `go test ./...` is green
 - Tag before `CHANGELOG.md` is updated for the version
 - Use a lightweight tag (`git tag vX.Y.Z` without `-a`) for a release
 - Push the tag in the same command as commits
+- Ship a behavioural change to `forge-mcp/` without a `forge-mcp/vX.Y.Z` tag
 
 ---
 
