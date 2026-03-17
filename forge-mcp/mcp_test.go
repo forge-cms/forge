@@ -1139,3 +1139,38 @@ func ExampleNew() {
 	_ = srv
 	// Output:
 }
+
+// — A52 inputSchema array type ————————————————————————————————————————————
+
+// TestInputSchema_arrayField verifies that a field with Type == "array" causes
+// inputSchema to emit {"type":"array","items":{"type":"string"}} and suppresses
+// minLength/maxLength/enum constraints (Amendment A52-2).
+func TestInputSchema_arrayField(t *testing.T) {
+	fields := []forge.MCPField{
+		{Name: "Title", JSONName: "title", Type: "string", Required: true, MinLength: 3},
+		{Name: "Tags", JSONName: "tags", Type: "array"},
+	}
+	schema := inputSchema(fields)
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("properties not a map")
+	}
+	tagsProp, ok := props["tags"].(map[string]any)
+	if !ok {
+		t.Fatalf("tags property not found or wrong type: %v", props["tags"])
+	}
+	if tagsProp["type"] != "array" {
+		t.Errorf("tags.type = %v, want array", tagsProp["type"])
+	}
+	items, ok := tagsProp["items"].(map[string]any)
+	if !ok {
+		t.Errorf("tags must have items, got: %v", tagsProp["items"])
+		return
+	}
+	if items["type"] != "string" {
+		t.Errorf("tags.items.type = %v, want string", items["type"])
+	}
+	if _, exists := tagsProp["minLength"]; exists {
+		t.Error("array field must not have minLength")
+	}
+}

@@ -1349,6 +1349,8 @@ func mcpGoTypeStr(t reflect.Type) string {
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 		reflect.Float32, reflect.Float64:
 		return "number"
+	case reflect.Slice:
+		return "array"
 	default:
 		return "string"
 	}
@@ -1479,16 +1481,59 @@ func (m *Module[T]) MCPGet(ctx Context, slug string) (any, error) {
 	return item, nil
 }
 
+// coerceSliceFields normalises fields destined for MCPCreate / MCPUpdate:
+// any map value for a []string struct field that arrives as a plain string is
+// split on "," and replaced with []any so the subsequent Marshal → Unmarshal
+// round-trip decodes correctly. This tolerates MCP clients that serialise
+// multi-value fields as comma-separated strings.
+func coerceSliceFields(fields map[string]any, t reflect.Type) {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		ft := sf.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		if ft.Kind() != reflect.Slice {
+			continue
+		}
+		key := mcpJSONName(sf)
+		v, ok := fields[key]
+		if !ok {
+			continue
+		}
+		s, isStr := v.(string)
+		if !isStr {
+			continue
+		}
+		parts := strings.Split(s, ",")
+		out := make([]any, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		fields[key] = out
+	}
+}
+
 // MCPCreate creates a new content item from the supplied fields map. A new ID
 // is always generated; the slug is auto-derived when absent. The item is
 // validated before persistence. AfterCreate signals are dispatched
 // asynchronously.
 func (m *Module[T]) MCPCreate(ctx Context, fields map[string]any) (any, error) {
+	pv, elemType := m.newItemPtr()
+	coerceSliceFields(fields, elemType)
 	data, err := json.Marshal(fields)
 	if err != nil {
 		return nil, ErrBadRequest
 	}
-	pv, elemType := m.newItemPtr()
 	if err := json.Unmarshal(data, pv.Interface()); err != nil {
 		return nil, ErrBadRequest
 	}
@@ -1539,7 +1584,7 @@ func (m *Module[T]) MCPUpdate(ctx Context, slug string, fields map[string]any) (
 	if seed, merr := json.Marshal(existing); merr == nil {
 		json.Unmarshal(seed, pv.Interface()) //nolint:errcheck
 	}
-
+	coerceSliceFields(fields, elemType)
 	data, err := json.Marshal(fields)
 	if err != nil {
 		return nil, ErrBadRequest

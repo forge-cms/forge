@@ -748,3 +748,59 @@ func TestModule_Stop_haltsCacheSweep(t *testing.T) {
 		t.Error("stopCh not closed after Stop()")
 	}
 }
+
+// — A52 []string field typing and coercion ————————————————————————————————
+
+// testSlicePost is a content type with a []string field for Amendment A52 tests.
+type testSlicePost struct {
+	Node
+	Title string   `forge:"required"`
+	Tags  []string `json:"tags"`
+}
+
+func (p *testSlicePost) Head() Head { return Head{Title: p.Title} }
+
+// TestMCPSchema_arrayField verifies that []string struct fields are typed as
+// "array" in MCPSchema output (Amendment A52-1).
+func TestMCPSchema_arrayField(t *testing.T) {
+	m := NewModule((*testSlicePost)(nil), Repo(NewMemoryRepo[*testSlicePost]()))
+	fields := m.MCPSchema()
+	for _, f := range fields {
+		if f.Name == "Tags" {
+			if f.Type != "array" {
+				t.Errorf("Tags.Type = %q, want %q", f.Type, "array")
+			}
+			return
+		}
+	}
+	t.Fatal("Tags field not found in MCPSchema output")
+}
+
+// TestMCPCreate_commaStringCoercion verifies that a comma-separated string
+// value for a []string field is split before the Marshal→Unmarshal round-trip,
+// so the decoded item slice is populated correctly (Amendment A52-3).
+func TestMCPCreate_commaStringCoercion(t *testing.T) {
+	repo := NewMemoryRepo[*testSlicePost]()
+	m := NewModule((*testSlicePost)(nil), Repo(repo))
+	ctx := NewTestContext(User{})
+	item, err := m.MCPCreate(ctx, map[string]any{
+		"title": "Hello World",
+		"tags":  "mcp,test",
+	})
+	if err != nil {
+		t.Fatalf("MCPCreate returned error: %v", err)
+	}
+	p, ok := item.(*testSlicePost)
+	if !ok {
+		t.Fatalf("unexpected type %T", item)
+	}
+	want := []string{"mcp", "test"}
+	if len(p.Tags) != len(want) {
+		t.Fatalf("Tags = %v, want %v", p.Tags, want)
+	}
+	for i := range want {
+		if p.Tags[i] != want[i] {
+			t.Errorf("Tags[%d] = %q, want %q", i, p.Tags[i], want[i])
+		}
+	}
+}

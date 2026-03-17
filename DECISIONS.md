@@ -72,6 +72,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A49 | `mcp.go`/`module.go`/`forge.go`: `MCPModule` contract — `mcpOption` carries ops; export `MCPMeta`, `MCPField`, `MCPModule`; `Module[T]` implements 10 MCP methods; `App.MCPModules()` | Agreed | 2026-03-16 |
 | A50 | `auth.go`/`forge.go`/`context.go`/`forge-mcp/mcp.go`: `VerifyBearerToken`, `App.Secret()`, `NewContextWithUser`, `Server` secret auto-inherit | Agreed | 2026-03-16 |
 | A51 | `templates.go`: `twitter:card` derives from `Head.Type` — `Article`/`Product` emit `summary_large_image` without requiring an explicit image | Agreed | 2026-03-17 |
+| A52 | `module.go`/`forge-mcp/mcp.go`: `[]string` fields typed as `"array"` in `MCPSchema`/`inputSchema`; comma-string coercion in `MCPCreate`/`MCPUpdate` | Agreed | 2026-03-17 |
 
 ---
 
@@ -3258,3 +3259,60 @@ present. Priority order (highest to lowest):
    remains the highest-priority branch.
 5. No README examples break. `example_test.go` requires no changes.
 6. Shipped as patch v1.1.1 — no breaking change.
+
+## Amendment A52 — `module.go`/`forge-mcp/mcp.go`: `[]string` fields in MCPSchema and comma-string coercion
+
+**Status:** Agreed
+**Date:** 2026-03-17
+**Scope:** `module.go` (`mcpGoTypeStr`, `coerceSliceFields`, `MCPCreate`, `MCPUpdate`),
+`forge-mcp/mcp.go` (`inputSchema`, `inputSchemaUpdate`),
+`module_test.go`, `forge-mcp/mcp_test.go`
+
+**Problem (three related bugs):**
+
+1. `mcpGoTypeStr` in `module.go` has no `case reflect.Slice` branch — slice types
+   fall through to `default: return "string"`, so a `[]string` field on a content
+   type is advertised to MCP clients as `{"type":"string"}`. Claude Desktop and
+   other clients therefore send a plain string value, which `json.Unmarshal` into
+   a `[]string` field rejects silently (the field stays nil, no error returned).
+
+2. `inputSchema` and `inputSchemaUpdate` in `forge-mcp/mcp.go` unconditionally emit
+   `{"type": f.Type}` with `minLength`/`maxLength`/`enum` constraints regardless of
+   the field type. An array field needs `{"type":"array","items":{"type":"string"}}`;
+   the constraints are not meaningful for array entries.
+
+3. Even after Bug 1 is fixed, some MCP client versions (observed in Claude Desktop)
+   serialise multi-value fields as comma-separated strings (`"tags":"mcp,test"`)
+   rather than JSON arrays (`["mcp","test"]`). Without normalisation,
+   `json.Unmarshal` into `[]string` silently discards the value.
+
+**Decision:**
+
+Fix all three bugs as a single patch:
+
+1. **`mcpGoTypeStr`** — add `case reflect.Slice: return "array"` before `default`.
+
+2. **`inputSchema` / `inputSchemaUpdate`** — when `f.Type == "array"`, emit
+   `{"type":"array","items":{"type":"string"}}` and skip `minLength`/`maxLength`/`enum`
+   constraints (which apply to string entries, not arrays).
+
+3. **`coerceSliceFields`** — new unexported helper in `module.go`. Before the
+   `json.Marshal(fields)` → `json.Unmarshal(data, pv)` round-trip in `MCPCreate`
+   and `MCPUpdate`, walk every struct field of the target type; for any `[]string`
+   (or `[]*string`) field whose corresponding `fields` map entry is a plain `string`,
+   split on `","`, trim spaces, and replace the entry with `[]any`. The subsequent
+   `json.Marshal` then encodes a proper JSON array, and `json.Unmarshal` succeeds.
+   `MCPCreate` is also reordered to call `m.newItemPtr()` before the marshal step so
+   the element type is available for the coercion walk.
+
+**Consequences:**
+
+1. Content types with `[]string` fields (e.g. `Tags []string`) now produce correct
+   `MCPField.Type == "array"` from `MCPSchema()` and `{"type":"array","items":{"type":"string"}}`
+   in the MCP tools/list schema, so conforming MCP clients send proper JSON arrays.
+2. Clients that send comma-separated strings are transparently normalised; no change
+   required at the application layer.
+3. No exported API change — `MCPCreate`, `MCPUpdate`, and `MCPSchema` signatures are
+   unchanged. `coerceSliceFields` is unexported.
+4. No README examples break. `example_test.go` requires no changes.
+5. Shipped as patch v1.1.2 — no breaking change.

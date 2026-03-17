@@ -23,6 +23,29 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.2] — 2026-03-17
+
+`[]string` fields in content types are now correctly typed as `"array"` in
+`MCPSchema` and MCP tool schemas; comma-separated string values from MCP clients
+are automatically coerced to slices (Amendment A52).
+
+### Fixed
+
+- `module.go`: `mcpGoTypeStr` now returns `"array"` for `reflect.Slice` kinds;
+  previously fell through to `"string"`, causing MCP clients to advertise and send a
+  plain string for `[]string` fields which `json.Unmarshal` silently discarded
+  (Amendment A52-1)
+- `module.go`: new `coerceSliceFields` helper splits comma-separated string values
+  for `[]string` struct fields before the `Marshal→Unmarshal` round-trip in
+  `MCPCreate` and `MCPUpdate`, tolerating MCP clients that serialise multi-value
+  fields as comma strings (Amendment A52-3)
+- `forge-mcp/mcp.go`: `inputSchema` and `inputSchemaUpdate` now emit
+  `{"type":"array","items":{"type":"string"}}` for array fields instead of
+  `{"type":"array"}`, and suppress `minLength`/`maxLength`/`enum` constraints that
+  apply to string entries but not arrays (Amendment A52-2)
+
+---
+
 ## [1.1.1] — 2026-03-17
 
 `forge:head` now emits the correct `twitter:card` value for article and product

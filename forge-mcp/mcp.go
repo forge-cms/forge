@@ -165,15 +165,23 @@ func inputSchema(fields []forge.MCPField) map[string]any {
 	props := make(map[string]any, len(fields))
 	var required []string
 	for _, f := range fields {
-		prop := map[string]any{"type": f.Type}
-		if f.MinLength > 0 {
-			prop["minLength"] = f.MinLength
-		}
-		if f.MaxLength > 0 {
-			prop["maxLength"] = f.MaxLength
-		}
-		if len(f.Enum) > 0 {
-			prop["enum"] = f.Enum
+		var prop map[string]any
+		if f.Type == "array" {
+			prop = map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": "string"},
+			}
+		} else {
+			prop = map[string]any{"type": f.Type}
+			if f.MinLength > 0 {
+				prop["minLength"] = f.MinLength
+			}
+			if f.MaxLength > 0 {
+				prop["maxLength"] = f.MaxLength
+			}
+			if len(f.Enum) > 0 {
+				prop["enum"] = f.Enum
+			}
 		}
 		props[f.JSONName] = prop
 		if f.Required {
@@ -197,15 +205,23 @@ func inputSchemaUpdate(fields []forge.MCPField) map[string]any {
 		"slug": map[string]any{"type": "string"},
 	}
 	for _, f := range fields {
-		prop := map[string]any{"type": f.Type}
-		if f.MinLength > 0 {
-			prop["minLength"] = f.MinLength
-		}
-		if f.MaxLength > 0 {
-			prop["maxLength"] = f.MaxLength
-		}
-		if len(f.Enum) > 0 {
-			prop["enum"] = f.Enum
+		var prop map[string]any
+		if f.Type == "array" {
+			prop = map[string]any{
+				"type":  "array",
+				"items": map[string]any{"type": "string"},
+			}
+		} else {
+			prop = map[string]any{"type": f.Type}
+			if f.MinLength > 0 {
+				prop["minLength"] = f.MinLength
+			}
+			if f.MaxLength > 0 {
+				prop["maxLength"] = f.MaxLength
+			}
+			if len(f.Enum) > 0 {
+				prop["enum"] = f.Enum
+			}
 		}
 		props[f.JSONName] = prop
 	}

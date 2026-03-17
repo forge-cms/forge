@@ -285,10 +285,13 @@ Each will be resolved as a patch or Phase 2 item.
 - [ ] **Health endpoint HTTPS redirect** — `forge.Config{HTTPS: true}` causes `GET /_health` to return 301, breaking tools like Caddy's `health_uri` check that follow internal routes and expect 200. Internal health checks should bypass the HTTPS redirect. (Relates to Amendment A42)
 - [ ] **SQLite reserved keyword guard** — `SQLRepo` generates unquoted column names; reserved keywords such as `order` cause SQL syntax errors at runtime. Consider quoting all column names in generated SQL (`"order"`), or document the restriction clearly so developers know to avoid reserved words in struct field names.
 - [ ] **forge-admin missing** — no web UI for content management; non-developer users cannot manage content without the REST API; MVP forge-admin is Tier 4 on the critical path to Forge Cloud.
-- [ ] **forge:head emits relative canonical and og:url** — forge:head
-  outputs `<link rel="canonical">` and `<meta property="og:url">` with
-  relative paths (e.g. /devlog/my-post) when `forge.URL()` is used in
-  `Head()`. OG scrapers require absolute URLs. Workaround: prepend
-  `BaseURL` explicitly in `Head()` implementations or override `og:url` in
-  templates. Proper fix requires `forge.URL()` to use `Config.BaseURL`, or
-  a `forge.AbsURL()` helper. Discovered during forge-cms.dev OG audit.
+- [ ] **forge:head emits relative og:url** — forge:head outputs
+  og:url with the value of `Head.Canonical` verbatim. `forge.URL()`
+  returns root-relative paths by design (`/devlog/slug`), so any
+  content type that builds `Canonical` with `forge.URL()` will produce
+  an invalid og:url. Workaround: prepend `BaseURL` explicitly in
+  `Head()` implementations (see Amendment S19 in forge-site).
+  Proper fix: add `forge.AbsURL(base, path string) string` helper that
+  prepends `Config.BaseURL`, and update forge:head to use it for
+  og:url and canonical link tag. All forge-site `Head()` calls can
+  then be simplified back to `forge.URL()`.
