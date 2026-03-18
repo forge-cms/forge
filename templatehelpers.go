@@ -4,32 +4,9 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 )
-
-// — Inline Markdown patterns ——————————————————————————————————————————————
-
-var (
-	reMdLink    = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
-	reMdBold    = regexp.MustCompile(`\*\*([^*]+)\*\*`)
-	reMdItalic  = regexp.MustCompile(`\*([^*\s][^*]*)\*`)
-	reMdCode    = regexp.MustCompile("`([^`]+)`")
-	reMdHeading = regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
-)
-
-// applyInline applies link, bold, italic, and code Markdown patterns to a
-// single line of text and returns the HTML result.
-// Process order: links → bold → italic → code.
-func applyInline(s string) string {
-	s = reMdLink.ReplaceAllString(s, `<a href="$2">$1</a>`)
-	s = reMdBold.ReplaceAllString(s, `<strong>$1</strong>`)
-	// Italic: after bold replacement all ** patterns are gone, so \*…\* is safe.
-	s = reMdItalic.ReplaceAllString(s, `<em>$1</em>`)
-	s = reMdCode.ReplaceAllString(s, `<code>$1</code>`)
-	return s
-}
 
 // — Template helpers ———————————————————————————————————————————————————————
 

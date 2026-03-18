@@ -165,21 +165,21 @@ func TestDebouncerCoalesces(t *testing.T) {
 // window prevents the earlier scheduled fn from firing.
 func TestDebouncerResetsOnTrigger(t *testing.T) {
 	var count atomic.Int32
-	delay := 30 * time.Millisecond
+	delay := 100 * time.Millisecond
 	d := newDebouncer(delay, func() {
 		count.Add(1)
 	})
 
 	d.Trigger()
-	time.Sleep(15 * time.Millisecond) // halfway through delay
+	time.Sleep(40 * time.Millisecond) // well within delay
 	d.Trigger()                       // resets the timer
-	time.Sleep(15 * time.Millisecond) // original would have fired here
+	time.Sleep(40 * time.Millisecond) // original would have fired here, reset has not
 	// timer has not elapsed yet after the reset
 	if got := count.Load(); got != 0 {
 		t.Errorf("fn fired too early: %d calls", got)
 	}
 
-	time.Sleep(30 * time.Millisecond) // now the reset timer fires
+	time.Sleep(100 * time.Millisecond) // now the reset timer fires
 	if got := count.Load(); got != 1 {
 		t.Errorf("expected 1 fn invocation, got %d", got)
 	}

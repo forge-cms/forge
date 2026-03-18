@@ -50,16 +50,6 @@ func New(app *forge.App, opts ...ServerOption) *Server {
 	return s
 }
 
-// moduleByPrefix returns the module whose MCPMeta.Prefix equals prefix.
-func (s *Server) moduleByPrefix(prefix string) (forge.MCPModule, bool) {
-	for _, m := range s.modules {
-		if m.MCPMeta().Prefix == prefix {
-			return m, true
-		}
-	}
-	return nil, false
-}
-
 // mcpResource is the internal representation of a single MCP resource entry.
 type mcpResource struct {
 	URI         string `json:"uri"`

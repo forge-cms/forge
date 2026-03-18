@@ -2,7 +2,7 @@
 
 This document captures the long-term vision for Forge and Forge Cloud.
 
-Last updated: 2026-03-15
+Last updated: 2026-03-18
 
 ---
 
@@ -204,8 +204,8 @@ Invitation-only. Manually provisioned instances to start.
 
 ### Current — AGPL v3
 
-All Forge packages (`forge`, `forge-mcp`, `forge-admin`) are licensed under
-the GNU Affero General Public License v3 (AGPL).
+`forge` and `forge-mcp` are licensed under the GNU Affero General
+Public License v3 (AGPL).
 
 AGPL means: the source code is open and free to use, modify, and distribute.
 If you use Forge to provide a hosted service to others, you must release your
@@ -214,6 +214,11 @@ modifications under the same license.
 For individual developers, open source projects, and companies building their
 own sites with Forge: AGPL imposes no meaningful restriction. You can use
 Forge freely.
+
+### forge-admin — closed source
+
+`forge-admin` is a commercial component of Forge Cloud. It is not
+part of the open source framework and is not available separately.
 
 ### Future — Commercial license (AGPL exemption)
 

@@ -37,7 +37,7 @@ func newTestApp(t *testing.T, opts ...forge.Option) *forge.App {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -78,19 +78,19 @@ func TestNewServer(t *testing.T) {
 	repo := forge.NewMemoryRepo[*testMCPPost]()
 
 	// Two modules with MCP, one without.
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
 		forge.MCP(forge.MCPRead),
 	)
-	drafts := forge.NewModule[*testMCPPost](
+	drafts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/drafts"),
 		forge.MCP(forge.MCPWrite),
 	)
-	noMCP := forge.NewModule[*testMCPPost](
+	noMCP := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/other"),
@@ -162,7 +162,7 @@ func TestMCPResourcesList(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	mod := forge.NewModule[*testMCPPost](
+	mod := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -203,7 +203,7 @@ func TestMCPResourcesRead_published(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	mod := forge.NewModule[*testMCPPost](
+	mod := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -254,7 +254,7 @@ func TestMCPResourcesRead_draft(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	mod := forge.NewModule[*testMCPPost](
+	mod := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -285,20 +285,20 @@ func TestMCPResourcesTemplatesList(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	}
 	app := forge.New(cfg)
-	app.Content(forge.NewModule[*testMCPPost](
+	app.Content(forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/posts"),
 		forge.MCP(forge.MCPRead),
 	))
-	app.Content(forge.NewModule[*testMCPPost](
+	app.Content(forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/news"),
 		forge.MCP(forge.MCPRead),
 	))
 	// MCPWrite-only module — must not appear in templates list.
-	app.Content(forge.NewModule[*testMCPPost](
+	app.Content(forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/writeonly"),
@@ -353,7 +353,7 @@ func newWriteApp(t *testing.T, opts ...forge.Option) (*forge.App, *forge.MemoryR
 		forge.At("/posts"),
 		forge.MCP(forge.MCPWrite),
 	}, opts...)
-	posts := forge.NewModule[*testMCPPost]((*testMCPPost)(nil), allOpts...)
+	posts := forge.NewModule((*testMCPPost)(nil), allOpts...)
 	app.Content(posts)
 	return app, repo
 }
@@ -418,7 +418,7 @@ func TestMCPToolsList(t *testing.T) {
 	// MCPRead-only module must NOT contribute any tools.
 	cfg := forge.Config{BaseURL: "http://localhost", Secret: []byte("test-secret-32-bytes-xxxxxxxxxxxx")}
 	app2 := forge.New(cfg)
-	app2.Content(forge.NewModule[*testMCPPost](
+	app2.Content(forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(forge.NewMemoryRepo[*testMCPPost]()),
 		forge.At("/readonly"),
@@ -825,7 +825,7 @@ func TestMCPServeStdio_resourcesList(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -965,7 +965,7 @@ func TestMCPHandler_initialize(t *testing.T) {
 	cfg := forge.Config{BaseURL: "http://localhost"}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -1007,7 +1007,7 @@ func TestMCPHandler_unauthenticated(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -1035,7 +1035,7 @@ func TestMCPHandler_authenticated_resourcesList(t *testing.T) {
 	}
 	app := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
@@ -1079,7 +1079,7 @@ func TestMCPHandler_bodyTooLarge(t *testing.T) {
 	cfg := forge.Config{BaseURL: "http://localhost"}
 	appNoSecret := forge.New(cfg)
 	repo := forge.NewMemoryRepo[*testMCPPost]()
-	posts := forge.NewModule[*testMCPPost](
+	posts := forge.NewModule(
 		(*testMCPPost)(nil),
 		forge.Repo(repo),
 		forge.At("/posts"),
