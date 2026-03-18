@@ -150,7 +150,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return item, nil
+		return toolResult(item), nil
 
 	case "update":
 		slug, ok := stringArg(args, "slug")
@@ -161,7 +161,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return item, nil
+		return toolResult(item), nil
 
 	case "publish":
 		slug, ok := stringArg(args, "slug")
@@ -176,12 +176,12 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		}
 		type statuser interface{ GetStatus() forge.Status }
 		if st, isStatuser := existing.(statuser); isStatuser && st.GetStatus() == forge.Published {
-			return map[string]any{"slug": slug, "status": "published"}, nil
+			return toolResult(map[string]any{"slug": slug, "status": "published"}), nil
 		}
 		if err := m.MCPPublish(ctx, slug); err != nil {
 			return nil, errorFor(err)
 		}
-		return map[string]any{"slug": slug, "status": "published"}, nil
+		return toolResult(map[string]any{"slug": slug, "status": "published"}), nil
 
 	case "schedule":
 		slug, ok := stringArg(args, "slug")
@@ -199,7 +199,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err := m.MCPSchedule(ctx, slug, t); err != nil {
 			return nil, errorFor(err)
 		}
-		return map[string]any{"slug": slug, "status": "scheduled", "scheduled_at": atStr}, nil
+		return toolResult(map[string]any{"slug": slug, "status": "scheduled", "scheduled_at": atStr}), nil
 
 	case "archive":
 		slug, ok := stringArg(args, "slug")
@@ -209,7 +209,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err := m.MCPArchive(ctx, slug); err != nil {
 			return nil, errorFor(err)
 		}
-		return map[string]any{"slug": slug, "status": "archived"}, nil
+		return toolResult(map[string]any{"slug": slug, "status": "archived"}), nil
 
 	case "delete":
 		slug, ok := stringArg(args, "slug")
@@ -219,7 +219,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err := m.MCPDelete(ctx, slug); err != nil {
 			return nil, errorFor(err)
 		}
-		return map[string]any{"deleted": true, "slug": slug}, nil
+		return toolResult(map[string]any{"deleted": true, "slug": slug}), nil
 
 	case "list":
 		lm, ok := s.moduleForAdminList(typeSnake)
@@ -240,7 +240,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if items == nil {
 			items = []any{}
 		}
-		return map[string]any{"items": items}, nil
+		return toolResult(map[string]any{"items": items}), nil
 
 	case "get":
 		gm, ok := s.moduleForType(typeSnake)
@@ -258,7 +258,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return item, nil
+		return toolResult(item), nil
 
 	default:
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown operation: " + op}
@@ -284,6 +284,21 @@ func (s *Server) handleToolMethod(ctx forge.Context, req jsonRPCRequest) (jsonRP
 		return jsonRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, true
 	}
 	return jsonRPCResponse{}, false
+}
+
+// toolResult wraps v in the MCP CallToolResult envelope that MCP clients
+// require for tools/call responses. The payload is marshalled to JSON and
+// embedded as the text of a single content item. This format applies to all
+// successful results: create, update, publish, schedule, archive, delete,
+// list, and get.
+func toolResult(v any) map[string]any {
+	data, _ := json.Marshal(v)
+	return map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": string(data)},
+		},
+		"isError": false,
+	}
 }
 
 // stringArg extracts a non-empty string value from args under the given key.

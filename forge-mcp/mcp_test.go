@@ -358,6 +358,30 @@ func newWriteApp(t *testing.T, opts ...forge.Option) (*forge.App, *forge.MemoryR
 	return app, repo
 }
 
+// unwrapToolResult extracts the JSON text payload from a CallToolResult
+// envelope returned by handleToolsCall and unmarshals it into map[string]any.
+// It fails the test on any structural problem (missing content, bad JSON).
+func unwrapToolResult(t *testing.T, result any) map[string]any {
+	t.Helper()
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("result is %T, want map[string]any (CallToolResult)", result)
+	}
+	content, ok := m["content"].([]map[string]any)
+	if !ok || len(content) == 0 {
+		t.Fatalf("content is %T, want []map[string]any with ≥1 element", m["content"])
+	}
+	text, ok := content[0]["text"].(string)
+	if !ok {
+		t.Fatalf("content[0][\"text\"] is %T, want string", content[0]["text"])
+	}
+	var fields map[string]any
+	if err := json.Unmarshal([]byte(text), &fields); err != nil {
+		t.Fatalf("unwrapToolResult: %v (text: %q)", err, text)
+	}
+	return fields
+}
+
 // — Tool naming ——————————————————————————————————————————————
 
 // TestMCPToolName verifies toolName builds lower_snake_case tool names.
@@ -455,22 +479,20 @@ func TestMCPToolsCall_create(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	post, ok := result.(*testMCPPost)
-	if !ok {
-		t.Fatalf("result is %T, want *testMCPPost", result)
-	}
-	if post.ID == "" {
+	fields := unwrapToolResult(t, result)
+	if fields["ID"] == nil || fields["ID"] == "" {
 		t.Error("created item has empty ID")
 	}
-	if post.Slug == "" {
+	slug, _ := fields["Slug"].(string)
+	if slug == "" {
 		t.Error("created item has empty Slug")
 	}
-	if post.Status != forge.Draft {
-		t.Errorf("created item status = %q, want Draft", post.Status)
+	if fields["Status"] != "draft" {
+		t.Errorf("created item status = %v, want draft", fields["Status"])
 	}
 
-	// Verify item is actually in the repo via JSON round-trip.
-	gotten, err := repo.FindBySlug(context.Background(), post.Slug)
+	// Verify item is actually in the repo.
+	gotten, err := repo.FindBySlug(context.Background(), slug)
 	if err != nil {
 		t.Fatalf("FindBySlug after create: %v", err)
 	}
@@ -520,12 +542,9 @@ func TestMCPToolsCall_publish(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	if m["status"] != "published" {
-		t.Errorf("status = %v, want published", m["status"])
+	pubFields := unwrapToolResult(t, result)
+	if pubFields["status"] != "published" {
+		t.Errorf("status = %v, want published", pubFields["status"])
 	}
 
 	// Verify state in repo.
@@ -567,12 +586,9 @@ func TestMCPToolsCall_publish_already_published(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	if m["status"] != "published" {
-		t.Errorf("status = %v, want published", m["status"])
+	idFields := unwrapToolResult(t, result)
+	if idFields["status"] != "published" {
+		t.Errorf("status = %v, want published", idFields["status"])
 	}
 	if atomic.LoadInt32(&fired) != 0 {
 		t.Errorf("AfterPublish fired %d time(s), want 0 for already-Published item", fired)
@@ -600,15 +616,12 @@ func TestMCPToolsCall_schedule(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
+	schedFields := unwrapToolResult(t, result)
+	if schedFields["status"] != "scheduled" {
+		t.Errorf("status = %v, want scheduled", schedFields["status"])
 	}
-	if m["status"] != "scheduled" {
-		t.Errorf("status = %v, want scheduled", m["status"])
-	}
-	if m["scheduled_at"] != futureStr {
-		t.Errorf("scheduled_at = %v, want %v", m["scheduled_at"], futureStr)
+	if schedFields["scheduled_at"] != futureStr {
+		t.Errorf("scheduled_at = %v, want %v", schedFields["scheduled_at"], futureStr)
 	}
 
 	// Verify state in repo.
@@ -641,12 +654,9 @@ func TestMCPToolsCall_archive(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	if m["status"] != "archived" {
-		t.Errorf("status = %v, want archived", m["status"])
+	archFields := unwrapToolResult(t, result)
+	if archFields["status"] != "archived" {
+		t.Errorf("status = %v, want archived", archFields["status"])
 	}
 
 	stored, err := repo.FindBySlug(context.Background(), "arch-post")
@@ -675,15 +685,12 @@ func TestMCPToolsCall_delete(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
+	delFields := unwrapToolResult(t, result)
+	if delFields["deleted"] != true {
+		t.Errorf("deleted = %v, want true", delFields["deleted"])
 	}
-	if m["deleted"] != true {
-		t.Errorf("deleted = %v, want true", m["deleted"])
-	}
-	if m["slug"] != "del-post" {
-		t.Errorf("slug = %v, want del-post", m["slug"])
+	if delFields["slug"] != "del-post" {
+		t.Errorf("slug = %v, want del-post", delFields["slug"])
 	}
 
 	// The module should now return an error for the deleted slug.
@@ -1223,11 +1230,8 @@ func TestMCPToolsCall_list_all(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	got, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	items, _ := got["items"].([]any)
+	listFields := unwrapToolResult(t, result)
+	items, _ := listFields["items"].([]any)
 	if len(items) != 3 {
 		t.Errorf("got %d items, want 3", len(items))
 	}
@@ -1252,11 +1256,8 @@ func TestMCPToolsCall_list_filtered(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	got, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	items, _ := got["items"].([]any)
+	filterFields := unwrapToolResult(t, result)
+	items, _ := filterFields["items"].([]any)
 	if len(items) != 2 {
 		t.Errorf("got %d items, want 2 (drafts only)", len(items))
 	}
@@ -1279,12 +1280,9 @@ func TestMCPToolsCall_get_draft(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	post, ok := result.(*testMCPPost)
-	if !ok {
-		t.Fatalf("result is %T, want *testMCPPost", result)
-	}
-	if post.Status != forge.Draft {
-		t.Errorf("status = %q, want Draft", post.Status)
+	getFields := unwrapToolResult(t, result)
+	if getFields["Status"] != "draft" {
+		t.Errorf("Status = %v, want draft", getFields["Status"])
 	}
 }
 
@@ -1349,11 +1347,8 @@ func TestMCPToolsCall_list_empty(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	got, ok := result.(map[string]any)
-	if !ok {
-		t.Fatalf("result is %T, want map[string]any", result)
-	}
-	items, _ := got["items"].([]any)
+	emptyFields := unwrapToolResult(t, result)
+	items, _ := emptyFields["items"].([]any)
 	if len(items) != 0 {
 		t.Errorf("got %d items, want 0", len(items))
 	}

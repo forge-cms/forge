@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.4] — 2026-03-18
+
+Wrap all tool call results in MCP `CallToolResult` format.
+
+### Fixed
+
+- `tool.go`: `handleToolsCall` now wraps every successful result in the MCP
+  `CallToolResult` envelope via a new `toolResult` helper:
+  `{"content":[{"type":"text","text":"<json>"}],"isError":false}`;
+  previously returned raw Go values that serialised to plain JSON objects
+  or arrays, causing MCP clients (including Claude Desktop) to silently
+  discard the result or display empty output
+
+---
+
 ## [1.0.3] — 2026-03-18
 
 Fix `list_{type}s` response format: wrap slice in `{"items": [...]}` object.
