@@ -141,25 +141,29 @@ func mcpToolDefs(m forge.MCPModule) []mcpTool {
 			Description: "Archive a " + meta.TypeName + " by slug.",
 			InputSchema: slugOnly,
 		},
-		{
-			Name:        "delete_" + typeSnake,
-			Description: "Delete a " + meta.TypeName + " permanently.",
-			InputSchema: slugOnly,
-		},
 	}
 }
 
-// mcpAdminReadToolDefs returns the admin read tool definitions for a module.
-// These tools require Editor or Admin role and return items at any lifecycle
-// status, making them suitable for content management dashboards and admin AI
-// assistants. Two tools are generated per MCPWrite module:
+// mcpAdminReadToolDefs returns the admin tool definitions for a module that
+// has MCPWrite. These tools require Editor or Admin role and bypass the
+// Published-only restriction, making them suitable for content management
+// dashboards and admin AI assistants. Three tools are generated per MCPWrite
+// module:
 //
 //   - list_{type}s — list all items; optional status filter ("draft",
 //     "scheduled", "published", "archived")
 //   - get_{type} — fetch a single item by slug regardless of status
+//   - delete_{type} — permanently delete an item by slug
 func mcpAdminReadToolDefs(m forge.MCPModule) []mcpTool {
 	meta := m.MCPMeta()
 	typeSnake := snakeCase(meta.TypeName)
+	slugOnly := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"slug": map[string]any{"type": "string"},
+		},
+		"required": []string{"slug"},
+	}
 	return []mcpTool{
 		{
 			Name:        "list_" + typeSnake + "s",
@@ -185,6 +189,11 @@ func mcpAdminReadToolDefs(m forge.MCPModule) []mcpTool {
 				},
 				"required": []string{"slug"},
 			},
+		},
+		{
+			Name:        "delete_" + typeSnake,
+			Description: "Delete a " + meta.TypeName + " permanently. Requires Editor or Admin role.",
+			InputSchema: slugOnly,
 		},
 	}
 }

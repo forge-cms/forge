@@ -7,6 +7,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.5] — 2026-03-18
+
+`delete_{type}` moved to Editor-level admin tools (Amendment A55).
+
+### Changed
+
+- `mcp.go`: `delete_{type}` moved from `mcpToolDefs` (Author-required write
+  tools) to `mcpAdminReadToolDefs` (Editor-required admin tools); the total
+  tool count per MCPWrite module remains 8 (5 write + 3 admin: list, get,
+  delete); `mcpAdminReadToolDefs` now accepts a local `slugOnly` schema to
+  avoid repeating the object definition
+- `tool.go`: `delete` dispatch case now calls `authoriseEditor` before
+  executing the delete; previously only Author role was required — now
+  Editor or Admin is required
+
+---
+
 ## [1.0.4] — 2026-03-18
 
 Wrap all tool call results in MCP `CallToolResult` format.

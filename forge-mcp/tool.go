@@ -212,6 +212,9 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		return toolResult(map[string]any{"slug": slug, "status": "archived"}), nil
 
 	case "delete":
+		if rpcErr := s.authoriseEditor(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
 		slug, ok := stringArg(args, "slug")
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: slug required"}

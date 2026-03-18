@@ -670,10 +670,11 @@ func TestMCPToolsCall_archive(t *testing.T) {
 
 // TestMCPToolsCall_delete verifies that a delete call permanently removes the
 // item and returns {"deleted": true, "slug": ...} (Flag F).
+// Requires Editor role (Amendment A55).
 func TestMCPToolsCall_delete(t *testing.T) {
 	app, repo := newWriteApp(t)
 	srv := New(app)
-	ctx := newAuthorCtx()
+	ctx := newEditorCtx()
 
 	seedPost(t, repo, "del-post", forge.Draft, "Del Post", "body content here ok")
 
@@ -1200,14 +1201,17 @@ func TestMCPAdminReadToolDefs(t *testing.T) {
 		t.Fatal("no MCP modules")
 	}
 	defs := mcpAdminReadToolDefs(mods[0])
-	if len(defs) != 2 {
-		t.Fatalf("got %d admin read tool defs, want 2", len(defs))
+	if len(defs) != 3 {
+		t.Fatalf("got %d admin read tool defs, want 3", len(defs))
 	}
 	if defs[0].Name != "list_test_mcp_posts" {
 		t.Errorf("defs[0].Name = %q, want list_test_mcp_posts", defs[0].Name)
 	}
 	if defs[1].Name != "get_test_mcp_post" {
 		t.Errorf("defs[1].Name = %q, want get_test_mcp_post", defs[1].Name)
+	}
+	if defs[2].Name != "delete_test_mcp_post" {
+		t.Errorf("defs[2].Name = %q, want delete_test_mcp_post", defs[2].Name)
 	}
 }
 
@@ -1307,7 +1311,8 @@ func TestMCPToolsCall_get_not_found(t *testing.T) {
 }
 
 // TestMCPToolsCall_admin_read_forbidden_author verifies that an Author-role
-// caller receives -32001 on admin read operations (Editor or Admin required).
+// caller receives -32001 on admin operations (Editor or Admin required):
+// list_{type}s, get_{type}, and delete_{type}.
 func TestMCPToolsCall_admin_read_forbidden_author(t *testing.T) {
 	app, repo := newWriteApp(t)
 	srv := New(app)
@@ -1315,19 +1320,22 @@ func TestMCPToolsCall_admin_read_forbidden_author(t *testing.T) {
 
 	seedPost(t, repo, "some-post", forge.Published, "Some Post", "body content here ok")
 
-	for _, toolName := range []string{"list_test_mcp_posts", "get_test_mcp_post"} {
-		args := map[string]any{}
-		if toolName == "get_test_mcp_post" {
-			args["slug"] = "some-post"
-		}
-		params, _ := json.Marshal(map[string]any{"name": toolName, "arguments": args})
+	for _, tc := range []struct {
+		toolName string
+		args     map[string]any
+	}{
+		{"list_test_mcp_posts", map[string]any{}},
+		{"get_test_mcp_post", map[string]any{"slug": "some-post"}},
+		{"delete_test_mcp_post", map[string]any{"slug": "some-post"}},
+	} {
+		params, _ := json.Marshal(map[string]any{"name": tc.toolName, "arguments": tc.args})
 		_, rpcErr := srv.handleToolsCall(authorCtx, params)
 		if rpcErr == nil {
-			t.Errorf("%s: expected forbidden error for Author, got nil", toolName)
+			t.Errorf("%s: expected forbidden error for Author, got nil", tc.toolName)
 			continue
 		}
 		if rpcErr.Code != -32001 {
-			t.Errorf("%s: error code = %d, want -32001", toolName, rpcErr.Code)
+			t.Errorf("%s: error code = %d, want -32001", tc.toolName, rpcErr.Code)
 		}
 	}
 }
