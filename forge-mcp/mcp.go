@@ -149,6 +149,46 @@ func mcpToolDefs(m forge.MCPModule) []mcpTool {
 	}
 }
 
+// mcpAdminReadToolDefs returns the admin read tool definitions for a module.
+// These tools require Editor or Admin role and return items at any lifecycle
+// status, making them suitable for content management dashboards and admin AI
+// assistants. Two tools are generated per MCPWrite module:
+//
+//   - list_{type}s — list all items; optional status filter ("draft",
+//     "scheduled", "published", "archived")
+//   - get_{type} — fetch a single item by slug regardless of status
+func mcpAdminReadToolDefs(m forge.MCPModule) []mcpTool {
+	meta := m.MCPMeta()
+	typeSnake := snakeCase(meta.TypeName)
+	return []mcpTool{
+		{
+			Name:        "list_" + typeSnake + "s",
+			Description: "List all " + meta.TypeName + " items. Requires Editor or Admin role. Returns items at any lifecycle status.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"status": map[string]any{
+						"type":        "string",
+						"enum":        []string{"draft", "scheduled", "published", "archived"},
+						"description": "Filter by lifecycle status. Omit to return all statuses.",
+					},
+				},
+			},
+		},
+		{
+			Name:        "get_" + typeSnake,
+			Description: "Get a single " + meta.TypeName + " by slug. Requires Editor or Admin role. Returns the item at any lifecycle status.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"slug": map[string]any{"type": "string"},
+				},
+				"required": []string{"slug"},
+			},
+		},
+	}
+}
+
 // inputSchema converts []forge.MCPField to a JSON Schema object suitable for
 // MCP tools/list, marking Required fields in the required array.
 func inputSchema(fields []forge.MCPField) map[string]any {

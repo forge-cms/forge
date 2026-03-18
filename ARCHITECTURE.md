@@ -53,6 +53,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-17 | Amendment A51 (`templates.go`): `forgeHeadTmpl` now emits `twitter:card = summary_large_image` when `Head.Type` is `"Article"` or `"Product"`, regardless of whether `Head.Image.URL` is set; `Head.Social.Twitter.Card` explicit override takes priority. Five new sub-tests in `TestTemplates_twitterCard`. Shipped in v1.1.1. |
 | 2026-03-17 | Amendment A52 (`module.go`): `mcpGoTypeStr` returns `"array"` for `reflect.Slice` kinds; new `coerceSliceFields` helper splits comma-separated string values for `[]string` fields before `MCPCreate`/`MCPUpdate` round-trip. (`forge-mcp/mcp.go`): `inputSchema` and `inputSchemaUpdate` emit `{"type":"array","items":{"type":"string"}}` for array fields and suppress `minLength`/`maxLength`/`enum` constraints. Shipped in forge v1.1.2 / forge-mcp v1.0.1. |
 | 2026-03-18 | Amendment A53 (`module.go`): `negotiate()` now returns `"text/html"` when `Accept` is absent or `"*/*"` and the module has templates configured; previously returned `"application/json"` unconditionally, causing crawlers to receive JSON and miss structured data in `<head>`. API-only modules (no templates) are unaffected. Shipped in v1.1.3. |
+| 2026-03-18 | Amendment A54 (`forge-mcp/mcp.go`, `forge-mcp/tool.go`): admin read tools added to every MCPWrite module — `mcpAdminReadToolDefs` generates `list_{type}s` and `get_{type}` tools; `authoriseEditor` enforces Editor or Admin role; `moduleForAdminList` resolves the plural typeSnake for list tool dispatch; `handleToolsList` and `handleToolsCall` wired. Shipped in forge-mcp v1.0.2. |
 
 ---
 
@@ -166,8 +167,9 @@ github.com/forge-cms/forge/forge-mcp/  (sub-module: ./forge-mcp/)
 │                     handleResourcesTemplatesList, handleResourcesRead,
 │                     parseResourceURI; mcpResource/resourceContent/resourceTemplate
 ├── tool.go           handleToolMethod, handleToolsList, handleToolsCall,  ✅ Milestone 10 Step 3
-│                     toolName, parseToolName, moduleForType, authorise,
-│                     errorFor, stringArg
+│                     toolName, parseToolName, moduleForType, moduleForAdminList,
+│                     authorise, authoriseEditor, errorFor, stringArg;
+│                     mcpAdminReadToolDefs (Amendment A54)
 ├── transport.go      ServeStdio(ctx, in, out), Handler(),                 ✅ Milestone 10 Step 4
 │                     sseHandler, messageHandler
 └── README.md         AI-first integration guide: quick start, Claude/Cursor  ✅ Milestone 10 Step 5

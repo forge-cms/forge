@@ -35,10 +35,34 @@ func (s *Server) moduleForType(typeSnake string) (forge.MCPModule, bool) {
 	return nil, false
 }
 
+// moduleForAdminList returns the MCPWrite module for list_{type}s tool names.
+// The list tool appends "s" to the type's snake_case name (e.g. "list_posts"
+// targets the "post" type), so this helper tries typeSnake with a trailing
+// "s" stripped when a direct lookup fails.
+func (s *Server) moduleForAdminList(typeSnake string) (forge.MCPModule, bool) {
+	if m, ok := s.moduleForType(typeSnake); ok {
+		return m, true
+	}
+	if strings.HasSuffix(typeSnake, "s") {
+		return s.moduleForType(typeSnake[:len(typeSnake)-1])
+	}
+	return nil, false
+}
+
 // authorise returns a -32001 error when the caller lacks the Author role,
 // which is the minimum required for any MCPWrite operation.
 func (s *Server) authorise(ctx forge.Context) *jsonRPCError {
 	if forge.HasRole(ctx.User().Roles, forge.Author) {
+		return nil
+	}
+	return &jsonRPCError{Code: -32001, Message: "forbidden"}
+}
+
+// authoriseEditor returns a -32001 error when the caller lacks Editor role.
+// Editor is the minimum role required for admin read tools (list_{type}s,
+// get_{type}). Admin also satisfies this check via the hierarchical role system.
+func (s *Server) authoriseEditor(ctx forge.Context) *jsonRPCError {
+	if forge.HasRole(ctx.User().Roles, forge.Editor) {
 		return nil
 	}
 	return &jsonRPCError{Code: -32001, Message: "forbidden"}
@@ -64,7 +88,8 @@ func errorFor(err error) *jsonRPCError {
 }
 
 // handleToolsList returns the tools/list result: a "tools" array containing
-// one entry per MCPWrite operation per registered MCPWrite module.
+// one entry per MCPWrite operation per registered MCPWrite module, plus two
+// admin read tools (list_{type}s, get_{type}) per MCPWrite module.
 func (s *Server) handleToolsList() any {
 	var tools []mcpTool
 	for _, m := range s.modules {
@@ -72,6 +97,7 @@ func (s *Server) handleToolsList() any {
 			continue
 		}
 		tools = append(tools, mcpToolDefs(m)...)
+		tools = append(tools, mcpAdminReadToolDefs(m)...)
 	}
 	return map[string]any{"tools": tools}
 }
@@ -109,7 +135,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 	}
 
 	m, ok := s.moduleForType(typeSnake)
-	if !ok {
+	if !ok && op != "list" {
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
 	}
 
@@ -194,6 +220,45 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 			return nil, errorFor(err)
 		}
 		return map[string]any{"deleted": true, "slug": slug}, nil
+
+	case "list":
+		lm, ok := s.moduleForAdminList(typeSnake)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
+		}
+		if rpcErr := s.authoriseEditor(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
+		var statuses []forge.Status
+		if statusStr, ok := stringArg(args, "status"); ok {
+			statuses = []forge.Status{forge.Status(statusStr)}
+		}
+		items, err := lm.MCPList(ctx, statuses...)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		if items == nil {
+			items = []any{}
+		}
+		return items, nil
+
+	case "get":
+		gm, ok := s.moduleForType(typeSnake)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
+		}
+		if rpcErr := s.authoriseEditor(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
+		slug, ok := stringArg(args, "slug")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: slug required"}
+		}
+		item, err := gm.MCPGet(ctx, slug)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		return item, nil
 
 	default:
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown operation: " + op}

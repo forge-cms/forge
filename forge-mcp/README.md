@@ -161,17 +161,19 @@ forge.MCP(forge.MCPWrite)                   // write-only access
 forge.MCP(forge.MCPRead, forge.MCPWrite)    // full access
 ```
 
-| MCP method                  | Requires   | What it does                                                  |
-|-----------------------------|------------|---------------------------------------------------------------|
-| `resources/list`            | MCPRead    | List all Published items across all MCPRead modules           |
-| `resources/templates/list`  | MCPRead    | Return the URI template for each MCPRead module               |
-| `resources/read {uri}`      | MCPRead    | Fetch a single Published item by URI                          |
-| `tools/call create_{type}`  | MCPWrite   | Create a Draft item; returns the saved item as JSON           |
-| `tools/call update_{type}`  | MCPWrite   | Partially update fields by slug; non-supplied fields retained |
-| `tools/call publish_{type}` | MCPWrite   | Transition Draft → Published; idempotent                      |
-| `tools/call schedule_{type}`| MCPWrite   | Set Scheduled status and `scheduled_at` (RFC 3339)            |
-| `tools/call archive_{type}` | MCPWrite   | Set Archived status                                           |
-| `tools/call delete_{type}`  | MCPWrite   | Permanently delete an item                                    |
+| MCP method                  | Requires   | Role required | What it does                                                  |
+|-----------------------------|------------|---------------|---------------------------------------------------------------|
+| `resources/list`            | MCPRead    | any           | List all Published items across all MCPRead modules           |
+| `resources/templates/list`  | MCPRead    | any           | Return the URI template for each MCPRead module               |
+| `resources/read {uri}`      | MCPRead    | any           | Fetch a single Published item by URI                          |
+| `tools/call create_{type}`  | MCPWrite   | Author+       | Create a Draft item; returns the saved item as JSON           |
+| `tools/call update_{type}`  | MCPWrite   | Author+       | Partially update fields by slug; non-supplied fields retained |
+| `tools/call publish_{type}` | MCPWrite   | Author+       | Transition Draft → Published; idempotent                      |
+| `tools/call schedule_{type}`| MCPWrite   | Author+       | Set Scheduled status and `scheduled_at` (RFC 3339)            |
+| `tools/call archive_{type}` | MCPWrite   | Author+       | Set Archived status                                           |
+| `tools/call delete_{type}`  | MCPWrite   | Author+       | Permanently delete an item                                    |
+| `tools/call list_{type}s`   | MCPWrite   | Editor+       | List all items at any status; optional `status` filter        |
+| `tools/call get_{type}`     | MCPWrite   | Editor+       | Get a single item by slug at any status                       |
 
 **Tool naming:** type names are converted to `lower_snake_case`, with consecutive
 uppercase letters treated as one word. `BlogPost` → `blog_post`,
@@ -184,6 +186,33 @@ uppercase letters treated as one word. `BlogPost` → `blog_post`,
 **Field names in `create_*` and `update_*` arguments:** use the JSON field name
 (lowercase, respecting any `json:` tag). For `Title string` with no json tag,
 the argument key is `"title"`. For `Tags string \`json:"tags"\``, the key is `"tags"`.
+
+---
+
+## Admin read tools
+
+Each MCPWrite module also exposes two admin read tools that require **Editor or Admin** role.
+Unlike `resources/read`, these tools return content at any lifecycle status — Draft, Scheduled,
+Published, or Archived.
+
+| Tool | Arguments | Returns |
+|------|-----------|--------|
+| `list_{type}s` | `status?: "draft"\|"scheduled"\|"published"\|"archived"` | `[]T` — all items, or filtered by status |
+| `get_{type}` | `slug: string` | `T` — single item |
+
+```go
+// Example: list all posts regardless of status
+// Tool name: list_blog_posts (type BlogPost → snake blog_post + s)
+
+// Example: get a single post by slug
+// Tool name: get_blog_post
+```
+
+**Tool naming:** follows the same snake_case rule as write tools. `BlogPost` → `blog_post`,
+so the list tool is `list_blog_posts` and the get tool is `get_blog_post`.
+
+**Return value:** the full struct including all `forge.Node` fields (`Status`, `PublishedAt`,
+`ScheduledAt`, `CreatedAt`, `UpdatedAt`, `Slug`, `ID`).
 
 ---
 

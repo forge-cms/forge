@@ -395,8 +395,8 @@ func TestMCPToolsList(t *testing.T) {
 	if !ok {
 		t.Fatalf("tools field is %T, want []mcpTool", m["tools"])
 	}
-	if len(tools) != 6 {
-		t.Fatalf("got %d tools, want 6", len(tools))
+	if len(tools) != 8 {
+		t.Fatalf("got %d tools, want 8", len(tools))
 	}
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
@@ -409,6 +409,8 @@ func TestMCPToolsList(t *testing.T) {
 		"schedule_test_mcp_post",
 		"archive_test_mcp_post",
 		"delete_test_mcp_post",
+		"list_test_mcp_posts",
+		"get_test_mcp_post",
 	} {
 		if !names[want] {
 			t.Errorf("missing tool %q", want)
@@ -1172,5 +1174,184 @@ func TestInputSchema_arrayField(t *testing.T) {
 	}
 	if _, exists := tagsProp["minLength"]; exists {
 		t.Error("array field must not have minLength")
+	}
+}
+
+// — Admin read tools —————————————————————————————————————————————————————
+
+// newEditorCtx returns a forge.Context with Editor role for admin read operations.
+func newEditorCtx() forge.Context {
+	return forge.NewTestContext(forge.User{ID: "e1", Roles: []forge.Role{forge.Editor}})
+}
+
+// TestMCPAdminReadToolDefs verifies that mcpAdminReadToolDefs generates the
+// two expected tool names for a given module.
+func TestMCPAdminReadToolDefs(t *testing.T) {
+	app, _ := newWriteApp(t)
+	mods := app.MCPModules()
+	if len(mods) == 0 {
+		t.Fatal("no MCP modules")
+	}
+	defs := mcpAdminReadToolDefs(mods[0])
+	if len(defs) != 2 {
+		t.Fatalf("got %d admin read tool defs, want 2", len(defs))
+	}
+	if defs[0].Name != "list_test_mcp_posts" {
+		t.Errorf("defs[0].Name = %q, want list_test_mcp_posts", defs[0].Name)
+	}
+	if defs[1].Name != "get_test_mcp_post" {
+		t.Errorf("defs[1].Name = %q, want get_test_mcp_post", defs[1].Name)
+	}
+}
+
+// TestMCPToolsCall_list_all verifies that list_test_mcp_posts with no status
+// filter returns all seeded items across all lifecycle statuses.
+func TestMCPToolsCall_list_all(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	seedPost(t, repo, "post-draft", forge.Draft, "Draft Post", "body content here ok")
+	seedPost(t, repo, "post-pub", forge.Published, "Published Post", "body content here ok")
+	seedPost(t, repo, "post-arch", forge.Archived, "Archived Post", "body content here ok")
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_mcp_posts",
+		"arguments": map[string]any{},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	items, ok := result.([]any)
+	if !ok {
+		t.Fatalf("result is %T, want []any", result)
+	}
+	if len(items) != 3 {
+		t.Errorf("got %d items, want 3", len(items))
+	}
+}
+
+// TestMCPToolsCall_list_filtered verifies that passing status="draft" returns
+// only Draft items.
+func TestMCPToolsCall_list_filtered(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	seedPost(t, repo, "d1", forge.Draft, "Draft 1", "body content here ok")
+	seedPost(t, repo, "d2", forge.Draft, "Draft 2", "body content here ok")
+	seedPost(t, repo, "p1", forge.Published, "Published 1", "body content here ok")
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_mcp_posts",
+		"arguments": map[string]any{"status": "draft"},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	items, ok := result.([]any)
+	if !ok {
+		t.Fatalf("result is %T, want []any", result)
+	}
+	if len(items) != 2 {
+		t.Errorf("got %d items, want 2 (drafts only)", len(items))
+	}
+}
+
+// TestMCPToolsCall_get_draft verifies that get_test_mcp_post returns a Draft
+// item — admin read tools are not restricted to Published items.
+func TestMCPToolsCall_get_draft(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	seedPost(t, repo, "hidden-draft", forge.Draft, "Hidden Draft", "body content here ok")
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "get_test_mcp_post",
+		"arguments": map[string]any{"slug": "hidden-draft"},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	post, ok := result.(*testMCPPost)
+	if !ok {
+		t.Fatalf("result is %T, want *testMCPPost", result)
+	}
+	if post.Status != forge.Draft {
+		t.Errorf("status = %q, want Draft", post.Status)
+	}
+}
+
+// TestMCPToolsCall_get_not_found verifies that get_test_mcp_post returns a
+// -32001 error when the slug does not exist.
+func TestMCPToolsCall_get_not_found(t *testing.T) {
+	app, _ := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "get_test_mcp_post",
+		"arguments": map[string]any{"slug": "no-such-slug"},
+	})
+	_, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr == nil {
+		t.Fatal("expected error for missing slug, got nil")
+	}
+	if rpcErr.Code != -32001 {
+		t.Errorf("error code = %d, want -32001", rpcErr.Code)
+	}
+}
+
+// TestMCPToolsCall_admin_read_forbidden_author verifies that an Author-role
+// caller receives -32001 on admin read operations (Editor or Admin required).
+func TestMCPToolsCall_admin_read_forbidden_author(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	authorCtx := newAuthorCtx()
+
+	seedPost(t, repo, "some-post", forge.Published, "Some Post", "body content here ok")
+
+	for _, toolName := range []string{"list_test_mcp_posts", "get_test_mcp_post"} {
+		args := map[string]any{}
+		if toolName == "get_test_mcp_post" {
+			args["slug"] = "some-post"
+		}
+		params, _ := json.Marshal(map[string]any{"name": toolName, "arguments": args})
+		_, rpcErr := srv.handleToolsCall(authorCtx, params)
+		if rpcErr == nil {
+			t.Errorf("%s: expected forbidden error for Author, got nil", toolName)
+			continue
+		}
+		if rpcErr.Code != -32001 {
+			t.Errorf("%s: error code = %d, want -32001", toolName, rpcErr.Code)
+		}
+	}
+}
+
+// TestMCPToolsCall_list_empty verifies that list returns an empty slice (not
+// nil) when no items match.
+func TestMCPToolsCall_list_empty(t *testing.T) {
+	app, _ := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_mcp_posts",
+		"arguments": map[string]any{},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	items, ok := result.([]any)
+	if !ok {
+		t.Fatalf("result is %T, want []any", result)
+	}
+	if len(items) != 0 {
+		t.Errorf("got %d items, want 0", len(items))
 	}
 }

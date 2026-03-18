@@ -7,6 +7,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.2] — 2026-03-18
+
+Admin read tools for MCPWrite modules.
+
+### Added
+
+- `mcp.go`: `mcpAdminReadToolDefs` generates two tools per MCPWrite module:
+  `list_{type}s` (all items, optional `status` filter) and `get_{type}`
+  (single item by slug); both tools return items at any lifecycle status
+- `tool.go`: `authoriseEditor` role check (Editor or Admin); `moduleForAdminList`
+  resolves the plural typeSnake used by `list_{type}s` tool names; `list` and
+  `get` cases in `handleToolsCall`; `handleToolsList` updated to include admin
+  read tools alongside write tools
+
+---
+
 ## [1.0.1] — 2026-03-17
 
 `inputSchema` and `inputSchemaUpdate` now emit the correct JSON Schema for
