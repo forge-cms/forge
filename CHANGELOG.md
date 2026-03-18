@@ -23,6 +23,22 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.3] — 2026-03-18
+
+`negotiate()` now returns `text/html` when `Accept` is absent or `*/*` and
+the module has templates configured, ensuring crawlers see HTML with structured
+data in `<head>` (Amendment A53).
+
+### Fixed
+
+- `module.go`: `negotiate()` now returns `text/html` when `Accept` is
+  absent or `*/*` and the module has templates configured; previously
+  returned `application/json` unconditionally for these cases, causing
+  Google Search Console and other crawlers to receive JSON instead of
+  HTML and never see structured data in `<head>` (Amendment A53)
+
+---
+
 ## [1.1.2] — 2026-03-17
 
 `[]string` fields in content types are now correctly typed as `"array"` in

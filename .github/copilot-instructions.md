@@ -27,6 +27,11 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
 - godoc comments on every exported symbol
 - A fix or improvement that changes a file **other than** the current step's file
   is an **Amendment**, not a fix. Stop, draft the Amendment, get approval, then implement.
+- Every Amendment commit — not just milestone steps — must include an explicit check
+  of `ARCHITECTURE.md`. If the amendment adds, removes, or changes any exported symbol,
+  interface, file, or behaviour, `ARCHITECTURE.md` must be updated in the same commit.
+  Never update `ARCHITECTURE.md` from a plan or backlog description — only from
+  verified, running code.
 - A step that is deferred or descoped must be documented in `Milestone{N}_BACKLOG.md`
   immediately with the reason and the target milestone. Never silently skip.
 

@@ -417,6 +417,35 @@ func TestModuleContentNegotiationHTML(t *testing.T) {
 	}
 }
 
+// TestModuleContentNegotiationWildcard verifies that Accept: */* and empty
+// Accept return text/html when templates are configured, and application/json
+// when they are not (Amendment A53).
+func TestModuleContentNegotiationWildcard(t *testing.T) {
+	cases := []struct {
+		name   string
+		accept string
+		html   bool
+		want   string
+	}{
+		{"empty Accept + html=true", "", true, "text/html"},
+		{"wildcard Accept + html=true", "*/*", true, "text/html"},
+		{"empty Accept + html=false", "", false, "application/json"},
+		{"wildcard Accept + html=false", "*/*", false, "application/json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := contentNegotiator{html: tc.html}
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tc.accept != "" {
+				r.Header.Set("Accept", tc.accept)
+			}
+			if got := n.negotiate(r); got != tc.want {
+				t.Errorf("negotiate() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // — Cache tests ———————————————————————————————————————————————————————————
 
 func TestModuleCacheMISS(t *testing.T) {

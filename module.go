@@ -50,9 +50,21 @@ type contentNegotiator struct {
 // When an Accept header requests a format the module cannot produce, the
 // negotiator falls through to the next candidate rather than returning a
 // type that will unconditionally 406.
+//
+// When Accept is absent or "*/*", the server returns its most useful
+// representation: HTML for modules with templates, JSON otherwise.
+// This matches RFC 9110 — "*/*" means anything acceptable, so the server
+// picks its preferred format. Ensures crawlers that omit Accept receive HTML
+// and see structured data in <head> (Amendment A53).
 func (n contentNegotiator) negotiate(r *http.Request) string {
 	a := r.Header.Get("Accept")
-	if a == "" || a == "*/*" || strings.Contains(a, "application/json") {
+	if a == "" || a == "*/*" {
+		if n.html {
+			return "text/html"
+		}
+		return "application/json"
+	}
+	if strings.Contains(a, "application/json") {
 		return "application/json"
 	}
 	if n.html && strings.Contains(a, "text/html") {

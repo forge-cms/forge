@@ -50,6 +50,9 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-16 | Milestone 10 Step 2: `forge-mcp/resource.go` — read path: `handleResourceMethod`, `handleResourcesList`, `handleResourcesTemplatesList`, `handleResourcesRead`, `parseResourceURI`; `mcpResource`/`resourceContent`/`resourceTemplate` wire types; Published-only lifecycle enforcement. `handle` default case delegates to `handleResourceMethod`. |
 | 2026-03-17 | Milestone 10 Step 3: `forge-mcp/tool.go` — write path: `handleToolMethod`, `handleToolsList`, `handleToolsCall` dispatcher (create/update/publish/schedule/archive/delete); `toolName`, `parseToolName`, `moduleForType`, `authorise`, `errorFor`, `stringArg` helpers; Author-level role enforcement; Flag H idempotency on publish; Flag F delete response `{"deleted":true,"slug":...}`; godoc NOTE on zero-value limitation (Flag G). `handle` default case now delegates to `handleToolMethod` before `handleResourceMethod`. |
 | 2026-03-16 | Milestone 10 Step 4: `forge-mcp/transport.go` + Amendment A50 — `ServeStdio(ctx, in, out)` with goroutine-based scanner and 1 MiB `bufio.Scanner` buffer limit; `Handler()` returning ServeMux with `GET /mcp` (SSE keepalive) and `POST /mcp/message` (HTTP 401 auth boundary + `MaxBytesReader` 1 MiB body limit + JSON-RPC response); A50 additions: `forge.VerifyBearerToken(r, secret)` in `auth.go`; `App.Secret()` accessor in `forge.go`; `forge.NewContextWithUser(user)` production-safe background context constructor in `context.go`; `Server.secret []byte` + `New(app, opts...)` auto-inherit + `WithSecret` option + mismatch `log.Printf` warning in `forge-mcp/mcp.go`. 10 transport tests + 3 `TestVerifyBearerToken` sub-tests added. |
+| 2026-03-17 | Amendment A51 (`templates.go`): `forgeHeadTmpl` now emits `twitter:card = summary_large_image` when `Head.Type` is `"Article"` or `"Product"`, regardless of whether `Head.Image.URL` is set; `Head.Social.Twitter.Card` explicit override takes priority. Five new sub-tests in `TestTemplates_twitterCard`. Shipped in v1.1.1. |
+| 2026-03-17 | Amendment A52 (`module.go`): `mcpGoTypeStr` returns `"array"` for `reflect.Slice` kinds; new `coerceSliceFields` helper splits comma-separated string values for `[]string` fields before `MCPCreate`/`MCPUpdate` round-trip. (`forge-mcp/mcp.go`): `inputSchema` and `inputSchemaUpdate` emit `{"type":"array","items":{"type":"string"}}` for array fields and suppress `minLength`/`maxLength`/`enum` constraints. Shipped in forge v1.1.2 / forge-mcp v1.0.1. |
+| 2026-03-18 | Amendment A53 (`module.go`): `negotiate()` now returns `"text/html"` when `Accept` is absent or `"*/*"` and the module has templates configured; previously returned `"application/json"` unconditionally, causing crawlers to receive JSON and miss structured data in `<head>`. API-only modules (no templates) are unaffected. Shipped in v1.1.3. |
 
 ---
 
@@ -64,7 +67,9 @@ github.com/forge-cms/forge/
 │
 ├── errors.go         Error interface, sentinel errors, WriteError(), ValidationError
 ├── roles.go          Role type, hierarchy, HasRole(), IsRole(), built-in constants, Option interface
-├── mcp.go            MCP() no-op option (v1), MCPRead/MCPWrite constants
+├── mcp.go            MCPOperation type, MCPRead/MCPWrite constants, MCP() option,
+│                     MCPMeta struct, MCPField struct, MCPModule interface
+│                     (Amendment A49)
 ├── node.go           Node, Status, lifecycle constants, NewID(), GenerateSlug(), UniqueSlug(), ValidateStruct()
 │                     GetSlug(), GetPublishedAt(), GetStatus() getter methods (Amendment A2)
 ├── context.go        Context interface, contextImpl, ContextFrom(), NewTestContext(), User, GuestUser,
@@ -264,11 +269,12 @@ HTTP Request
                  │
     ▼
 ┌─────────────────────────────────┐
-│  Content negotiation            │  application/json → JSON (default)
-│                                 │  text/html       → 406 until Milestone 3
-│                                 │  text/markdown   → Markdown() or 406
+│  Content negotiation            │  application/json → JSON (default for API-only modules)
+│                                 │  text/html       → HTML when templates configured
+│                                 │  text/markdown   → Markdown() or JSON fallback
 │                                 │  text/plain      → stripped text
 │                                 │  Vary: Accept always set
+│                                 │  Empty/"*/*" Accept: HTML preferred when n.html (A53)
 └────────────────┬────────────────┘
                  │
     ▼
