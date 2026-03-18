@@ -240,7 +240,7 @@ func (s *Server) handleToolsCall(ctx forge.Context, params json.RawMessage) (any
 		if items == nil {
 			items = []any{}
 		}
-		return items, nil
+		return map[string]any{"items": items}, nil
 
 	case "get":
 		gm, ok := s.moduleForType(typeSnake)

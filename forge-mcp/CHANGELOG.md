@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.3] — 2026-03-18
+
+Fix `list_{type}s` response format: wrap slice in `{"items": [...]}` object.
+
+### Fixed
+
+- `tool.go`: `list` case in `handleToolsCall` now returns
+  `map[string]any{"items": items}` instead of a raw `[]any`; a bare JSON
+  array result caused MCP protocol validation errors in clients that
+  interpret array-valued tool results as batch responses
+
+---
+
 ## [1.0.2] — 2026-03-18
 
 Admin read tools for MCPWrite modules.

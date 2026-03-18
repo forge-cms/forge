@@ -1223,10 +1223,11 @@ func TestMCPToolsCall_list_all(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	items, ok := result.([]any)
+	got, ok := result.(map[string]any)
 	if !ok {
-		t.Fatalf("result is %T, want []any", result)
+		t.Fatalf("result is %T, want map[string]any", result)
 	}
+	items, _ := got["items"].([]any)
 	if len(items) != 3 {
 		t.Errorf("got %d items, want 3", len(items))
 	}
@@ -1251,10 +1252,11 @@ func TestMCPToolsCall_list_filtered(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	items, ok := result.([]any)
+	got, ok := result.(map[string]any)
 	if !ok {
-		t.Fatalf("result is %T, want []any", result)
+		t.Fatalf("result is %T, want map[string]any", result)
 	}
+	items, _ := got["items"].([]any)
 	if len(items) != 2 {
 		t.Errorf("got %d items, want 2 (drafts only)", len(items))
 	}
@@ -1347,10 +1349,11 @@ func TestMCPToolsCall_list_empty(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %+v", rpcErr)
 	}
-	items, ok := result.([]any)
+	got, ok := result.(map[string]any)
 	if !ok {
-		t.Fatalf("result is %T, want []any", result)
+		t.Fatalf("result is %T, want map[string]any", result)
 	}
+	items, _ := got["items"].([]any)
 	if len(items) != 0 {
 		t.Errorf("got %d items, want 0", len(items))
 	}
