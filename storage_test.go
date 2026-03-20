@@ -488,6 +488,13 @@ type PageContent struct {
 	ID string `db:"id"`
 }
 
+// OrderedItem uses the SQLite reserved keyword "order" as a column name to
+// verify that quoteIdent is applied to all generated SQL identifiers.
+type OrderedItem struct {
+	ID    string `db:"id"`
+	Order int    `db:"order"`
+}
+
 // ---------------------------------------------------------------------------
 // SQLRepo[T] tests
 // ---------------------------------------------------------------------------
@@ -524,7 +531,7 @@ func TestSQLRepo_FindByID_query(t *testing.T) {
 	if item.ID != "1" || item.Title != "Hello" {
 		t.Errorf("unexpected item: %+v", item)
 	}
-	want := "SELECT * FROM blog_posts WHERE id = $1"
+	want := `SELECT * FROM blog_posts WHERE "id" = $1`
 	if q := getLastQuery(); q != want {
 		t.Errorf("query = %q, want %q", q, want)
 	}
@@ -541,7 +548,7 @@ func TestSQLRepo_FindBySlug_query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindBySlug: %v", err)
 	}
-	want := "SELECT * FROM blog_posts WHERE slug = $1"
+	want := `SELECT * FROM blog_posts WHERE "slug" = $1`
 	if q := getLastQuery(); q != want {
 		t.Errorf("query = %q, want %q", q, want)
 	}
@@ -555,7 +562,7 @@ func TestSQLRepo_Save_insert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	want := "INSERT INTO blog_posts (id, title) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title"
+	want := `INSERT INTO blog_posts ("id", "title") VALUES ($1, $2) ON CONFLICT ("id") DO UPDATE SET "title"=EXCLUDED."title"`
 	if q := getLastQuery(); q != want {
 		t.Errorf("query = %q, want %q", q, want)
 	}
@@ -569,7 +576,7 @@ func TestSQLRepo_Delete_query(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	want := "DELETE FROM blog_posts WHERE id = $1"
+	want := `DELETE FROM blog_posts WHERE "id" = $1`
 	if q := getLastQuery(); q != want {
 		t.Errorf("query = %q, want %q", q, want)
 	}
@@ -613,8 +620,25 @@ func TestSQLRepo_FindAll_statusFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindAll: %v", err)
 	}
-	want := "SELECT * FROM blog_posts WHERE status IN ($1)"
+	want := `SELECT * FROM blog_posts WHERE "status" IN ($1)`
 	if q := getLastQuery(); q != want {
 		t.Errorf("query = %q, want %q", q, want)
+	}
+}
+
+// TestSQLRepo_ReservedKeyword_quotes verifies that column names that collide
+// with SQL reserved keywords (e.g. "order") are double-quoted in every
+// generated SQL statement, preventing syntax errors at runtime.
+func TestSQLRepo_ReservedKeyword_quotes(t *testing.T) {
+	db := newTestDB(t)
+	setFakeExecRows(1)
+	r := NewSQLRepo[OrderedItem](db)
+	err := r.Save(context.Background(), OrderedItem{ID: "1", Order: 5})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := `INSERT INTO ordered_items ("id", "order") VALUES ($1, $2) ON CONFLICT ("id") DO UPDATE SET "order"=EXCLUDED."order"`
+	if q := getLastQuery(); q != want {
+		t.Errorf("Save query = %q, want %q", q, want)
 	}
 }

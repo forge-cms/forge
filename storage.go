@@ -416,6 +416,11 @@ func sortItems[T any](items []T, field string, desc bool) {
 // SQLRepo[T] — production Repository[T] backed by forge.DB
 // ---------------------------------------------------------------------------
 
+// quoteIdent wraps a SQL identifier in double quotes, making it safe to use
+// reserved keywords (e.g. "order", "group") as column names. ANSI SQL
+// double-quoting is supported by both SQLite and PostgreSQL.
+func quoteIdent(name string) string { return `"` + name + `"` }
+
 // SQLRepoOption configures a [SQLRepo]. Obtain values via [Table].
 type SQLRepoOption interface{ isSQLRepoOption() }
 
@@ -511,13 +516,13 @@ func (r *SQLRepo[T]) columnForField(goName string) (string, bool) {
 // FindByID returns the item with the given id, or [ErrNotFound].
 func (r *SQLRepo[T]) FindByID(ctx context.Context, id string) (T, error) {
 	return QueryOne[T](ctx, r.db,
-		"SELECT * FROM "+r.table+" WHERE id = $1", id)
+		"SELECT * FROM "+r.table+" WHERE "+quoteIdent("id")+" = $1", id)
 }
 
 // FindBySlug returns the item with the given slug, or [ErrNotFound].
 func (r *SQLRepo[T]) FindBySlug(ctx context.Context, slug string) (T, error) {
 	return QueryOne[T](ctx, r.db,
-		"SELECT * FROM "+r.table+" WHERE slug = $1", slug)
+		"SELECT * FROM "+r.table+" WHERE "+quoteIdent("slug")+" = $1", slug)
 }
 
 // FindAll returns items matching opts. Status filter, ordering, and
@@ -534,12 +539,12 @@ func (r *SQLRepo[T]) FindAll(ctx context.Context, opts ListOptions) ([]T, error)
 			args = append(args, string(s))
 			n++
 		}
-		query += " WHERE status IN (" + strings.Join(placeholders, ", ") + ")"
+		query += " WHERE " + quoteIdent("status") + " IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
 	if opts.OrderBy != "" {
 		if col, ok := r.columnForField(opts.OrderBy); ok {
-			query += " ORDER BY " + col
+			query += " ORDER BY " + quoteIdent(col)
 			if opts.Desc {
 				query += " DESC"
 			}
@@ -588,19 +593,20 @@ func (r *SQLRepo[T]) Save(ctx context.Context, item T) error {
 	setParts := make([]string, 0, len(fields))
 
 	for i, f := range fields {
-		cols[i] = f.name
+		cols[i] = quoteIdent(f.name)
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 		vals[i] = rv.FieldByIndex(f.index).Interface()
 		if f.name != "id" {
-			setParts = append(setParts, f.name+"=EXCLUDED."+f.name)
+			setParts = append(setParts, quoteIdent(f.name)+"=EXCLUDED."+quoteIdent(f.name))
 		}
 	}
 
 	query := fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (id) DO UPDATE SET %s",
+		"INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s",
 		r.table,
 		strings.Join(cols, ", "),
 		strings.Join(placeholders, ", "),
+		quoteIdent("id"),
 		strings.Join(setParts, ", "),
 	)
 	_, err := r.db.ExecContext(ctx, query, vals...)
@@ -611,7 +617,7 @@ func (r *SQLRepo[T]) Save(ctx context.Context, item T) error {
 // was deleted.
 func (r *SQLRepo[T]) Delete(ctx context.Context, id string) error {
 	result, err := r.db.ExecContext(ctx,
-		"DELETE FROM "+r.table+" WHERE id = $1", id)
+		"DELETE FROM "+r.table+" WHERE "+quoteIdent("id")+" = $1", id)
 	if err != nil {
 		return err
 	}

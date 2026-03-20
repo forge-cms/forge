@@ -75,6 +75,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A52 | `module.go`/`forge-mcp/mcp.go`: `[]string` fields typed as `"array"` in `MCPSchema`/`inputSchema`; comma-string coercion in `MCPCreate`/`MCPUpdate` | Agreed | 2026-03-17 |
 | A53 | `module.go`: `negotiate()` prefers `text/html` over `application/json` when `Accept` is absent or `*/*` and templates are configured | Agreed | 2026-03-18 |
 | A56 | `head.go`: `AbsURL(base, path string) string` helper for building absolute URLs in `Head()` implementations | Agreed | 2026-03-20 |
+| A57 | `storage.go`: `quoteIdent()` helper — double-quote all generated SQL identifiers to handle reserved keywords | Agreed | 2026-03-20 |
 
 ---
 
@@ -3404,3 +3405,41 @@ integration (automatic BaseURL prepend) is deferred to A57.
 3. No breaking change. No exported API removed or modified. `strings` is already
    imported in `head.go` — no new imports.
 4. Shipped as patch v1.1.4 — no breaking change.
+
+## Amendment A57 — `storage.go`: `quoteIdent()` — double-quote all generated SQL identifiers
+
+**Status:** Agreed
+**Date:** 2026-03-20
+**Scope:** `storage.go` (`quoteIdent` helper, `SQLRepo.FindByID`, `FindBySlug`, `FindAll`, `Save`, `Delete`), `storage_test.go` (updated expected queries, new `TestSQLRepo_ReservedKeyword_quotes`)
+
+**Problem:**
+`SQLRepo` generated unquoted column names in all SQL statements. SQLite and
+PostgreSQL treat unquoted identifiers as case-insensitive bare tokens; any
+identifier that collides with a SQL reserved keyword (`order`, `group`, `index`,
+`check`, `references`, etc.) causes a syntax error or silent misbehaviour at
+runtime. A content type with `Order int \`db:"order"\`` would panic under SQLite
+and raise a syntax error under PostgreSQL with no indication of the root cause.
+
+**Decision:**
+Add `quoteIdent(name string) string` immediately before the `SQLRepoOption`
+type declaration in `storage.go`. Apply it to every generated column reference:
+
+- `Save`: `cols[i]`, `setParts` entries (`col=EXCLUDED.col`), and the `ON CONFLICT (id)` key
+- `FindAll`: the `WHERE "status" IN (...)` column and the `ORDER BY "col"` column
+- `FindByID`: the `WHERE "id" = $1` predicate
+- `FindBySlug`: the `WHERE "slug" = $1` predicate
+- `Delete`: the `WHERE "id" = $1` predicate
+
+ANSI SQL double-quoting is the correct mechanism for identifier quoting and is
+supported by both SQLite (≥ 3.x) and PostgreSQL.
+
+**Consequences:**
+
+1. Reserved keywords (`order`, `group`, `index`, `references`, etc.) work as
+   `db` tag values without any workaround.
+2. No breaking change — quoting a valid identifier is semantically identical to
+   the unquoted form. Existing schemas and queries are unaffected.
+3. Existing unit tests updated to assert the now-quoted query strings.
+   New `TestSQLRepo_ReservedKeyword_quotes` asserts the `"order"` column is
+   quoted in the generated `INSERT … ON CONFLICT … DO UPDATE SET` statement.
+4. Shipped as patch v1.1.5 — no breaking change.

@@ -23,6 +23,21 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.5] — 2026-03-20
+
+`SQLRepo` now double-quotes all generated SQL identifiers, fixing runtime SQL
+syntax errors when `db` tag values collide with reserved keywords such as
+`order`, `group`, or `index` (Amendment A57).
+
+### Fixed
+
+- `storage.go`: `quoteIdent()` helper added; applied to every generated column
+  reference in `SQLRepo.Save`, `FindAll`, `FindByID`, `FindBySlug`, and
+  `Delete`; previously unquoted identifiers caused SQL syntax errors when a
+  `db` struct tag used a reserved keyword (e.g. `db:"order"`) (Amendment A57)
+
+---
+
 ## [1.1.4] — 2026-03-20
 
 Add `forge.AbsURL(base, path string) string` helper for building absolute URLs

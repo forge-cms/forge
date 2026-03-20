@@ -55,6 +55,7 @@ Read DECISIONS.md first. This document explains *how* — DECISIONS.md explains 
 | 2026-03-18 | Amendment A53 (`module.go`): `negotiate()` now returns `"text/html"` when `Accept` is absent or `"*/*"` and the module has templates configured; previously returned `"application/json"` unconditionally, causing crawlers to receive JSON and miss structured data in `<head>`. API-only modules (no templates) are unaffected. Shipped in v1.1.3. |
 | 2026-03-18 | Amendment A54 (`forge-mcp/mcp.go`, `forge-mcp/tool.go`): admin read tools added to every MCPWrite module — `mcpAdminReadToolDefs` generates `list_{type}s` and `get_{type}` tools; `authoriseEditor` enforces Editor or Admin role; `moduleForAdminList` resolves the plural typeSnake for list tool dispatch; `handleToolsList` and `handleToolsCall` wired. Shipped in forge-mcp v1.0.2. |
 | 2026-03-18 | Amendment A55 (`forge-mcp/mcp.go`, `forge-mcp/tool.go`): `delete_{type}` moved from Author-level `mcpToolDefs` to Editor-level `mcpAdminReadToolDefs`; `mcpAdminReadToolDefs` now generates 3 tools per MCPWrite module (list, get, delete); `delete` dispatch case calls `authoriseEditor` before executing. Shipped in forge-mcp v1.0.5. |
+| 2026-03-20 | Amendment A57 (`storage.go`): `quoteIdent()` helper added; applied to every generated column reference in `SQLRepo.Save`, `FindAll`, `FindByID`, `FindBySlug`, and `Delete`; prevents SQL syntax errors when `db` struct tags use reserved keywords (e.g. `db:"order"`). Shipped in v1.1.5. |
 
 ---
 
