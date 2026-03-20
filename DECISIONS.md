@@ -76,6 +76,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A53 | `module.go`: `negotiate()` prefers `text/html` over `application/json` when `Accept` is absent or `*/*` and templates are configured | Agreed | 2026-03-18 |
 | A56 | `head.go`: `AbsURL(base, path string) string` helper for building absolute URLs in `Head()` implementations | Agreed | 2026-03-20 |
 | A57 | `storage.go`: `quoteIdent()` helper — double-quote all generated SQL identifiers to handle reserved keywords | Agreed | 2026-03-20 |
+| A58 | `forge.go`: `forgeVersions()` — read `runtime/debug.ReadBuildInfo()` for `/_health` and startup log; remove `"version"` key from `Health()` response | Agreed | 2026-03-20 |
 
 ---
 
@@ -3443,3 +3444,70 @@ supported by both SQLite (≥ 3.x) and PostgreSQL.
    New `TestSQLRepo_ReservedKeyword_quotes` asserts the `"order"` column is
    quoted in the generated `INSERT … ON CONFLICT … DO UPDATE SET` statement.
 4. Shipped as patch v1.1.5 — no breaking change.
+
+---
+
+## Amendment A58 — `forge.go`: `forgeVersions()` — framework version reporting in `/_health` and startup log
+
+**Status:** Agreed
+**Date:** 2026-03-20
+**Scope:** `forge.go` (`forgeVersions()`, `App.Health()`, `App.Run()`), `forge_test.go` (updated health tests, new `TestApp_health_forgeVersion`, `TestApp_health_configVersion_notExposed`)
+
+**Problem:**
+The `/_health` endpoint reported an application-supplied `Config.Version` string
+that the framework had no knowledge of, placing operational responsibility for
+version management on every application author. There was no way for observability
+tooling, monitoring dashboards, or support engineers to discover which version of
+Forge (or its companion modules) was actually running inside a binary.
+
+**Decision:**
+Add `forgeVersions() map[string]string` to `forge.go`. It calls
+`runtime/debug.ReadBuildInfo()` (available since Go 1.12) to discover the
+versions of all modules whose path begins with `github.com/forge-cms/forge`:
+
+- `github.com/forge-cms/forge` → key `"forge"`
+- Sub-modules (e.g. `github.com/forge-cms/forge/forge-mcp`) → key derived from
+  the sub-path with hyphens replaced by underscores (`"forge_mcp"`)
+
+The leading `"v"` is stripped from version strings so the JSON values are clean
+(e.g. `"1.1.6"` not `"v1.1.6"`). Both `info.Main` and `info.Deps` are scanned
+so the function works whether forge is the main module (dev/test binaries, where
+the version is `"(devel)"`) or a versioned dependency.
+
+`App.Health()` calls `forgeVersions()` once at mount time and closes over the
+result. The `"version"` key (previously driven by `Config.Version`) is removed;
+the new keys are `"forge"` and any detected companion modules:
+
+```json
+{"status":"ok","forge":"1.1.6","forge_mcp":"1.0.5"}
+```
+
+`App.Run()` calls `forgeVersions()` once before starting `ListenAndServe` and
+emits a startup log line to stderr:
+
+```
+forge: forge (devel)        // development build
+forge: forge 1.1.6, forge_mcp 1.0.5  // production build
+```
+
+`Config.Version` is retained in the `Config` struct — its godoc is updated to
+clarify it is for application use only and is no longer consumed by `Health()`.
+
+**Consequences:**
+
+1. Observability tooling and health-check consumers can now discover the exact
+   Forge version from the health endpoint without any application configuration.
+2. The `"version"` key is removed from the `/_health` response — callers that
+   relied on it must read `Config.Version` themselves and add it to a custom
+   response if needed. This is a **breaking change to the Health() JSON shape**;
+   however, because `Config.Version` was seldom set in practice and the new
+   behaviour is strictly more informative, this is shipped as a patch (v1.1.6)
+   rather than a minor version bump.
+3. In development builds (go test, local go run), the version will be `"(devel)"`
+   — this is the correct representation from `runtime/debug` and is intentional.
+4. `TestApp_health_ok` and `TestApp_health_version` updated; new tests
+   `TestApp_health_forgeVersion` and `TestApp_health_configVersion_notExposed`
+   added.
+5. No new exported symbols. No changes to any interface. No dependency added;
+   `runtime/debug` is part of the Go standard library.
+6. Shipped as patch v1.1.6.

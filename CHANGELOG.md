@@ -23,6 +23,29 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.6] — 2026-03-20
+
+`/_health` now reports framework versions sourced from the binary's embedded
+build info; the application-supplied `"version"` key is removed (Amendment A58).
+`App.Run()` emits a startup log line with the same version data before
+`ListenAndServe`.
+
+### Changed
+
+- `forge.go`: `App.Health()` response no longer includes the `"version"` key
+  driven by `Config.Version`; instead, `forgeVersions()` reads
+  `runtime/debug.ReadBuildInfo()` at mount time and injects `"forge"` (and
+  any companion-module keys such as `"forge_mcp"`) into the JSON — e.g.
+  `{"status":"ok","forge":"1.1.6","forge_mcp":"1.0.5"}` (Amendment A58)
+- `forge.go`: `App.Run()` calls `forgeVersions()` before starting
+  `ListenAndServe` and emits a startup line to stderr, e.g.
+  `forge: forge 1.1.6, forge_mcp 1.0.5` (Amendment A58)
+- `forge.go`: `Config.Version` godoc updated — the field is retained for
+  application authors but is no longer consumed by any built-in Forge endpoint
+  (Amendment A58)
+
+---
+
 ## [1.1.5] — 2026-03-20
 
 `SQLRepo` now double-quotes all generated SQL identifiers, fixing runtime SQL

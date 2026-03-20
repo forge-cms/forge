@@ -423,11 +423,12 @@ func TestApp_RedirectStore(t *testing.T) {
 }
 
 // ——————————————————————————————————————————————————————————————
-// Health endpoint (Amendment A42)
+// Health endpoint (Amendments A42, A58)
 // ——————————————————————————————————————————————————————————————
 
 // TestApp_health_ok verifies that GET /_health returns 200 application/json
-// {"status":"ok"} when Config.Version is empty.
+// with a body containing "status":"ok" (A42) and a "forge" version key
+// sourced from build info (A58).
 func TestApp_health_ok(t *testing.T) {
 	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
 	app.Health()
@@ -442,14 +443,34 @@ func TestApp_health_ok(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("Content-Type: got %q, want %q", ct, "application/json")
 	}
-	if body := w.Body.String(); body != `{"status":"ok"}` {
-		t.Fatalf("body: got %q, want %q", body, `{"status":"ok"}`)
+	body := w.Body.String()
+	if !strings.Contains(body, `"status":"ok"`) {
+		t.Fatalf("body missing status:ok, got %q", body)
 	}
 }
 
-// TestApp_health_version verifies that GET /_health includes the version field
-// when Config.Version is set.
-func TestApp_health_version(t *testing.T) {
+// TestApp_health_forgeVersion verifies that GET /_health includes the
+// "forge" key populated from binary build info (Amendment A58).
+func TestApp_health_forgeVersion(t *testing.T) {
+	app := New(Config{BaseURL: "https://example.com", Secret: []byte("supersecretkey16")})
+	app.Health()
+
+	req := httptest.NewRequest("GET", "/_health", nil)
+	w := httptest.NewRecorder()
+	app.Handler().ServeHTTP(w, req)
+
+	body := w.Body.String()
+	// In test binaries forge is the main module; build info is always present.
+	// The version may be "(devel)" in local builds but the key must exist.
+	if !strings.Contains(body, `"forge":`) {
+		t.Fatalf("body missing forge version key, got %q", body)
+	}
+}
+
+// TestApp_health_configVersion_notExposed verifies that Config.Version is NOT
+// included in the /_health JSON response (Amendment A58: app-level versioning
+// is no longer forge core's responsibility).
+func TestApp_health_configVersion_notExposed(t *testing.T) {
 	app := New(Config{
 		BaseURL: "https://example.com",
 		Secret:  []byte("supersecretkey16"),
@@ -465,9 +486,8 @@ func TestApp_health_version(t *testing.T) {
 		t.Fatalf("got status %d, want 200", w.Code)
 	}
 	body := w.Body.String()
-	want := `{"status":"ok","version":"1.2.3"}`
-	if body != want {
-		t.Fatalf("body: got %q, want %q", body, want)
+	if strings.Contains(body, `"version"`) {
+		t.Fatalf("expected no version key in health response, got: %s", body)
 	}
 }
 

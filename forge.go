@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -54,8 +57,9 @@ type Config struct {
 	//	)
 	Auth AuthFunc
 
-	// Version is the application version string. When non-empty, it is included
-	// in the GET /_health response.
+	// Version is the application version string. It is an optional field for
+	// application authors who want to track their own release version; forge
+	// itself does not use this field in any built-in endpoint.
 	Version string
 
 	// DB is the database connection used by content modules.
@@ -482,28 +486,79 @@ func (a *App) RedirectManifestAuth(auth AuthFunc) {
 	a.redirectManifestOpts = append(a.redirectManifestOpts, ManifestAuth(auth))
 }
 
+// forgeVersions reads the binary's embedded build info and returns a map of
+// short module name → version for all Forge core and companion modules
+// (github.com/forge-cms/forge and its sub-modules). The base module maps to
+// the key "forge"; sub-modules use their sub-path with hyphens replaced by
+// underscores (e.g. github.com/forge-cms/forge/forge-mcp → "forge_mcp").
+// The leading "v" is stripped from version strings ("v1.1.5" → "1.1.5").
+// Returns nil when build info is unavailable or no forge modules are found.
+func forgeVersions() map[string]string {
+	const base = "github.com/forge-cms/forge"
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return nil
+	}
+	result := make(map[string]string)
+	add := func(path, version string) {
+		if !strings.HasPrefix(path, base) || version == "" {
+			return
+		}
+		v := strings.TrimPrefix(version, "v")
+		sub := strings.TrimPrefix(path, base)
+		if sub == "" {
+			result["forge"] = v
+		} else {
+			key := strings.ReplaceAll(strings.TrimPrefix(sub, "/"), "-", "_")
+			result[key] = v
+		}
+	}
+	add(info.Main.Path, info.Main.Version)
+	for _, dep := range info.Deps {
+		add(dep.Path, dep.Version)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 // Health mounts GET /_health on the App's mux.
 //
 // The endpoint always returns HTTP 200 with Content-Type application/json.
-// The response body is {"status":"ok"} when Config.Version is empty, or
-// {"status":"ok","version":"X.Y.Z"} when Config.Version is set.
+// Framework versions are read from the binary's embedded build info and
+// included in the response. The forge core version uses the key "forge";
+// companion modules use a key derived from their sub-path (e.g. "forge_mcp").
+// When build info is unavailable, only {"status":"ok"} is returned.
 //
 // Call Health before [App.Handler] or [App.Run]:
 //
 //	app.Health()
-//	if err := app.Run(":8080"); err != nil {
-//	    log.Fatal(err)
-//	}
+//	// GET /_health → {"status":"ok","forge":"1.1.6","forge_mcp":"1.0.5"}
 func (a *App) Health() {
-	version := a.cfg.Version
+	versions := forgeVersions()
+	// Pre-sort companion module keys for deterministic JSON output.
+	var companions []string
+	for k := range versions {
+		if k != "forge" {
+			companions = append(companions, k)
+		}
+	}
+	sort.Strings(companions)
+
 	a.mux.Handle("GET /_health", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		if version != "" {
-			fmt.Fprintf(w, `{"status":"ok","version":%q}`, version)
-			return
+		var b strings.Builder
+		b.WriteString(`{"status":"ok"`)
+		if v, ok := versions["forge"]; ok {
+			fmt.Fprintf(&b, `,"forge":%q`, v)
 		}
-		w.Write([]byte(`{"status":"ok"}`))
+		for _, k := range companions {
+			fmt.Fprintf(&b, `,%q:%q`, k, versions[k])
+		}
+		b.WriteByte('}')
+		fmt.Fprint(w, b.String())
 	}))
 }
 
@@ -524,6 +579,25 @@ func (a *App) Run(addr string) error {
 		if err := tp.parseTemplates(); err != nil {
 			return err
 		}
+	}
+
+	// Log framework versions at startup.
+	if versions := forgeVersions(); len(versions) > 0 {
+		var parts []string
+		if v, ok := versions["forge"]; ok {
+			parts = append(parts, "forge "+v)
+		}
+		companions := make([]string, 0, len(versions))
+		for k := range versions {
+			if k != "forge" {
+				companions = append(companions, k)
+			}
+		}
+		sort.Strings(companions)
+		for _, k := range companions {
+			parts = append(parts, k+" "+versions[k])
+		}
+		fmt.Fprintf(os.Stderr, "forge: %s\n", strings.Join(parts, ", "))
 	}
 
 	srv := &http.Server{
