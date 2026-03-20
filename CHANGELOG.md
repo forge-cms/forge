@@ -23,6 +23,21 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.4] — 2026-03-20
+
+Add `forge.AbsURL(base, path string) string` helper for building absolute URLs
+in `Head()` implementations (Amendment A56).
+
+### Added
+
+- `head.go`: `AbsURL(base, path string) string` — trims any trailing slash from
+  `base`, passes `path` through `URL()` for normalisation, and concatenates;
+  intended for use in `Head()` implementations when setting `Head.Canonical`,
+  `Head.Image.URL`, or any other field that requires an absolute URL
+  (Amendment A56)
+
+---
+
 ## [1.1.3] — 2026-03-18
 
 `negotiate()` now returns `text/html` when `Accept` is absent or `*/*` and

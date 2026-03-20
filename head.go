@@ -190,3 +190,25 @@ func URL(parts ...string) string {
 	}
 	return joined
 }
+
+// AbsURL joins a base URL and a path into an absolute URL.
+// It trims any trailing slash from base before joining, so both of the
+// following produce the same result:
+//
+//	forge.AbsURL("https://example.com",  "/posts/my-slug")  →  "https://example.com/posts/my-slug"
+//	forge.AbsURL("https://example.com/", "/posts/my-slug")  →  "https://example.com/posts/my-slug"
+//
+// The path argument is passed through [URL] first, so duplicate slashes are
+// collapsed and a leading slash is guaranteed.
+// Use AbsURL in Head() implementations when setting Head.Canonical, Head.Image.URL,
+// or any other field that requires an absolute URL.
+//
+//	func (p *Post) Head() forge.Head {
+//	    return forge.Head{
+//	        Canonical: forge.AbsURL(siteBaseURL, forge.URL("/posts", p.Slug)),
+//	    }
+//	}
+func AbsURL(base, path string) string {
+	base = strings.TrimRight(base, "/")
+	return base + URL(path)
+}

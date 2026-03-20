@@ -70,6 +70,31 @@ func TestURL(t *testing.T) {
 	}
 }
 
+// ——— AbsURL ————————————————————————————————————————————————————————————
+
+func TestAbsURL(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+		path string
+		want string
+	}{
+		{"trailing slash on base", "https://example.com/", "/posts/my-slug", "https://example.com/posts/my-slug"},
+		{"no trailing slash on base", "https://example.com", "/posts/my-slug", "https://example.com/posts/my-slug"},
+		{"path with duplicate slashes", "https://example.com", "/posts//slug", "https://example.com/posts/slug"},
+		{"empty path becomes root", "https://example.com", "", "https://example.com/"},
+		{"path is just slash", "https://example.com", "/", "https://example.com/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AbsURL(tt.base, tt.path)
+			if got != tt.want {
+				t.Errorf("AbsURL(%q, %q) = %q; want %q", tt.base, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 // ——— Crumbs ——————————————————————————————————————————————————————————————
 
 func TestCrumbs(t *testing.T) {

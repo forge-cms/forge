@@ -113,7 +113,7 @@ github.com/forge-cms/forge/
 └── head.go           Head (Title, Description, Author, Published, Modified, Image, Type,
                       Canonical, Tags, Breadcrumbs, Alternates, Social, NoIndex),
                       Image, Breadcrumb, Alternate, Headable, HeadFunc[T],
-                      Excerpt, URL, Crumbs, Crumb, rich-result constants,
+                      Excerpt, URL, AbsURL, Crumbs, Crumb, rich-result constants,
                       TwitterCardType (Summary/SummaryLargeImage/AppCard/PlayerCard),
                       TwitterMeta, SocialOverrides
 └── schema.go         SchemaFor, FAQProvider, HowToProvider, EventProvider,
