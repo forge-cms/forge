@@ -23,6 +23,21 @@ under Milestone 10 and the v2+ Roadmap section.
 
 ---
 
+## [1.1.7] — 2026-03-20
+
+`/_health` is now exempt from the HTTPS redirect middleware so that reverse-proxy
+health checks (e.g. Caddy `health_uri`) receive a `200` response on plain HTTP
+(Amendment A59).
+
+### Fixed
+
+- `forge.go`: `httpsRedirect()` now short-circuits to `next.ServeHTTP` for
+  `/_health` before checking TLS / `X-Forwarded-Proto`; previously a plain-HTTP
+  health check from a co-located reverse proxy received a `301` redirect instead
+  of `200`, causing the proxy to report the upstream as unhealthy (Amendment A59)
+
+---
+
 ## [1.1.6] — 2026-03-20
 
 `/_health` now reports framework versions sourced from the binary's embedded

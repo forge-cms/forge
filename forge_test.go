@@ -506,6 +506,26 @@ func TestApp_health_notMounted(t *testing.T) {
 	}
 }
 
+// TestApp_health_httpsExempt verifies that GET /_health returns 200 on a
+// plain-HTTP request even when Config.HTTPS is true (Amendment A59).
+func TestApp_health_httpsExempt(t *testing.T) {
+	app := New(Config{
+		BaseURL: "https://example.com",
+		Secret:  []byte("supersecretkey16"),
+		HTTPS:   true,
+	})
+	app.Health()
+
+	req := httptest.NewRequest("GET", "/_health", nil)
+	// No TLS, no X-Forwarded-Proto: plain HTTP.
+	w := httptest.NewRecorder()
+	app.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200 — /_health must be exempt from HTTPS redirect", w.Code)
+	}
+}
+
 // ——————————————————————————————————————————————————————————————
 // Benchmark
 // ——————————————————————————————————————————————————————————————

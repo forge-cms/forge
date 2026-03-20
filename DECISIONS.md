@@ -77,6 +77,7 @@ Revisions to existing decisions require a new entry that supersedes the original
 | A56 | `head.go`: `AbsURL(base, path string) string` helper for building absolute URLs in `Head()` implementations | Agreed | 2026-03-20 |
 | A57 | `storage.go`: `quoteIdent()` helper — double-quote all generated SQL identifiers to handle reserved keywords | Agreed | 2026-03-20 |
 | A58 | `forge.go`: `forgeVersions()` — read `runtime/debug.ReadBuildInfo()` for `/_health` and startup log; remove `"version"` key from `Health()` response | Agreed | 2026-03-20 |
+| A59 | `forge.go`: `httpsRedirect()` — exempt `/_health` from HTTPS redirect so reverse-proxy health checks receive 200 on plain HTTP | Agreed | 2026-03-20 |
 
 ---
 
@@ -3511,3 +3512,41 @@ clarify it is for application use only and is no longer consumed by `Health()`.
 5. No new exported symbols. No changes to any interface. No dependency added;
    `runtime/debug` is part of the Go standard library.
 6. Shipped as patch v1.1.6.
+
+---
+
+## Amendment A59 — `forge.go`: `httpsRedirect()` — exempt `/_health` from HTTPS redirect
+
+**Status:** Agreed
+**Date:** 2026-03-20
+**Scope:** `forge.go` (`httpsRedirect()`), `forge_test.go` (new `TestApp_health_httpsExempt`)
+
+**Problem:**
+When `Config.HTTPS` is true, the `httpsRedirect()` middleware unconditionally
+redirects all plain-HTTP requests with a 301 to their HTTPS equivalent. Reverse
+proxies that perform health checks over plain HTTP (e.g. Caddy `health_uri`,
+internal Kubernetes liveness probes) receive a 301 instead of 200, causing
+the proxy to report the upstream as unhealthy and potentially taking the site
+down.
+
+**Decision:**
+Add a path check inside `httpsRedirect()` before the TLS / `X-Forwarded-Proto`
+check: if `r.URL.Path == "/_health"`, call `next.ServeHTTP(w, r)` and return
+immediately. The check is placed first so the hot path for the health endpoint
+skips the TLS check entirely.
+
+**Consequences:**
+
+1. Reverse-proxy health checks over plain HTTP (Caddy `health_uri`, etc.) now
+   receive `200 application/json` regardless of `Config.HTTPS`.
+2. All other plain-HTTP requests are still redirected to HTTPS as before.
+3. Security note: `/_health` is exempt from HTTPS redirect but not exempt from
+   DDoS risk. The risk is considered acceptable: the endpoint performs no
+   database queries, no file I/O, and no computation — it returns a static JSON
+   response of ~50 bytes. A reverse proxy (e.g. Caddy) sits in front and
+   handles connection limiting independently of Forge. An attacker targeting
+   `/_health` gains no meaningful advantage over targeting any other public endpoint.
+4. New test `TestApp_health_httpsExempt` confirms `/_health` returns 200 on a
+   plain-HTTP request when `Config.HTTPS` is true.
+5. No exported symbols added or changed. No interfaces modified.
+6. Shipped as patch v1.1.7.

@@ -317,9 +317,17 @@ func (a *App) Secret() []byte { return a.cfg.Secret }
 //
 // The redirect is skipped when the request is already over TLS (r.TLS != nil)
 // or when the X-Forwarded-Proto header equals "https" (reverse-proxy scenario).
+//
+// GET /_health is always exempt so that reverse-proxy health checks (e.g.
+// Caddy health_uri) receive a 200 response without being redirected
+// (Amendment A59).
 func httpsRedirect() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/_health" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 				next.ServeHTTP(w, r)
 				return
