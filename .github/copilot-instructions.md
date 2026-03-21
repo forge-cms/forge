@@ -15,6 +15,26 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
    Do not implement anything not listed in the current backlog.
    Do not skip steps — the order is load-bearing (dependency layers).
 
+## Change classification
+
+Before starting any work, identify the level:
+
+**Level 0 — cosmetic** (CSS spacing, comment typos, whitespace)
+Solo commit by the user. No DECISIONS.md entry. No architect involvement.
+Criteria: no functional change, no exported symbol touched, no behaviour changed.
+
+**Level 1 — micro-amendment** (isolated change, no cross-file consequences)
+One A-entry in DECISIONS.md. No full milestone step required.
+Examples: dependency version bumps, single-file config, docs-only changes.
+
+**Level 2 — standard amendment or milestone step** (full cycle)
+Requires architect involvement, DECISIONS.md entry with both index row and body,
+ARCHITECTURE.md check, and explicit user approval before commit.
+Criteria: touches an exported Go symbol, interface, or function signature;
+affects a route or middleware behaviour; has consequences in more than one file.
+
+When in doubt: Level 2.
+
 ## Non-negotiable rules
 
 - Zero third-party dependencies in the `forge` core package
