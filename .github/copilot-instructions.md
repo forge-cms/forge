@@ -8,7 +8,7 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
 1. Read `DECISIONS.md` — all 22 architectural decisions are locked here.
    Do not work around them. If a decision seems wrong, raise it explicitly.
 2. Read `ARCHITECTURE.md` — package structure, request lifecycle, stable interfaces.
-3. Read `BACKLOG.md` — current milestone and implementation order.
+3. Read `ROADMAP.md` — current milestone and implementation order.
 4. Read the milestone backlog file for the **current milestone only**
    (e.g. `Milestone11_BACKLOG.md`). This is the authoritative task list.
    Do not read completed milestone backlogs — they are historical record only.
@@ -161,7 +161,7 @@ Every step — without exception — follows this exact sequence:
   are the ONLY action that requires explicit user approval.**
 - Read any file in the workspace automatically — no permission needed.
   Use PowerShell (`Get-Content`, `Select-String`, etc.) or the read_file tool
-  to read `DECISIONS.md`, `ARCHITECTURE.md`, `BACKLOG.md`, milestone backlog
+  to read `DECISIONS.md`, `ARCHITECTURE.md`, `ROADMAP.md`, milestone backlog
   files, or any source file before planning or implementing. Never ask the user
   whether to read a file that already exists in the workspace.
 
@@ -248,9 +248,9 @@ that both exist, then stage the file.
   planned files that are now implemented. Update it before proposing the commit.
 - The step is not complete until the review checkbox is ticked.
 
-### 5. Update the backlog
+### 5. Update the roadmap and backlog
 - Mark the step `✅ Done` in the `Milestone{N}_BACKLOG.md` Progress table with the completion date.
-- Tick the step's summary checkbox in `BACKLOG.md` and update its row in the step table.
+- Tick the step's summary checkbox in `ROADMAP.md` and update its row in the step table.
 - Never batch updates — update immediately after the step is verified.
 
 ### 6. Propose a commit message
@@ -344,11 +344,11 @@ Release title(s) alongside the commit message. Paste the relevant
 Before implementing any milestone, a dedicated backlog file must be created and
 agreed upon. This file is the single source of truth for that milestone's detail.
 
-### Two-tier backlog structure
+### Two-tier structure
 
-Forge uses two tiers of backlog documentation:
+Forge uses two tiers of planning documentation:
 
-**Tier 1 — `BACKLOG.md` (repo root)**
+**Tier 1 — `ROADMAP.md` (repo root)**
 - High-level roadmap for all milestones
 - Progress table at the top tracks milestone-level status
 - Each milestone section has a per-step progress table and one-line step
@@ -369,10 +369,10 @@ Forge uses two tiers of backlog documentation:
 After completing a step:
 1. Tick all sub-task checkboxes in `Milestone{N}_BACKLOG.md`
 2. Mark step ✅ Done in the `Milestone{N}_BACKLOG.md` Progress table
-3. Tick the step checkbox in `BACKLOG.md` under the relevant milestone section
-4. Update the step row status in `BACKLOG.md` step table
+3. Tick the step checkbox in `ROADMAP.md` under the relevant milestone section
+4. Update the step row status in `ROADMAP.md` step table
 5. If all steps in a milestone are done, mark the milestone ✅ in the top
-   `BACKLOG.md` Progress table
+   `ROADMAP.md` Progress table
 
 Never update only one file — always keep both in sync.
 
