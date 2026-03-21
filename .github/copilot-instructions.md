@@ -9,8 +9,10 @@ actually think. Zero dependencies. AI-first. Production-ready by default.
    Do not work around them. If a decision seems wrong, raise it explicitly.
 2. Read `ARCHITECTURE.md` — package structure, request lifecycle, stable interfaces.
 3. Read `BACKLOG.md` — current milestone and implementation order.
-4. Read the milestone backlog file for the current milestone (e.g. `Milestone1_BACKLOG.md`).
-   This is the authoritative task list. Do not implement anything not listed there.
+4. Read the milestone backlog file for the **current milestone only**
+   (e.g. `Milestone11_BACKLOG.md`). This is the authoritative task list.
+   Do not read completed milestone backlogs — they are historical record only.
+   Do not implement anything not listed in the current backlog.
    Do not skip steps — the order is load-bearing (dependency layers).
 
 ## Non-negotiable rules
@@ -358,6 +360,20 @@ Never update only one file — always keep both in sync.
 
 The file follows the structure defined in `Milestone_BACKLOG_TEMPLATE.md`.
 Copy that file and fill in the placeholders before implementation starts.
+
+### Milestone close — backlog cleanup
+
+When a milestone is marked ✅ Done, remove its backlog and test strategy
+files from the working tree in the final commit of that milestone:
+
+```powershell
+git rm Milestone{N}_BACKLOG.md
+git rm Milestone{N}_TEST_STRATEGY.md   # if one exists
+```
+
+These files are preserved in git history. Removing them keeps the repo
+root clean for developers who clone forge to use it, not to study its
+internal planning history. `Milestone_BACKLOG_TEMPLATE.md` is never removed.
 
 ### Rules for steps
 
